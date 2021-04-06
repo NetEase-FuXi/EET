@@ -4,7 +4,7 @@
 
 
 <div  align="center"> <img src="./doc/image/EETblueLOGO.png" width = "600" height = "180" alt="EET" align=center /></div>
-
+</br>
 EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型和长序列场景的高性能pytorch推理插件。
 
 ## 功能特性
@@ -36,7 +36,14 @@ EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有�
 * [TODO](#todo)
 * [联系我们](#联系我们)
 
-<div  align="left"> <img src="./doc/image/compare_work.png" width = "900" height = "220" alt="compare"/></div>
+| Frameworks | decoding mechanism| maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
+|--------------------|-------------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
+| EET                | Joint-decoding          | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
+| Faster Transformer | increment decoding      | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
+| TensorRt           | None                    | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
+| LightSeq           | full+Increment decoding | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
+| TurboTransformer   | None                    | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
+| ONNX               | None                    | non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
 
 ## 联合解码机制
 <div  align="left"> <img src="./doc/image/eet_pic2.png" width = "700" height = "350" alt="bert"/></div>
@@ -62,7 +69,7 @@ EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有�
 ```bash
 $ git clone git@github.com:NetEase-FuXi/EET.git
 $ pip install transformers==3.0.2
-$ pip installl fairseq==0.10.0
+$ pip install fairseq==0.10.0
 $ pip install .
 ```
 由于编译了大量的cuda内核，因此安装时间相对较长，请耐心等待。 
@@ -169,7 +176,37 @@ EET提供了python API接口([python/eet](./python/eet))，用法非常简单，
 
 我们在两个GPU硬件平台上测试了EET的性能。并且选择pytorch、NVIDIA Faster Transformers以及lightseq进行比较。 
 
-[benchmark](./doc/benchmark.md)
+### GPT-2推理性能
+
+* RTX 2080ti
+
+<div  align="left"> <img src="./doc/image/gpt2_context_2080ti.jpg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
+
+<div  align="left"> <img src="./doc/image/hidden_unit_2080ti.jpg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
+
+中等模型(hidden_units=1024,max_seq_len=768)情况下与lightseq的比较:
+<div  align="left"> <img src="./doc/image/1024model_lightseq.png" width = "700" height = "318" alt="1024model_lightseq"/></div>
+
+小模型(hidden_units=768,max_seq_len=128)情况下与lightseq的比较:
+<div  align="left"> <img src="./doc/image/768model_lightseq.png" width = "700" height = "318" alt="768model_lightseq"/></div>
+
+* A100
+
+<div  align="left"> <img src="./doc/image/gpt2_context_A100.jpg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
+
+<div  align="left"> <img src="./doc/image/hidden_unit_A100.jpg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
+
+
+### BERT推理性能
+
+* RTX 2080ti
+
+<div  align="left"> <img src="./doc/image/bert_speedup_2080ti.jpg" width = "700" height = "315" alt="bert_speedup_2080ti"/></div>
+
+* A100
+
+<div  align="left"> <img src="./doc/image/bert_speedup_A100.jpg" width = "700" height = "315" alt="bert_speedup_A100"/></div>
+
 
 ## TODO
 1. int8

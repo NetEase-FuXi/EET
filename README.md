@@ -3,7 +3,7 @@
 
 
 <div  align="center"> <img src="./doc/image/EETblueLOGO.png" width = "600" height = "180" alt="EET" align=center /></div>
-
+</br>
 EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin focus on Transformer-based models with large model sizes and long sequences.
 
 ## Features
@@ -20,22 +20,31 @@ EET has been applied to a variety of NetEase online services. In the future, EET
 * [Quick Start](#quick-start)
   * [Environment](#environment)
   * [Installation](#installation)
+    * [From Source](#from-source)
+    * [From Docker](#from-docker)
   * [Run](#run)
     * [run BERT in Transformers](#run-bert-in-transformers)
     * [run GPT2 in Transformers](#run-gpt2-in-transformers)
     * [run GPT2 in Fairseq](#run-gpt2-in-fairseq)
 * [Supported Models](#supported-models)
-  * [BERT](#bert)
   * [GPT2](#gpt2)
+  * [BERT](#bert)
 * [Usage](#usage)
-* [APIs](#APIs)
+* [APIs](#apis)
 * [Performance](#performance)
   * [We show GPT2 inference performance here\.](#we-show-gpt2-inference-performance-here)
   * [We show BERT inference performance here\.](#we-show-bert-inference-performance-here)
 * [TODO](#todo)
 * [Contact us](#contact-us)
 
-<div  align="left"> <img src="./doc/image/compare_work.png" width = "900" height = "220" alt="compare"/></div>
+| Frameworks | decoding mechanism| maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
+|--------------------|-------------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
+| EET                | Joint-decoding          | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
+| Faster Transformer | increment decoding      | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
+| TensorRt           | None                    | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
+| LightSeq           | full+Increment decoding | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
+| TurboTransformer   | None                    | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
+| ONNX               | None                    | non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
 
 ##  A novel Joint-Decoding mechanism
 
@@ -67,7 +76,7 @@ If you are installing from source, you will need install the necessary [environm
 ```bash
 $ git clone git@github.com:NetEase-FuXi/EET.git
 $ pip install transformers==3.0.2
-$ pip installl fairseq==0.10.0
+$ pip install fairseq==0.10.0
 $ pip install .
 ```
 Due to the compilation of a large number of cuda kernels, the installation time is relatively long, please be patient. 
@@ -179,9 +188,37 @@ Please make sure the dynamic-batch is open if you want a higher throughput.
 ## Performance
 
 We tested the performance of EET on two GPU hardware platforms. We chose pytorch, NVIDIA Faster Transformers, and lightseq implementations for comparison.
-For the results of the experiment, please click on the link below.
 
-[benchmark](./doc/benchmark.md)
+### We show GPT2 inference performance here.
+
+* RTX 2080ti
+
+<div  align="left"> <img src="./doc/image/gpt2_context_2080ti.jpg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
+
+<div  align="left"> <img src="./doc/image/hidden_unit_2080ti.jpg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
+
+Medium sized model(hidden_units=1024,max_seq_len=768),compare with lightseq:
+<div  align="left"> <img src="./doc/image/1024model_lightseq.png" width = "700" height = "318" alt="1024model_lightseq"/></div>
+
+Small-scale model(hidden_units=768,max_seq_len=128),compare with lightseq:
+<div  align="left"> <img src="./doc/image/768model_lightseq.png" width = "700" height = "318" alt="768model_lightseq"/></div>
+
+* A100
+
+<div  align="left"> <img src="./doc/image/gpt2_context_A100.jpg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
+
+<div  align="left"> <img src="./doc/image/hidden_unit_A100.jpg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
+
+
+### We show BERT inference performance here.
+
+* RTX 2080ti
+
+<div  align="left"> <img src="./doc/image/bert_speedup_2080ti.jpg" width = "700" height = "315" alt="bert_speedup_2080ti"/></div>
+
+* A100
+
+<div  align="left"> <img src="./doc/image/bert_speedup_A100.jpg" width = "700" height = "315" alt="bert_speedup_A100"/></div>
 
 ## TODO
 1. int8
