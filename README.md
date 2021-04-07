@@ -191,15 +191,18 @@ We tested the performance of EET on two GPU hardware platforms. We chose pytorch
 
 ### We show GPT2 inference performance here.
 
-* RTX 2080ti
+* RTX 2080ti (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
 
 <div  align="left"> <img src="./doc/image/gpt2_context_2080ti.jpg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
 
+* RTX 2080ti (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
 <div  align="left"> <img src="./doc/image/hidden_unit_2080ti.jpg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
 
-* A100
+* A100 (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
 
 <div  align="left"> <img src="./doc/image/gpt2_context_A100.jpg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
+
+* A100 (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
 
 <div  align="left"> <img src="./doc/image/hidden_unit_A100.jpg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
 
