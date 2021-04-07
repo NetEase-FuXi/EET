@@ -197,17 +197,18 @@ We tested the performance of EET on two GPU hardware platforms. We chose pytorch
 
 <div  align="left"> <img src="./doc/image/hidden_unit_2080ti.jpg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
 
-Medium sized model(hidden_units=1024,max_seq_len=768),compare with lightseq:
-<div  align="left"> <img src="./doc/image/1024model_lightseq.png" width = "700" height = "318" alt="1024model_lightseq"/></div>
-
-Small-scale model(hidden_units=768,max_seq_len=128),compare with lightseq:
-<div  align="left"> <img src="./doc/image/768model_lightseq.png" width = "700" height = "318" alt="768model_lightseq"/></div>
-
 * A100
 
 <div  align="left"> <img src="./doc/image/gpt2_context_A100.jpg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
 
 <div  align="left"> <img src="./doc/image/hidden_unit_A100.jpg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
+
+Medium size model(hidden_units=1024,max_seq_len=768),compare with lightseq:
+<div  align="left"> <img src="./doc/image/1024model_lightseq.png" width = "700" height = "318" alt="1024model_lightseq"/></div>
+
+Small size model(hidden_units=768,max_seq_len=128),compare with lightseq:
+<div  align="left"> <img src="./doc/image/768model_lightseq.png" width = "700" height = "318" alt="768model_lightseq"/></div>
+
 
 
 ### We show BERT inference performance here.
