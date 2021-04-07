@@ -54,7 +54,7 @@ class Args(object):
 args = Args(0, True, 1280, 1280, 1024, False, False, False, True, 36, 20, 5120, None, 0.1, 0.1)
 
 vocab_size = 13672
-embedding = nn.Embedding(vocab, 1280, padding_idx=1)
+embedding = nn.Embedding(vocab_size, 1280, padding_idx=1)
 
 dictionary = Dictionary.load('resource/data/dict.txt')
 
