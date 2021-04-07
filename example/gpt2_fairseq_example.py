@@ -4,7 +4,7 @@ from fairseq.data.dictionary import Dictionary
 from eet.fairseq.transformer import EETTransformerDecoder
 
 using_half = False
-seq_len = 1024
+full_seq_len = 512 # prompt length
 batch = 4
 
 class Args(object):
@@ -52,7 +52,9 @@ class Args(object):
         assert self.decoder_embed_dim == self.decoder_output_dim
 
 args = Args(0, True, 1280, 1280, 1024, False, False, False, True, 36, 20, 5120, None, 0.1, 0.1)
-embedding = nn.Embedding(13672, 1280, padding_idx=1)
+
+vocab_size = 13672
+embedding = nn.Embedding(vocab, 1280, padding_idx=1)
 
 dictionary = Dictionary.load('resource/data/dict.txt')
 
@@ -60,13 +62,12 @@ def main():
     model_id_or_path = 'resource/model/checkpoint_best.pt'
     torch.set_grad_enabled(False)
 
-    input = np.random.randint(1000,9000,seq_len * batch,dtype="int64")
-    inputs = np.random.randint(1000,9000,1 * batch,dtype="int64")
-
-    # prompt context
+    # prompt context for full docoder
+    inputs = np.random.randint(0,vocab_size,1 * batch,dtype="int64")
     input_full_decoder = torch.from_numpy(input).long().reshape(batch, seq_len).cuda()
 
-    # prediction 
+    # fake prediction results for incremental decoder
+    input = np.random.randint(0,vocab_size,seq_len * batch,dtype="int64")
     input_inc_decoder = torch.from_numpy(inputs).long().reshape(batch, 1).cuda()
 
 
@@ -75,7 +76,7 @@ def main():
     if using_half:
         data_type = torch.float16
         embedding.half()
-    eet_config = {"data_type":data_type,"embed_tokens":embedding,"max_batch":batch,"full_seq_len":seq_len}
+    eet_config = {"data_type":data_type,"embed_tokens":embedding,"max_batch":batch,"full_seq_len":full_seq_len} 
     eet_model = EETTransformerDecoder.from_torch(model_id_or_path = model_id_or_path,dictionary = dictionary,args = args,config = eet_config,no_encoder_attn = True)
 
     input_ids = input_full_decoder
