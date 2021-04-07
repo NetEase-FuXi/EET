@@ -68,7 +68,7 @@ EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有�
 如果从源代码安装，则需要安装必要的[environment](#environment)。然后，按以下步骤进行。 
 ```bash
 $ git clone git@github.com:NetEase-FuXi/EET.git
-$ pip install transformers==3.0.2
+$ pip install transformers==3.5.0
 $ pip install fairseq==0.10.0
 $ pip install .
 ```
@@ -80,7 +80,7 @@ $ pip install .
 $ git clone git@github.com:NetEase-FuXi/EET.git
 $ cd EET/docker
 $ docker build -t your_docker_name:your_docker_version .
-$ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  Your_Docker_Name:Your_docker_version bash
+$ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  your_Docker_Name:your_docker_version bash
 ```
 
 此时，EET已安装在docker中。
