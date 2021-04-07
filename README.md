@@ -75,7 +75,7 @@ If you are installing from source, you will need install the necessary [environm
 
 ```bash
 $ git clone git@github.com:NetEase-FuXi/EET.git
-$ pip install transformers==3.0.2
+$ pip install transformers==3.5.0
 $ pip install fairseq==0.10.0
 $ pip install .
 ```
