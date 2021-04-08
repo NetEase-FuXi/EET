@@ -24,14 +24,19 @@ namespace eet
         layernorm_bias_(layernorm_bias.data_ptr())
         {   
             // Currently only supports gelu and relu
-            if (desc_.activation_fn_ == "gelu")
+            if (desc_.activation_fn_ == "gelu" || desc_.activation_fn_ == "gelu_new" || desc_.activation_fn_ == "gelu_fast")
             {
                 act_type_ = 1;
             }
-            else 
+            else if(desc_.activation_fn_ == "relu")
             {
                 // relu
                 act_type_ = 0;
+            }
+            else
+            {
+                std::cout << "unsupported activation " << std::endl;
+                return;
             }
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
             output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
@@ -69,14 +74,14 @@ namespace eet
             cur_seq_len_ = input.sizes()[1];
 
             //ffn_inner
-            Buffer &ffn_inner = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer &ffn_inner = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                                                         desc_.hidden_units_ * 4,
                                                                     desc_.dtype_, desc_.options_);
 
             if(pre_layernorm)
             {
                 // pre_layerNorm
-                Buffer& layernorme_tensor = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+                Buffer& layernorme_tensor = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                         desc_.hidden_units_, desc_.dtype_, desc_.options_);
                 layer_norm(input,layernorme_tensor);
 

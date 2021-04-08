@@ -79,16 +79,16 @@ namespace eet{
 
             valid_word_num_ = cur_batch_size_ * cur_seq_len_;
 
-            Buffer& q_buffer = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& k_buffer = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& v_buffer = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             if(pre_layernorm)
             {
                 // pre_layerNorm
-                Buffer& layernormed_query = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+                Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                         desc_.hidden_units_, desc_.dtype_, desc_.options_);
                 layer_norm(input,layernormed_query);
 
@@ -102,11 +102,11 @@ namespace eet{
             }
 
             //qkv add bias                
-            Buffer& q_buf = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& k_buf = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& v_buf = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             qkv_add_bias(q_buffer, k_buffer, v_buffer, q_buf, k_buf, v_buf);
             
@@ -115,8 +115,8 @@ namespace eet{
             v_buffer.free();
 
             //q * k
-            Buffer& qk_buf = MManager::get_instance().get_buffer(cur_batch_size_ * desc_.head_num_ *
-                                        cur_seq_len_ * cur_seq_len_, desc_.dtype_, desc_.options_);
+            Buffer& qk_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.head_num_ *
+                                        desc_.max_full_seq_len_ * desc_.max_full_seq_len_, desc_.dtype_, desc_.options_);
             q_k_mul(q_buf, k_buf, qk_buf);
 
             q_buf.free();
@@ -124,7 +124,7 @@ namespace eet{
             //softmax
             if (padding_mask.data_ptr() == nullptr)
             {
-                Buffer& atten_mask = MManager::get_instance().get_buffer(cur_batch_size_* cur_seq_len_ * cur_seq_len_, torch::kInt64, desc_.options_);
+                Buffer& atten_mask = MManager::get_instance().get_buffer(desc_.batch_size_* desc_.max_full_seq_len_ * desc_.max_full_seq_len_, torch::kInt64, desc_.options_);
                 fill_kernel((int64_t*)atten_mask.data_ptr(),cur_batch_size_* cur_seq_len_* cur_seq_len_,(int64_t)1);
                 qk_softmax(qk_buf,atten_mask.data_ptr());
                 atten_mask.free();
@@ -136,7 +136,7 @@ namespace eet{
 
 
             //attn * v
-            Buffer& transpose_dst = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             
             attn_v_mul(qk_buf,v_buf,transpose_dst);
@@ -146,7 +146,7 @@ namespace eet{
             v_buf.free();
 
             //transpose
-            Buffer& dst = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
 
             transpose(transpose_dst, dst);

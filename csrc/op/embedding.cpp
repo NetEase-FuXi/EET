@@ -66,7 +66,7 @@ namespace eet
             if(if_layernorm)
             {
                 // embedding
-                Buffer& embedding_out = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+                Buffer& embedding_out = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                                         desc_.hidden_units_, desc_.dtype_, desc_.options_);
                 fused_embedding(input_tensor,position_ids,token_type_ids,embedding_out.data_ptr());
                 
