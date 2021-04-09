@@ -46,7 +46,7 @@ EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有�
 | ONNX               | None                    | non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
 
 ## 联合解码机制
-<div  align="left"> <img src="./doc/image/eet_pic2.png" width = "700" height = "350" alt="bert"/></div>
+<div  align="left"> <img src="./doc/image/joint_decoding.svg" width = "700" height = "350" alt="bert"/></div>
 
 三级解码：
 * 1级：联合序列中的上下文信息,并行处理.
