@@ -48,7 +48,7 @@ EET has been applied to a variety of NetEase online services. In the future, EET
 
 ##  A novel Joint-Decoding mechanism
 
-<div  align="left"> <img src="./doc/image/eet_pic2.png" width = "700" height = "350" alt="bert"/></div>
+<div  align="left"> <img src="./doc/image/joint_decoding.svg" width = "700" height = "350" alt="bert"/></div>
 
 
 Three-level decoding:
