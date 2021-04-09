@@ -21,8 +21,7 @@ namespace eet
         layernorm_weights_(layernorm_weights.data_ptr()),
         layernorm_bias_(layernorm_bias.data_ptr()),
         cur_batch_size_(0),
-        cur_seq_len_(0),
-        position_seq_len_(0)
+        cur_seq_len_(0)
         {
             output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
         }
@@ -33,6 +32,7 @@ namespace eet
             cur_batch_size_ = input_tensor.sizes()[0];
             cur_seq_len_ = input_tensor.sizes()[1];
             int embedding_num = cur_seq_len_;
+            // step_ = cur_batch_size_;
             const int64_t *input_ids = input_tensor.data_ptr<int64_t>();
 
             RUN_KERNEL(embedding_lookup_kernel, desc_.dtype_,embedding_weights_, input_ids,output_.data_ptr(),

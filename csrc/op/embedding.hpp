@@ -37,7 +37,6 @@ namespace eet
             void *layernorm_bias_;
             int cur_batch_size_;
             int cur_seq_len_;
-            int position_seq_len_;
         };
     } // namespace op
 } // namespace eet
