@@ -193,24 +193,24 @@ We tested the performance of EET on two GPU hardware platforms. We chose pytorch
 
 * RTX 2080ti (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
 
-<div  align="left"> <img src="./doc/image/gpt2_context_2080ti.jpg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
+<div  align="left"> <img src="./doc/image/2080_gpt.svg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
 
 * RTX 2080ti (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
-<div  align="left"> <img src="./doc/image/hidden_unit_2080ti.jpg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
+<div  align="left"> <img src="./doc/image/gpt1.svg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
 
 * A100 (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
 
-<div  align="left"> <img src="./doc/image/gpt2_context_A100.jpg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
+<div  align="left"> <img src="./doc/image/a100_gpt.svg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
 
 * A100 (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
 
-<div  align="left"> <img src="./doc/image/hidden_unit_A100.jpg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
+<div  align="left"> <img src="./doc/image/gpt2.svg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
 
 Medium size model(hidden_units=1024,max_seq_len=768),compare with lightseq:
-<div  align="left"> <img src="./doc/image/1024model_lightseq.png" width = "700" height = "318" alt="1024model_lightseq"/></div>
+<div  align="left"> <img src="./doc/image/lightseq1.svg" width = "700" height = "318" alt="1024model_lightseq"/></div>
 
 Small size model(hidden_units=768,max_seq_len=128),compare with lightseq:
-<div  align="left"> <img src="./doc/image/768model_lightseq.png" width = "700" height = "318" alt="768model_lightseq"/></div>
+<div  align="left"> <img src="./doc/image/lightseq2.svg" width = "700" height = "318" alt="768model_lightseq"/></div>
 
 
 
@@ -218,11 +218,11 @@ Small size model(hidden_units=768,max_seq_len=128),compare with lightseq:
 
 * RTX 2080ti
 
-<div  align="left"> <img src="./doc/image/bert_speedup_2080ti.jpg" width = "700" height = "315" alt="bert_speedup_2080ti"/></div>
+<div  align="left"> <img src="./doc/image/bert_2080.svg" width = "700" height = "315" alt="bert_speedup_2080ti"/></div>
 
 * A100
 
-<div  align="left"> <img src="./doc/image/bert_speedup_A100.jpg" width = "700" height = "315" alt="bert_speedup_A100"/></div>
+<div  align="left"> <img src="./doc/image/bert_a100.svg" width = "700" height = "315" alt="bert_speedup_A100"/></div>
 
 ## TODO
 1. int8
