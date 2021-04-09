@@ -47,15 +47,16 @@ class EETTransformerLayerNorm():
 class EETTransformerEmbedding():
     def __init__(self,args, meta_des,embedding_weights,data_type):
         self.embedding_weights = embedding_weights.cuda().type(data_type)
+        self.padding_idx = 1
+        self.weight = self.embedding_weights
         self.embed_scale = args.no_scale_embedding
         # print('self.embedding_weights:',self.embedding_weights,self.embedding_weights.size())
         self.embedding = eet_embedding(meta_des,self.embedding_weights,self.embedding_weights,self.embedding_weights ,self.embedding_weights ,self.embedding_weights)
 
     def __call__(self,
-                tokens,
-                padding_idx):
+                tokens):
         # positional_encode + embedding_lookup
-        return self.embedding.forward_fairseq(tokens, self.embed_scale,padding_idx)
+        return self.embedding.forward_fairseq(tokens, self.embed_scale,self.padding_idx)
     
     @staticmethod
     def from_torch(args,meta_des,embedding_weights,data_type =  torch.float32):
@@ -227,8 +228,7 @@ class EETTransformerDecoder():
         no_encoder_attn (bool, optional): whether to attend to encoder outputs
             (default: False).
     """
-    def __init__(self, args,max_batch,dictionary, embed_tokens,embedding,DecoderLayers, layer_norm):
-        self.embedding = embedding
+    def __init__(self, args,max_batch,dictionary, embed_tokens, DecoderLayers, layer_norm):
         self.layers = DecoderLayers
         self.layer_norm = layer_norm
         self.cross_self_attention = False
@@ -273,7 +273,8 @@ class EETTransformerDecoder():
         Returns:
             the decoder's output of shape `(batch, tgt_len, vocab)`
         """
-        x = self.embedding(prev_output_tokens,self.embed_tokens.padding_idx)
+        # print('prev_output_tokens-----:',prev_output_tokens)
+        x = self.embed_tokens(prev_output_tokens)
 
         """ EET will process self_attn_padding_mask to surport EET """
         self_attn_padding_mask: Optional[Tensor] = None
@@ -284,7 +285,7 @@ class EETTransformerDecoder():
             encoder_padding_mask = encoder_out["encoder_padding_mask"][0]
         else:
             encoder_padding_mask = None
-
+ 
         if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0):
             encoder_out = encoder_out["encoder_out"][0]
         else:
@@ -323,12 +324,11 @@ class EETTransformerDecoder():
             model_id_or_path : pytorch model path
             dictionary (~fairseq.data.Dictionary): decoding dictionary
             args (argparse.Namespace): parsed command-line arguments
-            config:dic[max_full_seq_len,max_batch,data_type,embed_tokens]
+            config:dic[max_full_seq_len,max_batch,data_type]
             {   
                 full_seq_len: The maximum length that can be supported by full decoding 
                 max_batch: the largest batch_size that can be supported, and it is supported if it is smaller than max_batch, so as to support dynamic batch
                 data_type: data_type (default: torch.float32)
-                embed_tokens (torch.nn.Embedding): output embedding
             }
             no_encoder_attn (bool, optional): whether to attend to encoder outputs
                 (default: False).
@@ -342,7 +342,6 @@ class EETTransformerDecoder():
         full_seq_len = config['full_seq_len']
         batch_size = config['max_batch']
         data_type = config['data_type']
-        embed_tokens = config['embed_tokens']
 
         model_dict = {}
         DecoderLayers = []
@@ -354,10 +353,10 @@ class EETTransformerDecoder():
 
         device = "cuda:0"
         activation_fn = args.activation_fn
-        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, args.decoder_layers ,128, full_seq_len, data_type, device, False, activation_fn)
         embedding = EETTransformerEmbedding.from_torch(args,meta_des,model_dict['decoder.embed_tokens.weight'],data_type)
         layer_norm = EETTransformerLayerNorm.from_torch(args,meta_des,model_dict['decoder.layer_norm.weight'],model_dict['decoder.layer_norm.bias'],data_type)
-
+        # layer_norm = None
         for i in range(args.decoder_layers):
             if i < 10:
                 DecoderLayers.extend(
@@ -372,6 +371,6 @@ class EETTransformerDecoder():
                     ]
                 )
 
-        eet_decoder =  EETTransformerDecoder(args,batch_size,dictionary,embed_tokens,embedding, DecoderLayers,layer_norm)
+        eet_decoder =  EETTransformerDecoder(args,batch_size,dictionary,embedding, DecoderLayers,layer_norm)
 
         return eet_decoder

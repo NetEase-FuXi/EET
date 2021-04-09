@@ -82,15 +82,25 @@ template void embedding_lookup_kernel<half>(const void* embedding_table, const i
 
 template<typename T>
 __global__
-void position_encoding(T* output, int seq_len, int padding_idx,int n){
+void position_encoding(T* output, int seq_len, int step, int padding_idx,int n){
   int tid = threadIdx.x + blockIdx.y * blockDim.x;
   int bid = blockIdx.x;
   float half_n = (float)n / 2.;
+
+  int cuda_step = 0;
+  // full decoder
+  if (seq_len >1)
+  {
+    cuda_step = bid % seq_len + padding_idx + 1;
+  }
+  else
+  {
+    cuda_step = step + padding_idx + 1;
+  }
   
-  int step = bid % seq_len + padding_idx + 1;
   float log_result = __logf(10000) / (half_n - 1.f);
   float exp_result = __expf( (tid % (int)half_n) * -1 * log_result );
-  float scaled_time = exp_result *  step;
+  float scaled_time = exp_result *  cuda_step;
   
   T encoding_val = (tid < half_n) ? (T) __sinf(scaled_time) : (T) __cosf(scaled_time);
   output[bid * n + tid] = output[bid * n + tid]  + encoding_val;
@@ -100,12 +110,9 @@ void position_encoding(T* output, int seq_len, int padding_idx,int n){
 template<typename T>
 void position_encoding_kernel(
   void* output,
-  int seq_len,int padding_idx,
+  int seq_len,int step, int padding_idx,
   int m, int n, cudaStream_t stream)
 {
-  // dim3 grid(m);
-  // dim3 block(n);
-  // assert(n <= 1024);
   int fold_coeff = 1;
   int k = n;
   if (k <= 1024){
@@ -121,9 +128,9 @@ void position_encoding_kernel(
   }
   dim3 grid(m , fold_coeff);
   dim3 block(k / fold_coeff);
-  position_encoding<T><<<grid, block, 0, stream>>>((T*)output, seq_len,padding_idx, n);
+  position_encoding<T><<<grid, block, 0, stream>>>((T*)output, seq_len,step,padding_idx, n);
 }
 
-template void position_encoding_kernel<float>(void* output, int seq_len, int padding_idx,int m, int n, cudaStream_t stream);
+template void position_encoding_kernel<float>(void* output, int seq_len,int step,  int padding_idx,int m, int n, cudaStream_t stream);
 
-template void position_encoding_kernel<half>(void* output, int seq_len, int padding_idx,int m, int n, cudaStream_t stream);
+template void position_encoding_kernel<half>(void* output, int seq_len,int step,  int padding_idx,int m, int n, cudaStream_t stream);

@@ -13,6 +13,7 @@ namespace eet
                             const torch::Tensor &token_type_weights,
                             const torch::Tensor& layernorm_weights, 
                             const torch::Tensor& layernorm_bias) : 
+        step_(0),
         desc_(desc),
         embedding_weights_(embedding_weights.data_ptr()),
         position_weights_(position_weights.data_ptr()),
@@ -20,7 +21,8 @@ namespace eet
         layernorm_weights_(layernorm_weights.data_ptr()),
         layernorm_bias_(layernorm_bias.data_ptr()),
         cur_batch_size_(0),
-        cur_seq_len_(0)
+        cur_seq_len_(0),
+        position_seq_len_(0)
         {
             output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
         }
@@ -30,8 +32,7 @@ namespace eet
         {
             cur_batch_size_ = input_tensor.sizes()[0];
             cur_seq_len_ = input_tensor.sizes()[1];
-            int embedding_num = cur_batch_size_ * cur_seq_len_;
-            // step_ = cur_batch_size_;
+            int embedding_num = cur_seq_len_;
             const int64_t *input_ids = input_tensor.data_ptr<int64_t>();
 
             RUN_KERNEL(embedding_lookup_kernel, desc_.dtype_,embedding_weights_, input_ids,output_.data_ptr(),
@@ -44,13 +45,13 @@ namespace eet
             int m = embedding_num;
             int n = desc_.hidden_units_;
             RUN_KERNEL(position_encoding_kernel, desc_.dtype_,output_.data_ptr(),
-                        cur_seq_len_, padding_idx,m , n, desc_.stream);
+                        cur_seq_len_,step_, padding_idx,m , n, desc_.stream);
 
             #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
             #endif
-            // step_ += cur_seq_len_;
+            step_ += cur_seq_len_;
 
             auto res = torch::from_blob(output_.data_ptr(),{cur_batch_size_, cur_seq_len_,desc_.hidden_units_} ,desc_.options_);
             return std::move(res);
@@ -66,7 +67,7 @@ namespace eet
             if(if_layernorm)
             {
                 // embedding
-                Buffer& embedding_out = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
+                Buffer& embedding_out = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
                                                         desc_.hidden_units_, desc_.dtype_, desc_.options_);
                 fused_embedding(input_tensor,position_ids,token_type_ids,embedding_out.data_ptr());
                 

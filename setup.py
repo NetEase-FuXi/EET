@@ -15,7 +15,7 @@ include_paths = cuda_include_paths + self_include_paths
 
 setup(
     name='EET',
-    version="0.1",
+    version="0.0.1",
     package_dir={"": "python"},
     packages=find_packages("python"),
     ext_modules=[
