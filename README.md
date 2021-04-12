@@ -135,8 +135,8 @@ You can refer to Operators APIs listed below to build your own model structure, 
 Replace the original transformer.py in Fairseq with our transformer.py and reinstall the Fairseq, that is all !
 [Transformer.py](./python/eet/fairseq/transformer.py) in EET corresponds to the fusion of [transformer.py](https://github.com/pytorch/fairseq/blob/master/fairseq/models/transformer.py) and [transformer_layer.py](https://github.com/pytorch/fairseq/blob/master/fairseq/modules/transformer_layer.py) in fairseq.
 
->4、How to integrate EET into Transformers
-Replace the original modeling_bert.py and modeling_gpt2.py in Transformers with our modeling_bert.py and modeling_gpt2.py and reinstall the Transformers, that is all !
+>4、How to integrate EET into Transformers  
+Replace the original modeling_bert.py and odeling_gpt2.py in Transformers with our modeling_bert.py and modeling_gpt2.py and reinstall the Transformers, that is all !
 [modeling_bert.py](./python/eet/transformers/modeling_bert.py) in EET corresponds to [modeling_bert.py](https://github.com/huggingface/transformers/blob/v3.0.2/src/transformers/modeling_bert.py) in transformers;[modeling_gpt2.py](./python/eet/transformers/modeling_gpt2.py) in EET corresponds to [modelling_gpt2.py](https://github.com/huggingface/transformers/blob/v3.0.2/src/transformers/modelling_gpt2.py) in transformers.
 
 >5、How to make a server  
