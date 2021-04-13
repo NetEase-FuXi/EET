@@ -40,7 +40,7 @@ EET has been applied to a variety of NetEase online services. In the future, EET
 | Frameworks | decoding mechanism| maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
 |--------------------|-------------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
 | EET                | Joint-decoding          | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
-| Faster Transformer | increment decoding      | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
+| Faster Transformer | increment decoding      | Multiples of specific numbers, such as 128, 256, 384, 512     | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
 | TensorRt           | None                    | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
 | LightSeq           | full+Increment decoding | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
 | TurboTransformer   | None                    | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
