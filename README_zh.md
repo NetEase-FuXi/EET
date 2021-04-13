@@ -8,11 +8,11 @@
 EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型和长序列场景的高性能pytorch推理插件。
 
 ## 功能特性
-> 1，联合解码：提出并实施一种新颖的解码机制，一种优化增量解码，增加tocken并行度并提高GPU占用率的方法。  
-> 2，高性能：设计高度优化的CUDA内核，参考NVIDIA [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1)，该内核支持长序列以及大型模型。  
-> 3，灵活： 提供算子级和模型级API。  
-> 4，易于使用： EET可以直接集成到Fairseq和Transformes中。  
-> 5，智能部署：支持动态批处理和可变的输入长度，结合[python web](https://github.com/ShannonAI/service-streamer)可以轻松部署EET。   
+* 联合解码：提出并实施一种新颖的解码机制，一种优化增量解码，增加tocken并行度并提高GPU占用率的方法。  
+* 高性能：设计高度优化的CUDA内核，参考NVIDIA [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1)，该内核支持长序列以及大型模型。 
+* 灵活： 提供算子级和模型级API。  
+* 易于使用： EET可以直接集成到Fairseq和Transformes中。  
+* 智能部署：支持动态批处理和可变的输入长度，结合[python web](https://github.com/ShannonAI/service-streamer)可以轻松部署EET。   
 
 EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有灵平台，网易云音乐AI歌词生成等。未来EET将致力于万亿模型的线上推理。
 
