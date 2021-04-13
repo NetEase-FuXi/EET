@@ -14,7 +14,7 @@ EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型
 > 4，易于使用： EET可以直接集成到Fairseq和Transformes中。  
 > 5，智能部署：支持动态批处理和可变的输入长度，结合[python web](https://github.com/ShannonAI/service-streamer)可以轻松部署EET。   
 
-EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有灵平台，网易云音乐AI歌词生成等，均取得了4x性能加速和8x的tps提升。未来EET将致力于万亿模型的线上推理。
+EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有灵平台，网易云音乐AI歌词生成等。未来EET将致力于万亿模型的线上推理。
 
 * [Easy and Efficient Transformer](#easy-and-efficient-transformer)
 * [功能特性](#功能特性)
@@ -39,7 +39,7 @@ EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有�
 | Frameworks | decoding mechanism| maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
 |--------------------|-------------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
 | EET                | Joint-decoding          | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
-| Faster Transformer | increment decoding      | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
+| Faster Transformer | increment decoding      | 特定数字的倍数(128,256,384,512)        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
 | TensorRt           | None                    | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
 | LightSeq           | full+Increment decoding | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
 | TurboTransformer   | None                    | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
