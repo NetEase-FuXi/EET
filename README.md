@@ -40,7 +40,7 @@ EET has been applied to a variety of NetEase online services. In the future, EET
 | Frameworks | decoding mechanism| maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
 |--------------------|-------------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
 | EET                | Joint-decoding          | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
-| Faster Transformer | increment decoding      | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
+| Faster Transformer | increment decoding      | Multiples of specific numbers, such as 128, 256, 384, 512     | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
 | TensorRt           | None                    | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
 | LightSeq           | full+Increment decoding | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
 | TurboTransformer   | None                    | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
@@ -48,7 +48,7 @@ EET has been applied to a variety of NetEase online services. In the future, EET
 
 ##  A novel Joint-Decoding mechanism
 
-<div  align="left"> <img src="./doc/image/eet_pic2.png" width = "700" height = "350" alt="bert"/></div>
+<div  align="left"> <img src="./doc/image/joint_decoding.svg" width = "700" height = "350" alt="bert"/></div>
 
 
 Three-level decoding:
@@ -135,8 +135,8 @@ You can refer to Operators APIs listed below to build your own model structure, 
 Replace the original transformer.py in Fairseq with our transformer.py and reinstall the Fairseq, that is all !
 [Transformer.py](./python/eet/fairseq/transformer.py) in EET corresponds to the fusion of [transformer.py](https://github.com/pytorch/fairseq/blob/master/fairseq/models/transformer.py) and [transformer_layer.py](https://github.com/pytorch/fairseq/blob/master/fairseq/modules/transformer_layer.py) in fairseq.
 
->4、How to integrate EET into Transformers
-Replace the original modeling_bert.py and modeling_gpt2.py in Transformers with our modeling_bert.py and modeling_gpt2.py and reinstall the Transformers, that is all !
+>4、How to integrate EET into Transformers  
+Replace the original modeling_bert.py and odeling_gpt2.py in Transformers with our modeling_bert.py and modeling_gpt2.py and reinstall the Transformers, that is all !
 [modeling_bert.py](./python/eet/transformers/modeling_bert.py) in EET corresponds to [modeling_bert.py](https://github.com/huggingface/transformers/blob/v3.0.2/src/transformers/modeling_bert.py) in transformers;[modeling_gpt2.py](./python/eet/transformers/modeling_gpt2.py) in EET corresponds to [modelling_gpt2.py](https://github.com/huggingface/transformers/blob/v3.0.2/src/transformers/modelling_gpt2.py) in transformers.
 
 >5、How to make a server  
@@ -193,24 +193,24 @@ We tested the performance of EET on two GPU hardware platforms. We chose pytorch
 
 * RTX 2080ti (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
 
-<div  align="left"> <img src="./doc/image/gpt2_context_2080ti.jpg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
+<div  align="left"> <img src="./doc/image/2080_gpt.svg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
 
 * RTX 2080ti (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
-<div  align="left"> <img src="./doc/image/hidden_unit_2080ti.jpg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
+<div  align="left"> <img src="./doc/image/gpt1.svg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
 
 * A100 (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
 
-<div  align="left"> <img src="./doc/image/gpt2_context_A100.jpg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
+<div  align="left"> <img src="./doc/image/a100_gpt.svg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
 
 * A100 (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
 
-<div  align="left"> <img src="./doc/image/hidden_unit_A100.jpg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
+<div  align="left"> <img src="./doc/image/gpt2.svg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
 
 Medium size model(hidden_units=1024,max_seq_len=768),compare with lightseq:
-<div  align="left"> <img src="./doc/image/1024model_lightseq.png" width = "700" height = "318" alt="1024model_lightseq"/></div>
+<div  align="left"> <img src="./doc/image/lightseq1.svg" width = "700" height = "318" alt="1024model_lightseq"/></div>
 
 Small size model(hidden_units=768,max_seq_len=128),compare with lightseq:
-<div  align="left"> <img src="./doc/image/768model_lightseq.png" width = "700" height = "318" alt="768model_lightseq"/></div>
+<div  align="left"> <img src="./doc/image/lightseq2.svg" width = "700" height = "318" alt="768model_lightseq"/></div>
 
 
 
@@ -218,11 +218,11 @@ Small size model(hidden_units=768,max_seq_len=128),compare with lightseq:
 
 * RTX 2080ti
 
-<div  align="left"> <img src="./doc/image/bert_speedup_2080ti.jpg" width = "700" height = "315" alt="bert_speedup_2080ti"/></div>
+<div  align="left"> <img src="./doc/image/bert_2080.svg" width = "700" height = "315" alt="bert_speedup_2080ti"/></div>
 
 * A100
 
-<div  align="left"> <img src="./doc/image/bert_speedup_A100.jpg" width = "700" height = "315" alt="bert_speedup_A100"/></div>
+<div  align="left"> <img src="./doc/image/bert_a100.svg" width = "700" height = "315" alt="bert_speedup_A100"/></div>
 
 ## TODO
 1. int8
