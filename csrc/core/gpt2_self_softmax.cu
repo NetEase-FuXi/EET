@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 
+
 template <typename T>
 __global__ void softmax_kernel_gpt2(T *qk_buf_, const int64_t *__restrict padding_index, const int head_num, const int seq_len, const T scalar)
 {
@@ -18,32 +19,32 @@ __global__ void softmax_kernel_gpt2(T *qk_buf_, const int64_t *__restrict paddin
   qk_offset += left_padding_len * seq_len;
   for (int i = left_padding_len; i < seq_len; ++i)
   {
+
+    float qk = (float)qk_buf_[threadIdx.x + blockDim.x * blockIdx.y + qk_offset];
+
+    float tmp = (threadIdx.x + blockDim.x * blockIdx.y <= i && threadIdx.x + blockDim.x * blockIdx.y >= left_padding_len) ? (float)(qk * (float)scalar) : -1e20f;
+
+    float max_val = blockReduceMax<float>(tmp);
+
+    if (threadIdx.x + blockDim.x * blockIdx.y == 0)
+      s_max = max_val;
+    __syncthreads();
+
+    qk = __expf(tmp - s_max);
+
+    float sum_val = blockReduceSum<float>(qk);
+
+    if (threadIdx.x + blockDim.x * blockIdx.y == 0)
+    {
+      s_sum = sum_val + 1e-6f;
+    }
+    __syncthreads();
     if (threadIdx.x + blockDim.x * blockIdx.y < seq_len)
     {
-      float qk = (float)qk_buf_[threadIdx.x + blockDim.x * blockIdx.y+ qk_offset];
-
-      float tmp = (threadIdx.x+ blockDim.x * blockIdx.y <= i && threadIdx.x+ blockDim.x * blockIdx.y >= left_padding_len) ? (float)(qk * (float)scalar) : -1e20f;
-
-      float max_val = blockReduceMax<float>(tmp);
-
-      if (threadIdx.x == 0)
-        s_max = max_val;
-      __syncthreads();
-
-      qk = __expf(tmp - s_max);
-
-      float sum_val = blockReduceSum<float>(qk);
-
-      if (threadIdx.x == 0)
-      {
-        s_sum = sum_val + 1e-6f;
-      }
-      __syncthreads();
-
-      qk_buf_[threadIdx.x+ blockDim.x * blockIdx.y + qk_offset] = (T)(qk / s_sum);
-
-      qk_offset += seq_len;
+      qk_buf_[threadIdx.x + blockDim.x * blockIdx.y + qk_offset] = (T)(qk / s_sum);
     }
+
+    qk_offset += seq_len;
   }
 }
 
