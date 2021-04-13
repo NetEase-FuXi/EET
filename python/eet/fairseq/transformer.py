@@ -203,7 +203,7 @@ class EETTransformerDecoderLayer():
         return out
 
     @staticmethod
-    def from_torch(args,meta_des, model_dict,no_encoder_attn=False,data_type = torch.float32):
+    def from_torch(args, meta_des, model_dict,no_encoder_attn=False,data_type = torch.float32):
         attention = EETTransformerAttention.from_torch(meta_des = meta_des, model_dict = model_dict,data_type = data_type,is_encoder = False)
         feedforward = EETTransformerFeedforward.from_torch(meta_des = meta_des, model_dict = model_dict,data_type = data_type)
         if no_encoder_attn == False:
@@ -228,7 +228,7 @@ class EETTransformerDecoder():
         no_encoder_attn (bool, optional): whether to attend to encoder outputs
             (default: False).
     """
-    def __init__(self, args,max_batch,dictionary, embed_tokens, DecoderLayers, layer_norm):
+    def __init__(self, args, max_batch, dictionary, embed_tokens, DecoderLayers, layer_norm):
         self.layers = DecoderLayers
         self.layer_norm = layer_norm
         self.cross_self_attention = False
@@ -316,8 +316,9 @@ class EETTransformerDecoder():
                 return F.linear(features, self.embed_out)
         else:
             return features
+
     @staticmethod
-    def from_torch(model_id_or_path: str, dictionary,args,config:dict,no_encoder_attn=False):
+    def from_torch(model_id_or_path: str, dictionary, args, config:dict, no_encoder_attn=False):
         """from torch."""
         """
         Args:
@@ -371,6 +372,6 @@ class EETTransformerDecoder():
                     ]
                 )
 
-        eet_decoder =  EETTransformerDecoder(args,batch_size,dictionary,embedding, DecoderLayers,layer_norm)
+        eet_decoder = EETTransformerDecoder(args, batch_size, dictionary, embedding, DecoderLayers,layer_norm)
 
         return eet_decoder
