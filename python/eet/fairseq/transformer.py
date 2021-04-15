@@ -22,7 +22,8 @@ from EET import MaskedMultiHeadAttention as eet_attention
 from EET import CrossMultiHeadAttention as eet_cross_attention
 from EET import MultiHeadAttention as eet_encoder_attention
 
-PARAM_LEN = 17
+FROM_TORCH_PARAM_LEN = 17
+FROM_BUFFER_PARAM_LEN = 9
 DEFAULT_MAX_TARGER_POSITIONS = 1024
 
 __all__ = [
@@ -353,7 +354,7 @@ class EETTransformerDecoder():
             model_dict[k] = v
         from itertools import groupby
         # Intercept k,num = length of 'decoder.layers.**'=17; If your weight name has changed please change it here
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:PARAM_LEN])}
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:FORM_TORCH_PARAM_LEN])}
 
         device = "cuda:0"
         activation_fn = args.activation_fn
@@ -420,7 +421,7 @@ class EETTransformerDecoder():
             model_dict[k] = v
         from itertools import groupby
         # Intercept k,num = length of 'decoder.layers.**'=17; If your weight name has changed please change it here
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:PARAM_LEN])}
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:FROM_BUFFER_PARAM_LEN])}
 
         device = "cuda:0"
         activation_fn = args.activation_fn
@@ -428,23 +429,23 @@ class EETTransformerDecoder():
             args.max_target_positions = DEFAULT_MAX_TARGER_POSITIONS
 
         meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
-        embedding = EETTransformerEmbedding.from_torch(args,meta_des,model_dict['decoder.embed_tokens.weight'],data_type)
+        embedding = EETTransformerEmbedding.from_torch(args,meta_des,model_dict['embed_tokens.weight'],data_type)
 
         if args.decoder_normalize_before:
-            layer_norm = EETTransformerLayerNorm.from_torch(args,meta_des,model_dict['decoder.layer_norm.weight'],model_dict['decoder.layer_norm.bias'],data_type)
+            layer_norm = EETTransformerLayerNorm.from_torch(args,meta_des,model_dict['layer_norm.weight'],model_dict['layer_norm.bias'],data_type)
         else:
             layer_norm = None
         for i in range(args.decoder_layers):
             if i < 10:
                 DecoderLayers.extend(
                     [
-                        EETTransformerDecoderLayer.from_torch(args,meta_des,layer_model_dict['decoder.layers.'+str(i)+'.'],no_encoder_attn,data_type)
+                        EETTransformerDecoderLayer.from_torch(args,meta_des,layer_model_dict['layers.'+str(i)+'.'],no_encoder_attn,data_type)
                     ]
                 )
             else:
                 DecoderLayers.extend(
                     [
-                        EETTransformerDecoderLayer.from_torch(args,meta_des,layer_model_dict['decoder.layers.'+str(i)],no_encoder_attn,data_type)
+                        EETTransformerDecoderLayer.from_torch(args,meta_des,layer_model_dict['layers.'+str(i)],no_encoder_attn,data_type)
                     ]
                 )
 

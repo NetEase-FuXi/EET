@@ -56,25 +56,10 @@ class Args(object):
 
         assert self.decoder_embed_dim == self.decoder_output_dim
 
-# args = Args(0, True, 1280, 1280, 1024, False, False, False, True, 1, 20, 5120, None, 0.1, 0.1)
-# embedding = nn.Embedding(13672, 1280, padding_idx=1)
-
-# args = Args(0, True, 4, 4, 1024, False, False, False, True, 1, 1, 16, None, 0.1, 0.1, 'gelu')
-# embedding = nn.Embedding(13672, 4, padding_idx=1)
-args = Args(0, True, 1024, 1024, 1024, False, False, False, True, 16, 16, 4096, None, 0.1, 0.1)
+args = Args(0, True, 1024, 1024, 1024, False, False, False, True, 1, 16, 4096, None, 0.1, 0.1)
 embedding = nn.Embedding(13672, 1024, padding_idx=1)
 
-# args = Args(0, True,  12288,  12288, 1024, False, False, False, True, 1, 96, 49152, None, 0.1, 0.1)
-# embedding = nn.Embedding(13672, 12288, padding_idx=1)
-
-# args = Args(0, True, 768, 768, 768, False, False, False, True, 12, 12, 3072, None, 0.1, 0.1)
-# embedding = nn.Embedding(13672, 768, padding_idx=1)
-
-# args = Args(0, True, 16, 16, 1024, False, False, False, True, 4, 4, 64, None, 0.1, 0.1)
-# embedding = nn.Embedding(13672, 16, padding_idx=1)
-# args = Args(0, True, 16, 16, 1024, False, False, False, True, 4, 4, 64, None, 0.1, 0.1)
-# embedding = nn.Embedding(13672, 16, padding_idx=1)
-dictionary = Dictionary.load('resource/data/dict.txt')
+dictionary = Dictionary.load('resource/dict.txt')
 
 def main():
     torch.set_grad_enabled(False)
@@ -84,7 +69,6 @@ def main():
 
     input_full = torch.from_numpy(input).long().reshape(batch, seq_len).cuda()
     input_inc = torch.from_numpy(inputs).long().reshape(batch, 1).cuda()
-
 
     data_type = torch.float32
     if using_half:
@@ -106,7 +90,6 @@ def main():
     for i in range(1024 - seq_len):
         torch.cuda.synchronize()
         t1 = time.perf_counter()
-        
         res_ft = eet_model(input_ids, first_pass = first_pass)
         torch.cuda.synchronize()
         t2 = time.perf_counter()
@@ -116,7 +99,6 @@ def main():
             inc_decoder_time_ft += (t2 - t1)
         print('ft time : ',i, t2 - t1)
         total_time_ft += (t2 - t1)
-        # print('res_ft:',res_ft)
         input_ids = input_inc
         if first_pass == True:
             first_pass = False

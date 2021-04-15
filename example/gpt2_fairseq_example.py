@@ -56,7 +56,7 @@ args = Args(0, True, 1280, 1280, 1024, False, False, False, True, 36, 20, 5120, 
 vocab_size = 13672
 embedding = nn.Embedding(vocab_size, 1280, padding_idx=1)
 
-dictionary = Dictionary.load('resource/data/dict.txt')
+dictionary = Dictionary.load('resource/dict.txt')
 
 def main():
     model_id_or_path = 'resource/model/checkpoint_best.pt'
