@@ -31,7 +31,10 @@ namespace eet
         {
             cur_batch_size_ = input_tensor.sizes()[0];
             cur_seq_len_ = input_tensor.sizes()[1];
-            int embedding_num = cur_seq_len_;
+            int embedding_num = cur_batch_size_ * cur_seq_len_;
+
+            // printf("cur_batch_size_:%d cur_seq_len_:%d embedding_num:%d padding_idx:%d desc_.hidden_units_:%d  no_scale_embedding:%d\n",
+            //             cur_batch_size_,cur_seq_len_,embedding_num,padding_idx,desc_.hidden_units_,no_scale_embedding);
             // step_ = cur_batch_size_;
             const int64_t *input_ids = input_tensor.data_ptr<int64_t>();
 
