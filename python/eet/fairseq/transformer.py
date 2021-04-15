@@ -240,7 +240,7 @@ class EETTransformerDecoder():
         self.output_embed_dim = args.decoder_output_dim
         self.embed_tokens = embed_tokens
         self.self_attn_padding_mask = torch.empty(0)
-
+        self.max_target_positions = args.max_target_positions
         if args.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
                 len(dictionary),
@@ -320,6 +320,12 @@ class EETTransformerDecoder():
                 return F.linear(features, self.embed_out)
         else:
             return features
+
+    def max_decoder_positions(self):
+        if self.max_target_positions is not None:
+            return self.max_target_positions
+        else:
+            return DEFAULT_MAX_TARGER_POSITIONS
 
     @staticmethod
     def from_torch(model_id_or_path: str, dictionary, args, config:dict, no_encoder_attn=False):
