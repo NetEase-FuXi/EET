@@ -82,7 +82,7 @@ template void embedding_lookup_kernel<half>(const void* embedding_table, const i
 
 template<typename T>
 __global__
-void position_encoding(T* output, int seq_len, int step, int padding_idx,int n){
+void position_encoding(T* output,const int64_t* positions,int seq_len, int step, int padding_idx,int n){
   int tid = threadIdx.x + blockIdx.y * blockDim.x;
   int bid = blockIdx.x;
   float half_n = (float)n / 2.;
@@ -91,7 +91,7 @@ void position_encoding(T* output, int seq_len, int step, int padding_idx,int n){
   // full decoder
   if (seq_len >1)
   {
-    cuda_step = bid % seq_len + padding_idx + 1;
+    cuda_step = positions[bid]; /*bid % seq_len + padding_idx + 1;*/
   }
   else
   {
@@ -109,7 +109,7 @@ void position_encoding(T* output, int seq_len, int step, int padding_idx,int n){
 
 template<typename T>
 void position_encoding_kernel(
-  void* output,
+  void* output,const int64_t* positions,
   int seq_len,int step, int padding_idx,
   int m, int n, cudaStream_t stream)
 {
@@ -128,9 +128,9 @@ void position_encoding_kernel(
   }
   dim3 grid(m , fold_coeff);
   dim3 block(k / fold_coeff);
-  position_encoding<T><<<grid, block, 0, stream>>>((T*)output, seq_len,step,padding_idx, n);
+  position_encoding<T><<<grid, block, 0, stream>>>((T*)output,positions, seq_len,step,padding_idx, n);
 }
 
-template void position_encoding_kernel<float>(void* output, int seq_len,int step,  int padding_idx,int m, int n, cudaStream_t stream);
+template void position_encoding_kernel<float>(void* output,const int64_t* positions, int seq_len,int step,  int padding_idx,int m, int n, cudaStream_t stream);
 
-template void position_encoding_kernel<half>(void* output, int seq_len,int step,  int padding_idx,int m, int n, cudaStream_t stream);
+template void position_encoding_kernel<half>(void* output,const int64_t* positions, int seq_len,int step,  int padding_idx,int m, int n, cudaStream_t stream);

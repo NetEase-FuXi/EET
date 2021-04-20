@@ -27,7 +27,7 @@ namespace eet
         }
 
         // embed tokens and positions
-        torch::Tensor Embedding::forward_fairseq(const torch::Tensor &input_tensor,bool no_scale_embedding,int padding_idx)
+        torch::Tensor Embedding::forward_fairseq(const torch::Tensor &input_tensor,const torch::Tensor &positions_mask,bool no_scale_embedding,int padding_idx)
         {
             cur_batch_size_ = input_tensor.sizes()[0];
             cur_seq_len_ = input_tensor.sizes()[1];
@@ -38,8 +38,11 @@ namespace eet
             // step_ = cur_batch_size_;
             const int64_t *input_ids = input_tensor.data_ptr<int64_t>();
 
+            const int64_t *positions = positions_mask.data_ptr<int64_t>();
+
             RUN_KERNEL(embedding_lookup_kernel, desc_.dtype_,embedding_weights_, input_ids,output_.data_ptr(),
                         embedding_num, desc_.hidden_units_, desc_.stream,/*acc=*/false,/*ratio=*/1,no_scale_embedding);
+            
             
             #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
@@ -47,7 +50,7 @@ namespace eet
             #endif
             int m = embedding_num;
             int n = desc_.hidden_units_;
-            RUN_KERNEL(position_encoding_kernel, desc_.dtype_,output_.data_ptr(),
+            RUN_KERNEL(position_encoding_kernel, desc_.dtype_,output_.data_ptr(),positions,
                         cur_seq_len_,step_, padding_idx,m , n, desc_.stream);
 
             #ifdef _DEBUG_MODE_

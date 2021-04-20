@@ -20,7 +20,7 @@ namespace eet
                     const torch::Tensor& layernorm_bias);
 
             torch::Tensor forward_transformers(const torch::Tensor& input_tensor,const torch::Tensor &position_ids,const torch::Tensor &token_type_ids, bool if_layernorm);
-            torch::Tensor forward_fairseq(const torch::Tensor& input_tensor,bool no_scale_embedding, int padding_idx);
+            torch::Tensor forward_fairseq(const torch::Tensor& input_tensor,const torch::Tensor &positions_mask,bool no_scale_embedding, int padding_idx);
 
         private:
             void fused_embedding(const torch::Tensor& input_tensor,const torch::Tensor &position_ids,const torch::Tensor &token_type_ids, void* embedding_out); 

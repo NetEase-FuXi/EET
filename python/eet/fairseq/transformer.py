@@ -14,6 +14,8 @@ from fairseq.models.transformer import TransformerDecoder
 from fairseq.models.transformer import TransformerEncoder 
 from fairseq.modules import  AdaptiveSoftmax
 from fairseq import options
+from fairseq import utils
+
 from EET import MetaDesc as meta_desc
 from EET import LayerNorm as eet_layernorm
 from EET import Embedding as eet_embedding
@@ -57,9 +59,10 @@ class EETTransformerEmbedding():
         self.embedding = eet_embedding(meta_des,self.embedding_weights,self.embedding_weights,self.embedding_weights ,self.embedding_weights ,self.embedding_weights)
 
     def __call__(self,
-                tokens):
+                tokens,
+                positions):
         # positional_encode + embedding_lookup
-        return self.embedding.forward_fairseq(tokens, self.embed_scale,self.padding_idx)
+        return self.embedding.forward_fairseq(tokens,positions, self.embed_scale,self.padding_idx)
     
     @staticmethod
     def from_torch(args,meta_des,embedding_weights,data_type =  torch.float32):
@@ -277,7 +280,11 @@ class EETTransformerDecoder():
             the decoder's output of shape `(batch, tgt_len, vocab)`
         """
         # print('prev_output_tokens-----:',prev_output_tokens)
-        x = self.embed_tokens(prev_output_tokens)
+        positions = utils.make_positions(
+            prev_output_tokens, self.embed_tokens.padding_idx, onnx_trace=False
+        )
+
+        x = self.embed_tokens(prev_output_tokens,positions)
 
         """ EET will process self_attn_padding_mask to surport EET """
         self_attn_padding_mask: Optional[Tensor] = None
@@ -295,7 +302,7 @@ class EETTransformerDecoder():
             encoder_out = None
         if self_attn_padding_mask is None:
             self_attn_padding_mask = self.self_attn_padding_mask
-
+        self_attn_padding_mask = self_attn_padding_mask.long()
         for layer in self.layers:
             x = layer(x,
                     attention_padding_mask = self_attn_padding_mask,
