@@ -8,15 +8,15 @@ EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin foc
 
 ## Features
 
->1、Joint-Decoding.  Propose and implement a novel decoding mechanism, an optimization for incremental decoding, increasing the token-parallelism and improving GPU occupancy.  
+>1、Pre-padding decoding. Pre-padding keep the relative position embedding remain unchanged within the context and the generated sequence, reducing the gap between training and inference. Basic on this, we achieve parallel inference for the context and incremental decoding for generated token sequence.   
 >2、High performance.  Design highly optimized CUDA kernels, referencing to NVIDIA [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1), supporting long sequences as well as large model sizes with advanced optimization.  
->3、Flexible.  Provide op-level and model-level APIs.  
->4、Easy to use. EET could be integrated into Fairseq and Transformes directly.  
+>3、Flexible.  Provide op-level and model-level APIs, allowing users to construct their model or upgrade partial algorithm flexible.
+>4、Easy to use. EET could be integrated into Fairseq and Transformes directly by replacement of sepcified files, without any code change.  
 >5、Smart deployment. Support dynamic batching and variable input length, Combined with [python web](https://github.com/ShannonAI/service-streamer), EET could be deployed smoothly.  
 
-EET has been applied to a variety of NetEase online services. In the future, EET will work on urtra-large-scale model inference of trillion parameters.   
+EET has been applied to a variety of NetEase online services,such as NiShuiHan, NetEase's cloud music, TianYu, Lofter, etc. In the future, EET will work on urtra-large-scale model inference of trillion parameters.   
 
-* [A novel Joint\-Decoding mechanism](#a-novel-joint-decoding-mechanism)
+* [Decoding mechanism](#decoding-mechanism)
 * [Quick Start](#quick-start)
   * [Environment](#environment)
   * [Installation](#installation)
@@ -37,27 +37,19 @@ EET has been applied to a variety of NetEase online services. In the future, EET
 * [TODO](#todo)
 * [Contact us](#contact-us)
 
-| Frameworks | decoding mechanism| maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
-|--------------------|-------------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
-| EET                | Joint-decoding          | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
-| Faster Transformer | increment decoding      | Multiples of specific numbers, such as 128, 256, 384, 512     | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
-| TensorRT           | None                    | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
-| LightSeq           | full+Increment decoding | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
-| TurboTransformer   | None                    | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
-| ONNX               | None                    | non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
+| Frameworks | maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
+|--------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
+| EET                | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
+| Faster Transformer | Multiples of specific numbers, such as 128, 256, 384, 512     | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
+| TensorRT           | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
+| LightSeq           | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
+| TurboTransformer   | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
+| ONNX               | non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
 
-##  A novel Joint-Decoding mechanism
+##  Decoding mechanism
 
 <div  align="left"> <img src="./doc/image/joint_decoding.svg" width = "700" height = "350" alt="bert"/></div>
 
-
-Three-level decoding:
-
-* Level-1. Joint prompts information insides a sequence, handled in parallel.
-
-* Level-2. Joint prompts information cross whole batch, along with left-padding to ensure the correctness of inferred results.
-
-* Level-3. Joint Full-decoding with Incremental-decoding towards the best performance. 
 
 ## Quick Start
 
