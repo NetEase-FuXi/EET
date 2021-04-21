@@ -48,7 +48,7 @@ EET has been applied to a variety of NetEase online services,such as NiShuiHan, 
 
 ##  Decoding mechanism
 
-<div  align="left"> <img src="./doc/image/joint_decoding.svg" width = "700" height = "350" alt="bert"/></div>
+<div  align="left"> <img src="./doc/image/pre_decoding.svg" width = "700" height = "350" alt="bert"/></div>
 
 
 ## Quick Start
