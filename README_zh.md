@@ -41,7 +41,7 @@ EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lo
 | TensorRT           |  1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
 | LightSeq           |  1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
 | TurboTransformer   | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
-| ONNX               || non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
+| ONNX               | non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
 
 ## 解码机制
 <div  align="left"> <img src="./doc/image/joint_decoding.svg" width = "700" height = "350" alt="bert"/></div>
