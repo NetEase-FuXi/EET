@@ -8,17 +8,15 @@
 EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型和长序列场景的高性能pytorch推理插件。
 
 ## 功能特性
-* 联合解码：提出并实施一种新颖的解码机制，一种优化增量解码，增加tocken并行度并提高GPU占用率的方法。  
+* Pre-padding解码：Pre-padding保证了上下文和生成序列之间的相对位置不变，和训练阶段了保持一致，进而不用关心推理时候的位置编码问题。基于此策略，EET实现了对上下文的并行推理和对生成序列的增量解码。
 * 高性能：设计高度优化的CUDA内核，参考[NVIDIA Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1)，该内核支持长序列以及大型模型。 
-* 灵活： 提供算子级和模型级API。  
-* 易于使用： EET可以直接集成到Fairseq和Transformes中。  
+* 灵活： 提供算子级和模型级API，允许用户自定义模型或者只更新部分算法逻辑。  
+* 易于使用： EET可以直接集成到Fairseq和Transformes中，无需任何代码改动，只需要替换指定文件即可完成从训练到推理的转换。  
 * 智能部署：支持动态批处理和可变的输入长度，结合[python web](https://github.com/ShannonAI/service-streamer)可以轻松部署EET。   
 
-EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有灵平台，网易云音乐AI歌词生成等。未来EET将致力于万亿模型的线上推理。
+EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lofter，天谕等。未来EET将致力于万亿模型的线上推理。
 
-* [Easy and Efficient Transformer](#easy-and-efficient-transformer)
-* [功能特性](#功能特性)
-* [联合解码机制](#联合解码机制)
+* [解码机制](#解码机制)
 * [快速开始](#快速开始)
   * [环境](#环境)
   * [安装](#安装)
@@ -36,22 +34,18 @@ EET已经应用于多款网易线上服务，如遇见逆水寒-傀儡戏，有�
 * [TODO](#todo)
 * [联系我们](#联系我们)
 
-| Frameworks | decoding mechanism| maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
-|--------------------|-------------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
-| EET                | Joint-decoding          | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
-| Faster Transformer | increment decoding      | 特定数字的倍数(128,256,384,512)        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
-| TensorRT           | None                    | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
-| LightSeq           | full+Increment decoding | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
-| TurboTransformer   | None                    | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
-| ONNX               | None                    | non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
+| Frameworks |  maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
+|--------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
+| EET                |16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
+| Faster Transformer |  特定数字的倍数(128,256,384,512)        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
+| TensorRT           |  1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
+| LightSeq           |  1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
+| TurboTransformer   | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
+| ONNX               || non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
 
-## 联合解码机制
+## 解码机制
 <div  align="left"> <img src="./doc/image/joint_decoding.svg" width = "700" height = "350" alt="bert"/></div>
 
-三级解码：
-* 1级：联合序列中的上下文信息,并行处理.
-* 2级：联合batch中的多个序列, 并使用左边padding的方法保证正确性.
-* 3级：联合全量解码与增量解码, 性能最大化.
 
 ## 快速开始
 
