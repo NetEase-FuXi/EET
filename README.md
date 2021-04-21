@@ -10,7 +10,7 @@ EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin foc
 
 >1、Pre-padding decoding. Pre-padding keep the relative position embedding remain unchanged within the context and the generated sequence, reducing the gap between training and inference. Basic on this, we achieve parallel inference for the context and incremental decoding for generated token sequence.   
 >2、High performance.  Design highly optimized CUDA kernels, referencing to NVIDIA [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1), supporting long sequences as well as large model sizes with advanced optimization.  
->3、Flexible.  Provide op-level and model-level APIs, allowing users to construct their model or upgrade partial algorithm flexible.
+>3、Flexible.  Provide op-level and model-level APIs, allowing users to construct their model or upgrade partial algorithm flexible.  
 >4、Easy to use. EET could be integrated into Fairseq and Transformes directly by replacement of sepcified files, without any code change.  
 >5、Smart deployment. Support dynamic batching and variable input length, Combined with [python web](https://github.com/ShannonAI/service-streamer), EET could be deployed smoothly.  
 
