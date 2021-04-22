@@ -6,8 +6,17 @@
 #include "op/cross_multi_head_attention.hpp"
 #include "op/masked_multi_head_attention.hpp"
 
+#define STRINGIFY(x) #x
+#define MACRO_STRINGIFY(x) STRINGIFY(x)
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+
+    #ifdef VERSION_INFO
+        m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
+    #else
+        m.attr("__version__") = "dev";
+    #endif
+
     py::class_<eet::MetaDesc>(m, "MetaDesc")
         .def(py::init<const int&, const int&,const int&, const int&, const int&,const int&, const py::object&, const std::string& ,const bool&, const std::string& >());
 
