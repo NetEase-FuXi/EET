@@ -243,6 +243,9 @@ class EETTransformerDecoder():
         self.output_embed_dim = args.decoder_output_dim
         self.embed_tokens = embed_tokens
         self.self_attn_padding_mask = torch.empty(0)
+        self.positions = torch.zeros(1).long().cuda()
+
+
         self.max_target_positions = args.max_target_positions
         if args.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
@@ -279,11 +282,13 @@ class EETTransformerDecoder():
         Returns:
             the decoder's output of shape `(batch, tgt_len, vocab)`
         """
-        # print('prev_output_tokens-----:',prev_output_tokens)
-        positions = utils.make_positions(
-            prev_output_tokens, self.embed_tokens.padding_idx, onnx_trace=False
-        )
-
+        if first_pass:
+            positions = utils.make_positions(
+                prev_output_tokens, self.embed_tokens.padding_idx, onnx_trace=False
+            )
+            # print('position:',positions,positions.size())
+        else:
+            positions = self.positions
         x = self.embed_tokens(prev_output_tokens,positions)
 
         """ EET will process self_attn_padding_mask to surport EET """

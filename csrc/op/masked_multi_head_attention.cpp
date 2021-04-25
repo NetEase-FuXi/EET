@@ -23,6 +23,7 @@ namespace eet{
                                     const torch::Tensor& layernorm_bias):
             desc_(desc),
             step_(1),
+            padding_mask_(nullptr),
             q_weights_(Q_weights.data_ptr()),
             k_weights_(K_weights.data_ptr()),
             v_weights_(V_weights.data_ptr()),
@@ -43,6 +44,8 @@ namespace eet{
             qkv_kernel_ = (void**)fused_qkv_ptr_;
             qkv_input_  = qkv_kernel_ + QKV_PTR_SIZE;
             qkv_buf_   = qkv_input_  + QKV_PTR_SIZE;
+            // padding_mask_ = MManager::get_instance().get_buffer(desc_.batch_size_, torch::kInt64, desc_.options_);
+            check_cuda_error(cudaMalloc((void **)&padding_mask_,sizeof(int64_t) * desc_.batch_size_));
 
             switch (desc_.dtype_)
             {
@@ -103,15 +106,14 @@ namespace eet{
             Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             
-            Buffer& padding_mask = MManager::get_instance().get_buffer(desc_.batch_size_, torch::kInt64, desc_.options_);
             if (padding_index.data_ptr() == nullptr)
             {
-                fill_kernel((int64_t*)padding_mask.data_ptr(),cur_batch_size_,(int64_t)0);
+                fill_kernel(padding_mask_,cur_batch_size_,(int64_t)0);
             }
             else
             {   
                 // compute padding seq_len
-                compute_len_inbatch_kernel((int64_t*)padding_index.data_ptr(), cur_batch_size_, cur_seq_len_, (int64_t*)padding_mask.data_ptr(), desc_.stream);
+                compute_len_inbatch_kernel((int64_t*)padding_index.data_ptr(), cur_batch_size_, cur_seq_len_, padding_mask_, desc_.stream);
             }
 
             if(pre_layernorm)
@@ -139,7 +141,7 @@ namespace eet{
             Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             qkv_add_bias(q_buffer, k_buffer, v_buffer, q_buf, k_buf, v_buf);
-            
+
             q_buffer.free();
             k_buffer.free();
             v_buffer.free();
@@ -149,19 +151,16 @@ namespace eet{
                                         desc_.max_full_seq_len_ * desc_.max_full_seq_len_, desc_.dtype_, desc_.options_);
             q_k_mul(q_buf, k_buf, qk_buf);
 
-
             q_buf.free();
 
             //softmax
-            qk_softmax(qk_buf,padding_mask);
+            qk_softmax(qk_buf);
 
-            padding_mask.free();
             //attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
 
             attn_v_mul(qk_buf,v_buf,transpose_dst);
-
 
             qk_buf.free();
 
@@ -180,6 +179,7 @@ namespace eet{
 
             //project
             project(dst,output_,input ,pre_layernorm,add_redusial);
+
             dst.free();
             step_ = cur_seq_len_;
             // output_ = output_[input.sizes()];
@@ -317,9 +317,10 @@ namespace eet{
 #endif
         }
 
-        void MaskedMultiHeadAttention::qk_softmax(Buffer& qk_buf, Buffer& padding_mask){
+        void MaskedMultiHeadAttention::qk_softmax(Buffer& qk_buf){
             float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
-            RUN_KERNEL(softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), (int64_t*)padding_mask.data_ptr(),  cur_batch_size_,
+
+            RUN_KERNEL(softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), padding_mask_,  cur_batch_size_,
                     desc_.head_num_,cur_seq_len_, scalar, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
@@ -418,7 +419,7 @@ namespace eet{
          {
             RUN_KERNEL(masked_attention_dispatch,desc_.dtype_,k_buffer.data_ptr(),v_buffer.data_ptr(),q_buffer.data_ptr(),
                         q_bias_,k_cache_.data_ptr(),k_bias_,v_cache_.data_ptr(),v_bias_,
-                        context_buf.data_ptr(),cur_batch_size_,desc_.head_num_,size_per_head_,step_, desc_.stream, nullptr);
+                        context_buf.data_ptr(),cur_batch_size_,desc_.head_num_,size_per_head_,step_, desc_.stream, padding_mask_);
             #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());

@@ -4,6 +4,8 @@
 #include <iostream>
 #include <assert.h>
 #include "cub/cub.cuh"
+#include <iostream>
+#include <vector>
 
 const int WARP_SIZE = 32;
 const bool ATTENION_OPT = true;
@@ -35,7 +37,7 @@ void masked_attention_kernel(
   T* key_buf, T* value_buf,
   T* query_buf, const T* self_Q_bias, 
   T* key_cache, const T* self_K_bias, T* value_cache, const T* self_V_bias,
-  T* context_buf, int batch_size, int head_num, int size_per_head, const int step, const T scalar, int* padding_index)
+  T* context_buf, int batch_size, int head_num, int size_per_head, const int step, const T scalar, int64_t* padding_index)
 {
   extern __shared__ __align__(sizeof(T)) unsigned s_buf[];
   T* sq = reinterpret_cast<T *>(s_buf);
@@ -125,7 +127,7 @@ void masked_attention_kernel_opt_half2(
   float* __restrict query_buf, const float* __restrict self_Q_bias, 
   float* __restrict key_cache, const float* __restrict self_K_bias, 
   float* __restrict value_cache, const float* __restrict self_V_bias,
-  float* __restrict context_buf, int batch_size, int head_num, const int step, const float scalar, int* padding_index) {}
+  float* __restrict context_buf, int batch_size, int head_num, const int step, const float scalar, int64_t* padding_index) {}
 
 template <int size_per_head, int block_sz>
 __global__ 
@@ -134,7 +136,7 @@ void masked_attention_kernel_opt_half2(
   half* __restrict query_buf, const half* __restrict self_Q_bias, 
   half* __restrict key_cache, const half* __restrict self_K_bias, 
   half* __restrict value_cache, const half* __restrict self_V_bias,
-  half* __restrict context_buf, int batch_size, int head_num, const int step, const half scalar, int* padding_index)
+  half* __restrict context_buf, int batch_size, int head_num, const int step, const half scalar, int64_t* padding_index)
 {
   half2* key_buf_ptr = (half2*)key_buf;
   half2* value_buf_ptr = (half2*)value_buf;
@@ -231,11 +233,6 @@ void masked_attention_kernel_opt_half2(
       int padding_len = 0;
       if (padding_index != nullptr){
           padding_len = padding_index[batch_id];
-          // if (padding_len>0)
-          // {
-          //   printf("batch_id:%d  padding_len:%d\n",batch_id,padding_len);
-          // }
-          
       }
       logits[ite] = ite >= padding_len ? qk : -1e20f;
     }
@@ -336,7 +333,7 @@ void masked_attention_kernel_opt(
   T* __restrict query_buf, const T* __restrict self_Q_bias, 
   T* __restrict key_cache, const T* __restrict self_K_bias, 
   T* __restrict value_cache, const T* __restrict self_V_bias,
-  T* __restrict context_buf, int batch_size, int head_num, const int step, const T scalar, int* padding_index)
+  T* __restrict context_buf, int batch_size, int head_num, const int step, const T scalar, int64_t* padding_index)
 {
   typedef Copy_t<T, size_per_head> copy_t;
   const int elems_per_thread = size_per_head / WARP_SIZE;
@@ -423,7 +420,6 @@ void masked_attention_kernel_opt(
       int padding_len = 0;
       if (padding_index != nullptr){
           padding_len = padding_index[batch_id];
-          // printf("!!!!!!!!!!!!!!!!!!!!!!!!!  %d\n",padding_len);
       }
       logits[ite] = ite >= padding_len ? (T)qk : (T)-1e20f;
       //logits[ite] = qk;
@@ -792,7 +788,6 @@ void cross_attention_dispatch(void* query_buf, const void* Q_bias,
     dim3 grid(batch_size * head_num);
 
     int cond = size_per_head * ((ATTENION_OPT)? 1:0);
-    // printf("cond:%d\n",cond);
     switch (cond)
     {
       case 32:
@@ -849,7 +844,7 @@ void masked_attention_dispatch(
   void* key_buf, void* value_buf,
   void* query_buf, const void* self_Q_bias, 
   void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
-  void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int* padding_index)
+  void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int64_t* padding_index)
   {
     #if 1
     const int block_sz = ATTENTION_BLOCK_SIZE;
@@ -963,12 +958,12 @@ void masked_attention_dispatch(
 template void masked_attention_dispatch<float>(void* key_buf, void* value_buf,
                                               void* query_buf, const void* self_Q_bias, 
                                               void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
-                                              void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int* padding_index);
+                                              void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int64_t* padding_index);
 
 template void masked_attention_dispatch<half>(void* key_buf, void* value_buf,
                                               void* query_buf, const void* self_Q_bias, 
                                               void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
-                                              void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int* padding_index);
+                                              void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int64_t* padding_index);
 
 template void cross_attention_dispatch<float>(void *query_buf, const void *Q_bias,
                                               void *key_cache, const void *K_bias, void *value_cache, const void *V_bias, const int *length,
