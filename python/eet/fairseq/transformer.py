@@ -245,7 +245,6 @@ class EETTransformerDecoder():
         self.self_attn_padding_mask = torch.empty(0)
         self.positions = torch.zeros(1).long().cuda()
 
-
         self.max_target_positions = args.max_target_positions
         if args.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(

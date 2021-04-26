@@ -2,6 +2,9 @@ FROM nvcr.io/nvidia/cuda:11.0-cudnn8-devel-ubuntu18.04
 
 LABEL maintainer="eet 2021"
 
+# If you get an error executing apt-get update, you can try executing this command, and if it doesn't report an error, you can remove this line
+RUN rm -rf  /etc/apt/sources.list.d/cuda.list
+
 RUN apt-get update \
     && apt-get install -y \
        software-properties-common \

@@ -104,8 +104,6 @@ namespace eet{
                             return buffer;
                         }
                     }
-                    std::cout << "There are " << buffers_.size() << " buffer in vector" << std::endl;
-
                     buffers_.emplace_back(size, dtype, options);
                     return buffers_.back();
         }
