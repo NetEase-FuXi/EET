@@ -50,7 +50,7 @@ namespace eet{
             void q_k_mul(const Buffer& q_buf, const Buffer& k_buf, 
                             Buffer& qk_buf);
 
-            void qk_softmax(Buffer& qk_buf,void* attr_mask);
+            void qk_softmax(Buffer& qk_buf,const int64_t * padding_len);
 
             void attn_v_mul(const Buffer& qk_buf, const Buffer& v_buf,
                             Buffer& transpose_dst);
@@ -58,13 +58,13 @@ namespace eet{
             void transpose(const Buffer& transpose_dst, Buffer&  dst);
 
             void project(const Buffer& dst, 
-                        torch::Tensor& res,
+                        Buffer& res,
                         torch::Tensor& input, 
                         bool pre_layernorm,
                         bool add_redusial);
 
             MetaDesc desc_;
-            torch::Tensor output_;
+            // torch::Tensor output_;
             cublasGemmAlgo_t qkv_weights_algo_, q_k_algo_, attn_v_algo_;
 
             int cur_batch_size_;

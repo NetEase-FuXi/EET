@@ -16,6 +16,7 @@ void softmax_kernel_gpt2(T *qk_buf,const int64_t* __restrict padding_index, cons
         left_padding_len = padding_index[batch_id];
     }
 
+    // This is added here because if it is not added, the original value will be used by default, and the value will get bigger and bigger when there are many layers until it overflows during the calculation
     for (int i = 0; i < left_padding_len; i++)
     {
       if(threadIdx.x < seq_len)

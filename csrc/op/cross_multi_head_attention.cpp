@@ -36,7 +36,8 @@ namespace eet{
             // output_ = torch::zeros({desc_.batch_size_ , desc_.max_full_seq_len_ ,desc_.hidden_units_}, desc_.options_);
             key_mem_cache_ =torch::zeros({desc_.batch_size_ , desc_.max_seq_len_ ,desc_.hidden_units_}, desc_.options_);
             value_mem_cache_ = torch::zeros_like(key_mem_cache_);
-            
+            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"cross_attn");
+
             switch(desc_.dtype_){
                 case torch::kFloat32:
                     qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT;

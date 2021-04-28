@@ -7,7 +7,7 @@
 #include <cuda_fp16.h>
 #include <cublas_v2.h>
 
-// #define _DEBUG_MODE_
+#define _DEBUG_MODE_
 #define QKV_PTR_SIZE 3
 #define FUSED_QKV_PTR_SIZE 9
 

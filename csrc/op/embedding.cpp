@@ -24,9 +24,7 @@ namespace eet
         cur_seq_len_(0)
         {
             // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
-            // 此处将embedding、attention、ffn的output显存都申请好，embedding和ffn可以复用，所以只需要申请两份
             Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_ffn");
-            Buffer& attn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn");
         }
 
         // embed tokens and positions

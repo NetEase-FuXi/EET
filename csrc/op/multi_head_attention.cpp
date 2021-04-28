@@ -36,7 +36,9 @@ namespace eet{
             layernorm_bias_(layernorm_bias.data_ptr())
         {   
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
-            output_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
+            // output_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
+            Buffer& attn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn");
+
             check_cuda_error(cudaMalloc(&fused_qkv_ptr_,sizeof(void**) * FUSED_QKV_PTR_SIZE));
             qkv_kernel_ = (void**)fused_qkv_ptr_;
             qkv_input_  = qkv_kernel_ + QKV_PTR_SIZE;
@@ -70,7 +72,7 @@ namespace eet{
 
         // encoder
         torch::Tensor MultiHeadAttention::forward(torch::Tensor& input,
-                                    const torch::Tensor& padding_mask,
+                                    const torch::Tensor& pre_padding_len,
                                     bool pre_layernorm,
                                     bool add_redusial){
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MultiHeadAttention's dtype");
@@ -122,18 +124,9 @@ namespace eet{
             q_buf.free();
 
             //softmax
-            if (padding_mask.data_ptr() == nullptr)
-            {
-                Buffer& atten_mask = MManager::get_instance().get_buffer(desc_.batch_size_* desc_.max_full_seq_len_ * desc_.max_full_seq_len_, torch::kInt64, desc_.options_);
-                fill_kernel((int64_t*)atten_mask.data_ptr(),cur_batch_size_* cur_seq_len_* cur_seq_len_,(int64_t)1);
-                qk_softmax(qk_buf,atten_mask.data_ptr());
-                atten_mask.free();
-            }
-            else{
-                qk_softmax(qk_buf,padding_mask.data_ptr());
-            }
+            const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
 
-
+            qk_softmax(qk_buf,padding_len);
 
             //attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
@@ -153,11 +146,13 @@ namespace eet{
             transpose_dst.free();
 
             //project
-            project(dst,output_,input ,pre_layernorm,add_redusial);
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn");
+
+            project(dst,output,input ,pre_layernorm,add_redusial);
             dst.free();
             // output_ = output_[input.sizes()];
 
-            auto res = torch::from_blob(output_.data_ptr(), input.sizes(), input.strides(), desc_.options_);
+            auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
 
             return std::move(res);
         }
@@ -244,9 +239,10 @@ namespace eet{
 #endif
         }
 
-        void MultiHeadAttention::qk_softmax(Buffer& qk_buf,void* attr_mask){
+        void MultiHeadAttention::qk_softmax(Buffer& qk_buf,const int64_t * padding_len){
             float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
-            RUN_KERNEL(bert_softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), attr_mask, cur_batch_size_,
+
+            RUN_KERNEL(bert_softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), padding_len, cur_batch_size_,
                     desc_.head_num_,cur_seq_len_, scalar, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
@@ -286,7 +282,7 @@ namespace eet{
             #endif
         }
 
-        void MultiHeadAttention::project(const Buffer& dst, torch::Tensor& res,torch::Tensor& input, bool pre_layernorm,bool add_redusial){
+        void MultiHeadAttention::project(const Buffer& dst, Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_redusial){
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = desc_.head_num_ * size_per_head_;
             int n = k;

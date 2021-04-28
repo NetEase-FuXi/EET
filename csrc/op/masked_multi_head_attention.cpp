@@ -40,6 +40,8 @@ namespace eet{
             k_cache_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
             v_cache_ = torch::zeros_like(k_cache_);
             check_cuda_error(cudaMalloc(&fused_qkv_ptr_,sizeof(void**) * FUSED_QKV_PTR_SIZE));
+            Buffer& attn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn");
+
             qkv_kernel_ = (void**)fused_qkv_ptr_;
             qkv_input_  = qkv_kernel_ + QKV_PTR_SIZE;
             qkv_buf_   = qkv_input_  + QKV_PTR_SIZE;
