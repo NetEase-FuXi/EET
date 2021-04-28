@@ -37,7 +37,7 @@ void masked_attention_kernel(
   T* key_buf, T* value_buf,
   T* query_buf, const T* self_Q_bias, 
   T* key_cache, const T* self_K_bias, T* value_cache, const T* self_V_bias,
-  T* context_buf, int batch_size, int head_num, int size_per_head, const int step, const T scalar, int64_t* padding_index)
+  T* context_buf, int batch_size, int head_num, int size_per_head, const int step, const T scalar, const int64_t* pre_padding_len)
 {
   extern __shared__ __align__(sizeof(T)) unsigned s_buf[];
   T* sq = reinterpret_cast<T *>(s_buf);
@@ -73,8 +73,8 @@ void masked_attention_kernel(
     T qk = blockReduceSum(val);
     if(threadIdx.x == 0){
       int padding_len = 0;
-      if (padding_index != nullptr){
-          padding_len = padding_index[batch_id];
+      if (pre_padding_len != nullptr){
+          padding_len = pre_padding_len[batch_id];
       }
       logits[ite] = ite >= padding_len ? qk : (T)-1e20f;
     }
@@ -127,7 +127,7 @@ void masked_attention_kernel_opt_half2(
   float* __restrict query_buf, const float* __restrict self_Q_bias, 
   float* __restrict key_cache, const float* __restrict self_K_bias, 
   float* __restrict value_cache, const float* __restrict self_V_bias,
-  float* __restrict context_buf, int batch_size, int head_num, const int step, const float scalar, int64_t* padding_index) {}
+  float* __restrict context_buf, int batch_size, int head_num, const int step, const float scalar, const int64_t* pre_padding_len) {}
 
 template <int size_per_head, int block_sz>
 __global__ 
@@ -136,7 +136,7 @@ void masked_attention_kernel_opt_half2(
   half* __restrict query_buf, const half* __restrict self_Q_bias, 
   half* __restrict key_cache, const half* __restrict self_K_bias, 
   half* __restrict value_cache, const half* __restrict self_V_bias,
-  half* __restrict context_buf, int batch_size, int head_num, const int step, const half scalar, int64_t* padding_index)
+  half* __restrict context_buf, int batch_size, int head_num, const int step, const half scalar, const int64_t* pre_padding_len)
 {
   half2* key_buf_ptr = (half2*)key_buf;
   half2* value_buf_ptr = (half2*)value_buf;
@@ -231,8 +231,8 @@ void masked_attention_kernel_opt_half2(
     if (lane_id == 0)
     {
       int padding_len = 0;
-      if (padding_index != nullptr){
-          padding_len = padding_index[batch_id];
+      if (pre_padding_len != nullptr){
+          padding_len = pre_padding_len[batch_id];
       }
       logits[ite] = ite >= padding_len ? qk : -1e20f;
     }
@@ -333,7 +333,7 @@ void masked_attention_kernel_opt(
   T* __restrict query_buf, const T* __restrict self_Q_bias, 
   T* __restrict key_cache, const T* __restrict self_K_bias, 
   T* __restrict value_cache, const T* __restrict self_V_bias,
-  T* __restrict context_buf, int batch_size, int head_num, const int step, const T scalar, int64_t* padding_index)
+  T* __restrict context_buf, int batch_size, int head_num, const int step, const T scalar, const int64_t* pre_padding_len)
 {
   typedef Copy_t<T, size_per_head> copy_t;
   const int elems_per_thread = size_per_head / WARP_SIZE;
@@ -418,8 +418,8 @@ void masked_attention_kernel_opt(
     if (lane_id == 0)
     {
       int padding_len = 0;
-      if (padding_index != nullptr){
-          padding_len = padding_index[batch_id];
+      if (pre_padding_len != nullptr){
+          padding_len = pre_padding_len[batch_id];
       }
       logits[ite] = ite >= padding_len ? (T)qk : (T)-1e20f;
       //logits[ite] = qk;
@@ -844,7 +844,7 @@ void masked_attention_dispatch(
   void* key_buf, void* value_buf,
   void* query_buf, const void* self_Q_bias, 
   void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
-  void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int64_t* padding_index)
+  void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len)
   {
     #if 1
     const int block_sz = ATTENTION_BLOCK_SIZE;
@@ -859,14 +859,14 @@ void masked_attention_dispatch(
         masked_attention_kernel_opt<32, block_sz, T><<<grid, block_sz, 0, stream>>>(
           (T*)key_buf, (T*)value_buf,
           (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
-          batch_size, head_num, step, scalar, padding_index); 
+          batch_size, head_num, step, scalar, pre_padding_len); 
         break;
       case 64:
         if(sizeof(T) == 2)
           masked_attention_kernel_opt_half2<64, block_sz><<<grid, block_sz, 0, stream>>>(
             (T*)key_buf, (T*)value_buf,
             (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
-            batch_size, head_num, step, scalar, padding_index);
+            batch_size, head_num, step, scalar, pre_padding_len);
         else
           masked_attention_kernel_opt<64, block_sz, T><<<grid, block_sz, 0, stream>>>(
             (T*)key_buf, (T*)value_buf,
@@ -874,14 +874,14 @@ void masked_attention_dispatch(
             (T*)key_cache, (T*)self_K_bias, 
             (T*)value_cache, (T*)self_V_bias, 
             (T*)context_buf, 
-            batch_size, head_num, step, scalar, padding_index);
+            batch_size, head_num, step, scalar, pre_padding_len);
         break;
       case 80:
         if(sizeof(T) == 2)
           masked_attention_kernel_opt_half2<80, block_sz><<<grid, block_sz, 0, stream>>>(
             (T*)key_buf, (T*)value_buf,
             (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
-            batch_size, head_num, step, scalar, padding_index);
+            batch_size, head_num, step, scalar, pre_padding_len);
         else
           masked_attention_kernel_opt<80, block_sz, T><<<grid, block_sz, 0, stream>>>(
             (T*)key_buf, (T*)value_buf,
@@ -889,14 +889,14 @@ void masked_attention_dispatch(
             (T*)key_cache, (T*)self_K_bias, 
             (T*)value_cache, (T*)self_V_bias, 
             (T*)context_buf, 
-            batch_size, head_num, step, scalar, padding_index);
+            batch_size, head_num, step, scalar, pre_padding_len);
         break;
       case 96:
         if(sizeof(T) == 2)
           masked_attention_kernel_opt_half2<96, block_sz><<<grid, block_sz, 0, stream>>>(
             (T*)key_buf, (T*)value_buf,
             (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
-            batch_size, head_num, step, scalar, padding_index);
+            batch_size, head_num, step, scalar, pre_padding_len);
         else
           masked_attention_kernel_opt<96, block_sz, T><<<grid, block_sz, 0, stream>>>(
             (T*)key_buf, (T*)value_buf,
@@ -904,19 +904,19 @@ void masked_attention_dispatch(
             (T*)key_cache, (T*)self_K_bias, 
             (T*)value_cache, (T*)self_V_bias, 
             (T*)context_buf, 
-            batch_size, head_num, step, scalar, padding_index);
+            batch_size, head_num, step, scalar, pre_padding_len);
         break;
       case 128:
         if(sizeof(T) == 2)
           masked_attention_kernel_opt_half2<128, block_sz><<<grid, block_sz, 0, stream>>>(
             (T*)key_buf, (T*)value_buf,
             (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
-            batch_size, head_num, step, scalar, padding_index);
+            batch_size, head_num, step, scalar, pre_padding_len);
         else
           masked_attention_kernel_opt<128, block_sz, T><<<grid, block_sz, 0, stream>>>(
             (T*)key_buf, (T*)value_buf,
             (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
-            batch_size, head_num, step, scalar, padding_index);
+            batch_size, head_num, step, scalar, pre_padding_len);
         break;
       default:
         // default path
@@ -949,7 +949,7 @@ void masked_attention_dispatch(
           (T*)key_cache, (T*)self_K_bias,
           (T*)value_cache, (T*)self_V_bias,
           (T*)context_buf, batch_size,
-          head_num, size_per_head, step, scalar, padding_index);
+          head_num, size_per_head, step, scalar, pre_padding_len);
     }
    #endif
   }
@@ -958,12 +958,12 @@ void masked_attention_dispatch(
 template void masked_attention_dispatch<float>(void* key_buf, void* value_buf,
                                               void* query_buf, const void* self_Q_bias, 
                                               void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
-                                              void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int64_t* padding_index);
+                                              void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len);
 
 template void masked_attention_dispatch<half>(void* key_buf, void* value_buf,
                                               void* query_buf, const void* self_Q_bias, 
                                               void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
-                                              void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, int64_t* padding_index);
+                                              void* context_buf, int& batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len);
 
 template void cross_attention_dispatch<float>(void *query_buf, const void *Q_bias,
                                               void *key_cache, const void *K_bias, void *value_cache, const void *V_bias, const int *length,

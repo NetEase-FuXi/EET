@@ -24,20 +24,20 @@ namespace eet{
                                     const torch::Tensor& layernorm_bias);
 
             torch::Tensor forward(torch::Tensor& input, 
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_len,
                                     bool pre_layernorm,
                                     bool add_redusial,
                                     bool first_pass);
 
             // full decode
             torch::Tensor forward_full(torch::Tensor& input, 
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_len,
                                     bool pre_layernorm,
                                     bool add_redusial);
             
             // incremental decode
             torch::Tensor forward_inc(torch::Tensor& input, 
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_len,
                                     bool pre_layernorm,
                                     bool add_redusial);
 
@@ -65,7 +65,7 @@ namespace eet{
             void q_k_mul(const Buffer& q_buf, const Buffer& k_buf, 
                             Buffer& qk_buf);
 
-            void qk_softmax(Buffer& qk_buf);
+            void qk_softmax(Buffer& qk_buf,const int64_t *padding_len);
 
             void attn_v_mul(const Buffer& qk_buf, const Buffer& v_buf,
                             Buffer& transpose_dst);
@@ -73,7 +73,7 @@ namespace eet{
             void transpose(const Buffer& transpose_dst, Buffer&  dst);
 
             void project(const Buffer& dst, 
-                        torch::Tensor& res,
+                        Buffer& res,
                         torch::Tensor& input, 
                         bool pre_layernorm,
                         bool add_redusial);
@@ -81,14 +81,14 @@ namespace eet{
             void masked_attention(const Buffer& k_buffer,
                                 const Buffer& v_buffer,
                                 const Buffer& q_buffer,
-                                Buffer& context_buf);
+                                Buffer& context_buf,
+                                const int64_t *padding_len);
 
             void kv_transpose(torch::Tensor& d_K_buf, torch::Tensor& d_V_buf,Buffer& K_buf,Buffer& V_buf);
             
             MetaDesc desc_;
-            torch::Tensor output_;
+            // torch::Tensor output_;
             torch::Tensor k_cache_, v_cache_;
-            int64_t* padding_mask_;
             cublasGemmAlgo_t qkv_weights_algo_, q_k_algo_, attn_v_algo_;
 
             int cur_batch_size_;

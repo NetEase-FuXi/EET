@@ -39,7 +39,7 @@ namespace eet
                 return;
             }
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
-            output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
+            // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
 
             switch (desc_.dtype_)
             {
@@ -95,14 +95,15 @@ namespace eet
             }
 
             add_bias_act(ffn_inner);
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_ffn");
 
-            fc2_mul(ffn_inner, output_);
+            fc2_mul(ffn_inner, output);
 
             ffn_inner.free();
 
-            add_input_bias_layernorm(output_,input,pre_layernorm, add_redusial);
+            add_input_bias_layernorm(output,input,pre_layernorm, add_redusial);
 
-            auto res = torch::from_blob(output_.data_ptr(), input.sizes(), input.strides(), desc_.options_);
+            auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
             return std::move(res);
         }
 
@@ -154,7 +155,7 @@ namespace eet
 #endif
         }
 
-        void FeedForwardNetwork::fc2_mul(const Buffer& ffn_inner, torch::Tensor& output)
+        void FeedForwardNetwork::fc2_mul(const Buffer& ffn_inner, Buffer& output)
         { 
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_ ;
@@ -178,7 +179,7 @@ namespace eet
 #endif
         }
 
-        void FeedForwardNetwork::add_input_bias_layernorm(torch::Tensor& output,torch::Tensor& input,bool pre_layernorm, bool add_redusial)
+        void FeedForwardNetwork::add_input_bias_layernorm(Buffer& output,torch::Tensor& input,bool pre_layernorm, bool add_redusial)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_ ;

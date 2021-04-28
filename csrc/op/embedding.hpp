@@ -25,11 +25,11 @@ namespace eet
         private:
             void fused_embedding(const torch::Tensor& input_tensor,const torch::Tensor &position_ids,const torch::Tensor &token_type_ids, void* embedding_out); 
 
-            void layer_norm(Buffer& input,torch::Tensor& out); 
+            void layer_norm(Buffer& input,Buffer& out); 
 
             int step_;
             MetaDesc desc_;
-            torch::Tensor output_;
+            // torch::Tensor output_;
             void *embedding_weights_;
             void *position_weights_;
             void *token_type_weights_;

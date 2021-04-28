@@ -139,7 +139,7 @@ class EETTransformerAttention():
 
     def __call__(self,
                 input_id,
-                padding_index,
+                pre_padding_len,
                 encoder_out = None,
                 encoder_padding_mask = None,
                 pre_layernorm = True,
@@ -147,14 +147,14 @@ class EETTransformerAttention():
                 first_pass = False):
 
         if self.is_encoder:
-            return self.attention.forward(input_id,padding_index,pre_layernorm,add_redusial)
+            return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial)
         else:
             if encoder_out is None:
                 # self_atten
-                return self.attention.forward(input_id,padding_index,pre_layernorm,add_redusial,first_pass)
+                return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial,first_pass)
             else:
                 # cross_atten
-                return self.attention.forward(input_id,encoder_out,padding_index,pre_layernorm,add_redusial,encoder_padding_mask,first_pass)
+                return self.attention.forward(input_id,encoder_out,pre_padding_len,pre_layernorm,add_redusial,encoder_padding_mask,first_pass)
 
     @staticmethod
     def from_torch(meta_des,model_dict, no_encoder_attn=True,data_type = torch.float32,is_encoder = False):
@@ -175,19 +175,19 @@ class EETTransformerDecoderLayer():
 
     def __call__(self,
                 x,
-                attention_padding_mask = None,
+                pre_padding_len = None,
                 encoder_out = None,
                 encoder_padding_mask  = None,
                 first_pass = False):
         if encoder_out is not None:
             ''' self_attn -> cross_attn -> ffn'''
             self_attn_out = self.attetion(input_id = x,
-                        padding_index = attention_padding_mask,
+                        pre_padding_len = pre_padding_len,
                         pre_layernorm = self.pre_layernorm,
                         add_redusial = self.add_redusial,
                         first_pass = first_pass)
             cross_attn_out = self.cross_attention(input_id = self_attn_out,
-                        padding_index = attention_padding_mask,
+                        pre_padding_len = pre_padding_len,
                         encoder_out = encoder_out,
                         encoder_padding_mask = encoder_padding_mask,
                         pre_layernorm = self.pre_layernorm,
@@ -199,7 +199,7 @@ class EETTransformerDecoderLayer():
         else:
             ''' self_attn -> ffn'''
             self_attn_out = self.attetion(input_id = x,
-                        padding_index = attention_padding_mask,
+                        pre_padding_len = pre_padding_len,
                         pre_layernorm = self.pre_layernorm,
                         add_redusial = self.add_redusial,
                         first_pass = first_pass)
@@ -242,8 +242,9 @@ class EETTransformerDecoder():
         self.share_input_output_embed = args.share_decoder_input_output_embed
         self.output_embed_dim = args.decoder_output_dim
         self.embed_tokens = embed_tokens
-        self.self_attn_padding_mask = torch.empty(0)
+        self.pre_padding_len = torch.empty(0)
         self.positions = torch.zeros(1).long().cuda()
+        self.pre_padding_len = None
 
         self.max_target_positions = args.max_target_positions
         if args.adaptive_softmax_cutoff is not None:
@@ -282,18 +283,14 @@ class EETTransformerDecoder():
             the decoder's output of shape `(batch, tgt_len, vocab)`
         """
         if first_pass:
-            positions = utils.make_positions(
-                prev_output_tokens, self.embed_tokens.padding_idx, onnx_trace=False
-            )
-            # print('position:',positions,positions.size())
+            mask = prev_output_tokens.ne(self.embed_tokens.padding_idx).int()
+            positions = (torch.cumsum(mask, dim=1).type_as(mask) * mask).long() + self.embed_tokens.padding_idx
+            pre_padding_len = prev_output_tokens.size(1) - torch.sum(mask,1)
+            self.pre_padding_len = pre_padding_len.long()
         else:
             positions = self.positions
         x = self.embed_tokens(prev_output_tokens,positions)
 
-        """ EET will process self_attn_padding_mask to surport EET """
-        self_attn_padding_mask: Optional[Tensor] = None
-        if self.cross_self_attention or prev_output_tokens.eq(self.embed_tokens.padding_idx).any():
-            self_attn_padding_mask = prev_output_tokens.eq(self.embed_tokens.padding_idx)
 
         if (encoder_out is not None and len(encoder_out["encoder_padding_mask"]) > 0):
             encoder_padding_mask = encoder_out["encoder_padding_mask"][0]
@@ -304,12 +301,10 @@ class EETTransformerDecoder():
             encoder_out = encoder_out["encoder_out"][0]
         else:
             encoder_out = None
-        if self_attn_padding_mask is None:
-            self_attn_padding_mask = self.self_attn_padding_mask
-        self_attn_padding_mask = self_attn_padding_mask.long()
+        
         for layer in self.layers:
             x = layer(x,
-                    attention_padding_mask = self_attn_padding_mask,
+                    pre_padding_len = self.pre_padding_len,
                     encoder_out = encoder_out,
                     encoder_padding_mask = encoder_padding_mask,
                     first_pass = first_pass)

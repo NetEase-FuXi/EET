@@ -76,7 +76,7 @@ namespace eet{
             void transpose(const Buffer& transpose_dst, Buffer&  dst);
 
             void project(const Buffer& dst, 
-                    torch::Tensor& res,
+                    Buffer& res,
                     torch::Tensor& input, 
                     bool pre_layernorm,
                     bool add_redusial);
@@ -87,7 +87,7 @@ namespace eet{
 
             void kv_transpose(torch::Tensor& d_K_buf, torch::Tensor& d_V_buf,Buffer& K_buf,Buffer& V_buf);
             MetaDesc desc_;
-            torch::Tensor output_;
+            // torch::Tensor output_;
             torch::Tensor key_mem_cache_, value_mem_cache_;
 
             cublasGemmAlgo_t qkv_weights_algo_, q_k_algo_, attn_v_algo_;
