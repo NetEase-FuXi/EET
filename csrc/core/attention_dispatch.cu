@@ -876,36 +876,36 @@ void masked_attention_dispatch(
             (T*)context_buf, 
             batch_size, head_num, step, scalar, pre_padding_len);
         break;
-      case 80:
-        if(sizeof(T) == 2)
-          masked_attention_kernel_opt_half2<80, block_sz><<<grid, block_sz, 0, stream>>>(
-            (T*)key_buf, (T*)value_buf,
-            (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
-            batch_size, head_num, step, scalar, pre_padding_len);
-        else
-          masked_attention_kernel_opt<80, block_sz, T><<<grid, block_sz, 0, stream>>>(
-            (T*)key_buf, (T*)value_buf,
-            (T*)query_buf, (T*)self_Q_bias,  
-            (T*)key_cache, (T*)self_K_bias, 
-            (T*)value_cache, (T*)self_V_bias, 
-            (T*)context_buf, 
-            batch_size, head_num, step, scalar, pre_padding_len);
-        break;
-      case 96:
-        if(sizeof(T) == 2)
-          masked_attention_kernel_opt_half2<96, block_sz><<<grid, block_sz, 0, stream>>>(
-            (T*)key_buf, (T*)value_buf,
-            (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
-            batch_size, head_num, step, scalar, pre_padding_len);
-        else
-          masked_attention_kernel_opt<96, block_sz, T><<<grid, block_sz, 0, stream>>>(
-            (T*)key_buf, (T*)value_buf,
-            (T*)query_buf, (T*)self_Q_bias,  
-            (T*)key_cache, (T*)self_K_bias, 
-            (T*)value_cache, (T*)self_V_bias, 
-            (T*)context_buf, 
-            batch_size, head_num, step, scalar, pre_padding_len);
-        break;
+      // case 80:
+      //   if(sizeof(T) == 2)
+      //     masked_attention_kernel_opt_half2<80, block_sz><<<grid, block_sz, 0, stream>>>(
+      //       (T*)key_buf, (T*)value_buf,
+      //       (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
+      //       batch_size, head_num, step, scalar, pre_padding_len);
+      //   else
+      //     masked_attention_kernel_opt<80, block_sz, T><<<grid, block_sz, 0, stream>>>(
+      //       (T*)key_buf, (T*)value_buf,
+      //       (T*)query_buf, (T*)self_Q_bias,  
+      //       (T*)key_cache, (T*)self_K_bias, 
+      //       (T*)value_cache, (T*)self_V_bias, 
+      //       (T*)context_buf, 
+      //       batch_size, head_num, step, scalar, pre_padding_len);
+      //   break;
+      // case 96:
+      //   if(sizeof(T) == 2)
+      //     masked_attention_kernel_opt_half2<96, block_sz><<<grid, block_sz, 0, stream>>>(
+      //       (T*)key_buf, (T*)value_buf,
+      //       (T*)query_buf, (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
+      //       batch_size, head_num, step, scalar, pre_padding_len);
+      //   else
+      //     masked_attention_kernel_opt<96, block_sz, T><<<grid, block_sz, 0, stream>>>(
+      //       (T*)key_buf, (T*)value_buf,
+      //       (T*)query_buf, (T*)self_Q_bias,  
+      //       (T*)key_cache, (T*)self_K_bias, 
+      //       (T*)value_cache, (T*)self_V_bias, 
+      //       (T*)context_buf, 
+      //       batch_size, head_num, step, scalar, pre_padding_len);
+      //   break;
       case 128:
         if(sizeof(T) == 2)
           masked_attention_kernel_opt_half2<128, block_sz><<<grid, block_sz, 0, stream>>>(

@@ -2,6 +2,8 @@ FROM nvcr.io/nvidia/cuda:11.0-cudnn8-devel-ubuntu18.04
 
 LABEL maintainer="eet 2021"
 
+#COPY sources.list /etc/apt/sources.list
+
 # If you get an error executing apt-get update, you can try executing this command, and if it doesn't report an error, you can remove this line
 RUN rm -rf  /etc/apt/sources.list.d/cuda.list
 
@@ -29,5 +31,9 @@ RUN ln -sf /usr/bin/pip3.7 /usr/bin/pip
 COPY . /workspace/EET
 
 RUN pip install -r /workspace/EET/requirements.txt
+
+WORKDIR /workspace/EET
+
+RUN pip install .
 
 WORKDIR /workspace
