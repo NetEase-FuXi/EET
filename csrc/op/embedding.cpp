@@ -40,7 +40,11 @@ namespace eet
             const int64_t *input_ids = input_tensor.data_ptr<int64_t>();
 
             const int64_t *positions = positions_mask.data_ptr<int64_t>();
-
+            if (positions != nullptr)
+            {
+                step_ = 0;
+            }
+            // printf("step:%d\n",step_);
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_ffn");
 
             RUN_KERNEL(embedding_lookup_kernel, desc_.dtype_,embedding_weights_, input_ids,output.data_ptr(),

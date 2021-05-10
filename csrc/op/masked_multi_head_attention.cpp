@@ -93,7 +93,7 @@ namespace eet{
                                     bool add_redusial)
         {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttention's dtype");
-            
+            step_ = 1;
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
             assert((cur_seq_len_ <= desc_.max_full_seq_len_)&& "cur_seq_len must be less than or equal to max_full_seq_len_");

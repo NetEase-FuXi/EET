@@ -243,8 +243,8 @@ class EETTransformerDecoder():
         self.output_embed_dim = args.decoder_output_dim
         self.embed_tokens = embed_tokens
         self.pre_padding_len = torch.empty(0)
-        self.positions = torch.zeros(1).long().cuda()
-        self.pre_padding_len = None
+        self.positions = torch.empty(0).long()
+        # self.pre_padding_len = None
 
         self.max_target_positions = args.max_target_positions
         if args.adaptive_softmax_cutoff is not None:

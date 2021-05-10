@@ -90,6 +90,7 @@ namespace eet{
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
             mem_seq_len_ = memory.sizes()[1];
+            step_ = 1;
             //qkv * weights
             Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
