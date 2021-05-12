@@ -9,7 +9,7 @@
 namespace eet{
     namespace op{
 
-        class MaskedMultiHeadAttention{
+        class MaskedMultiHeadAttention : public OpBase{
         public:
             MaskedMultiHeadAttention(MetaDesc desc,
                                     const torch::Tensor& Q_weights,
@@ -24,20 +24,20 @@ namespace eet{
                                     const torch::Tensor& layernorm_bias);
 
             torch::Tensor forward(torch::Tensor& input, 
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial,
                                     bool first_pass);
 
             // full decode
             torch::Tensor forward_full(torch::Tensor& input, 
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial);
-            
+
             // incremental decode
             torch::Tensor forward_inc(torch::Tensor& input, 
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial);
 

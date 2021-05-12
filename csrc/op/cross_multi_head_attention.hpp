@@ -8,7 +8,7 @@
 namespace eet{
     namespace op{
 
-        class CrossMultiHeadAttention{
+        class CrossMultiHeadAttention : public OpBase{
         public:
             CrossMultiHeadAttention(MetaDesc desc,
                                     const torch::Tensor& Q_weights,
@@ -24,17 +24,17 @@ namespace eet{
 
             torch::Tensor forward(torch::Tensor& input,
                                     torch::Tensor& memory,
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial,
                                     const torch::Tensor& length_per_sample,
                                     bool first_pass);
-        
+
 
             // full decode
             torch::Tensor forward_full(torch::Tensor& input, 
                                     torch::Tensor& memory,
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial);
             

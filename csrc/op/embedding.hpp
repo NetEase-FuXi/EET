@@ -9,7 +9,7 @@ namespace eet
 {
     namespace op
     {
-        class Embedding
+        class Embedding : public OpBase
         {
         public:
             Embedding(MetaDesc desc, 

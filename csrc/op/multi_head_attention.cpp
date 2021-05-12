@@ -22,7 +22,6 @@ namespace eet{
                                     const torch::Tensor& layernorm_weights,
                                     const torch::Tensor& layernorm_bias):
             desc_(desc),
-            valid_word_num_(0),
             max_len_(0),
             q_weights_(Q_weights.data_ptr()),
             k_weights_(K_weights.data_ptr()),
@@ -76,8 +75,6 @@ namespace eet{
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MultiHeadAttention's dtype");
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
-
-            valid_word_num_ = cur_batch_size_ * cur_seq_len_;
 
             Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
@@ -312,7 +309,7 @@ namespace eet{
                 }
                 else
                 {
-                    // add_bias + add_redusial
+                    // add_bias + add_residual
                     RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(),output_bias_,
                            m , n, desc_.stream);
                 }

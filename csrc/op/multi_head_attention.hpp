@@ -8,7 +8,7 @@
 namespace eet{
     namespace op{
 
-        class MultiHeadAttention{
+        class MultiHeadAttention : public OpBase {
         public:
             MultiHeadAttention(MetaDesc desc,
                                     const torch::Tensor& Q_weights,
@@ -76,7 +76,6 @@ namespace eet{
             void** qkv_input_;
             void** qkv_kernel_;
             void** qkv_buf_;
-            int valid_word_num_;
             int max_len_;
 
         private:

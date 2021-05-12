@@ -8,7 +8,7 @@
 namespace eet{
     namespace op{
 
-        class FeedForwardNetwork{
+        class FeedForwardNetwork : public OpBase{
         public:
             FeedForwardNetwork(MetaDesc desc,
                             const torch::Tensor& Intermediate_weights,

@@ -33,7 +33,7 @@ namespace eet{
             output_bias_(Output_bias.data_ptr()),
             layernorm_weights_(layernorm_weights.data_ptr()),
             layernorm_bias_(layernorm_bias.data_ptr())
-        {   
+        {
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
 
             output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
@@ -71,23 +71,23 @@ namespace eet{
         }
 
         torch::Tensor MaskedMultiHeadAttention::forward(torch::Tensor& input,
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial,
                                     bool first_pass){
             if(first_pass)
             {
-                return forward_full(input,padding_index,pre_layernorm,add_redusial);
+                return forward_full(input,pre_padding_length,pre_layernorm,add_redusial);
             }
             else
             {
-                return forward_inc(input,padding_index,pre_layernorm,add_redusial);
+                return forward_inc(input,pre_padding_length,pre_layernorm,add_redusial);
             }
         }
 
         // full decoder
         torch::Tensor MaskedMultiHeadAttention::forward_full(torch::Tensor& input,
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial)
         {
@@ -104,14 +104,14 @@ namespace eet{
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             
             Buffer& padding_mask = MManager::get_instance().get_buffer(desc_.batch_size_, torch::kInt64, desc_.options_);
-            if (padding_index.data_ptr() == nullptr)
+            if (pre_padding_length.data_ptr() == nullptr)
             {
                 fill_kernel((int64_t*)padding_mask.data_ptr(),cur_batch_size_,(int64_t)0);
             }
             else
             {   
                 // compute padding seq_len
-                compute_len_inbatch_kernel((int64_t*)padding_index.data_ptr(), cur_batch_size_, cur_seq_len_, (int64_t*)padding_mask.data_ptr(), desc_.stream);
+                compute_len_inbatch_kernel((int64_t*)pre_padding_length.data_ptr(), cur_batch_size_, cur_seq_len_, (int64_t*)padding_mask.data_ptr(), desc_.stream);
             }
 
             if(pre_layernorm)
@@ -198,16 +198,16 @@ namespace eet{
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
             assert(cur_seq_len_ == 1);
-            Buffer& q_buffer = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& k_buffer = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& v_buffer = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             if(pre_layernorm)
             {
                 // pre_layerNorm
-                Buffer& layernormed_query = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+                Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                         desc_.hidden_units_, desc_.dtype_, desc_.options_);
                 layer_norm(input,layernormed_query);
 
@@ -220,7 +220,7 @@ namespace eet{
                 qkv_weights_mul(input.data_ptr(), q_buffer,k_buffer,v_buffer);
             }
 
-            Buffer& context_buf = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
+            Buffer& context_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
 
             //masked_attention_dispatch

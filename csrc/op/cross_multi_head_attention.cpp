@@ -64,14 +64,14 @@ namespace eet{
 
         torch::Tensor CrossMultiHeadAttention::forward(torch::Tensor& input,
                                     torch::Tensor& memory,
-                                    const torch::Tensor& padding_index,
+                                    const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial,
                                     const torch::Tensor& length_per_sample,
                                     bool first_pass){
             if(first_pass)
             {
-                return forward_full(input,memory,padding_index,pre_layernorm,add_redusial);
+                return forward_full(input,memory,pre_padding_length,pre_layernorm,add_redusial);
             }
             else
             {
@@ -82,7 +82,7 @@ namespace eet{
         // full decoder
         torch::Tensor CrossMultiHeadAttention::forward_full(torch::Tensor& input,
                             torch::Tensor& memory,
-                            const torch::Tensor& padding_index,
+                            const torch::Tensor& pre_padding_length,
                             bool pre_layernorm,
                             bool add_redusial){
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as CrossMultiHeadAttention's dtype");
@@ -133,7 +133,7 @@ namespace eet{
             q_buf.free();
 
             //softmax
-            qk_softmax(qk_buf,padding_index);
+            qk_softmax(qk_buf,pre_padding_length);
 
             //attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(cur_batch_size_ * cur_seq_len_ *
