@@ -286,7 +286,7 @@ class EETTransformerDecoder():
 
         x = self.embed_tokens(prev_output_tokens,positions)
 
-        """ EET will process self_attn_padding_mask to surport EET """
+        """ EET will process self_attn_padding_mask """
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.embed_tokens.padding_idx).any():
             self_attn_padding_mask = prev_output_tokens.eq(self.embed_tokens.padding_idx)
