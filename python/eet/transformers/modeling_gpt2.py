@@ -118,7 +118,8 @@ class EETGPT2Attention():
 
     def __call__(self,
                 input_id,
-                padding_index,
+                pre_padding_len,
+                reorder_state = None,
                 encoder_out = None,
                 encoder_padding_mask  = None,
                 pre_layernorm = False,
@@ -126,9 +127,9 @@ class EETGPT2Attention():
                 first_pass = False):
                 
         if self.cross_attn:
-            return self.attention.forward(input_id,encoder_out,padding_index,pre_layernorm,add_redusial,encoder_padding_mask,first_pass)
+            return self.attention.forward(input_id,encoder_out,pre_padding_len,pre_layernorm,add_redusial,encoder_padding_mask,first_pass)
         else:
-            return self.attention.forward(input_id,padding_index,pre_layernorm,add_redusial, first_pass)
+            return self.attention.forward(input_id,pre_padding_len,reorder_state,pre_layernorm,add_redusial, first_pass)
 
     @staticmethod
     def from_torch(meta_des,model_dict,layer_id,data_type = torch.float32):
@@ -147,21 +148,23 @@ class EETGPT2DecoderLayer():
                 x,
                 encoder_out = None,
                 first_pass = True,
-                attention_mask = None,
+                pre_padding_len = None,
                 encoder_attention_mask = None,
-                head_mask = None):
+                head_mask = None,
+                reorder_state = None):
 
         ''' gpt2 model struct '''
         ''' layernorm->self_attention-> project->addinputbias->layernorm->ffn->addinputbias'''
         if encoder_out is not None and self.cross_attention is not None:
             self_attn_out = self.attetion(input_id = x,
-                        padding_index = attention_mask,
+                        pre_padding_len = pre_padding_len,
+                        reorder_state = reorder_state,
                         pre_layernorm = self.normalize_before,
                         add_redusial = self.add_redusial,
                         first_pass = first_pass)
 
             cross_attn_out = self.cross_attention(input_id = self_attn_out,
-                        padding_index = attention_mask,
+                        pre_padding_len = pre_padding_len,
                         encoder_out = encoder_out,
                         encoder_padding_mask = encoder_attention_mask,
                         pre_layernorm = self.normalize_before,
@@ -173,7 +176,8 @@ class EETGPT2DecoderLayer():
                         add_redusial = self.add_redusial)
         else:
             self_attn_out = self.attetion(input_id = x,
-                        padding_index = attention_mask,
+                        pre_padding_len = pre_padding_len,
+                        reorder_state = reorder_state,
                         pre_layernorm = self.normalize_before,
                         add_redusial = self.add_redusial,
                         first_pass = first_pass)
@@ -205,17 +209,19 @@ class EETGPT2Decoder():
         x,
         encoder_out = None,
         first_pass = True,
-        attention_mask = None,
+        pre_padding_len = None,
         encoder_attention_mask = None,
         head_mask = None,
+        reorder_state = None,
     ):
         for layer in self.layers:
             x = layer(x,
                     encoder_out = encoder_out,
                     first_pass = first_pass,
-                    attention_mask = attention_mask,
+                    pre_padding_len = pre_padding_len,
                     encoder_attention_mask = encoder_attention_mask,
-                    head_mask = None)
+                    head_mask = None,
+                    reorder_state = reorder_state)
         return x
     
     @staticmethod
@@ -247,6 +253,7 @@ class EETGPT2Model():
         self.position_ids = torch.arange(0,config.n_positions).reshape(1,config.n_positions).cuda()
         self.self_attn_padding_mask = torch.empty(0)
         self.encoder_attention_mask = torch.empty(0)
+        self.reorder_state = torch.empty(0).long()
 
     def __call__(
         self,
@@ -256,6 +263,7 @@ class EETGPT2Model():
         position_ids = None,
         token_type_ids = None,
         attention_mask = None,
+        reorder_state = None,
     ):
         """ EET suport left padding, ``0`` for tokens that are NOT MASKED, ``1`` for MASKED tokens. The struct like [1,1,1,0,0,0]"""
 
@@ -263,19 +271,25 @@ class EETGPT2Model():
         batch_size = input_shape[0]
         # Attention mask.
         if attention_mask is  None:
-            attention_mask = self.self_attn_padding_mask
+            pre_padding_len = self.self_attn_padding_mask
+        else:
+            pre_padding_len = torch.sum(attention_mask, 1, True).cuda().long()
 
         position_ids = self.position_ids[:, :input_shape[1]]
         if token_type_ids is not None:
             token_type_ids = token_type_ids.view(-1, input_shape[-1])
         embedding_out = self.embedding(input_ids,position_ids,token_type_ids)
 
+        if reorder_state is not None:
+            self.reorder_state = reorder_state.long()
+
         decoder_out = self.decoder(embedding_out,
                     encoder_out = encoder_out,
                     first_pass = first_pass,
-                    attention_mask = attention_mask,
+                    pre_padding_len = pre_padding_len,
                     encoder_attention_mask = self.encoder_attention_mask,
-                    head_mask = None,)
+                    head_mask = None,
+                    reorder_state = self.reorder_state,)
         
         decoder_out = self.layer_norm(decoder_out)
         return decoder_out

@@ -140,6 +140,7 @@ class EETTransformerAttention():
     def __call__(self,
                 input_id,
                 pre_padding_len,
+                reorder_state = None,
                 encoder_out = None,
                 encoder_padding_mask = None,
                 pre_layernorm = True,
@@ -151,7 +152,7 @@ class EETTransformerAttention():
         else:
             if encoder_out is None:
                 # self_atten
-                return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial,first_pass)
+                return self.attention.forward(input_id,pre_padding_len,reorder_state,pre_layernorm,add_redusial,first_pass)
             else:
                 # cross_atten
                 return self.attention.forward(input_id,encoder_out,pre_padding_len,pre_layernorm,add_redusial,encoder_padding_mask,first_pass)
@@ -176,6 +177,7 @@ class EETTransformerDecoderLayer():
     def __call__(self,
                 x,
                 pre_padding_len = None,
+                reorder_state = None,
                 encoder_out = None,
                 encoder_padding_mask  = None,
                 first_pass = False):
@@ -183,6 +185,7 @@ class EETTransformerDecoderLayer():
             ''' self_attn -> cross_attn -> ffn'''
             self_attn_out = self.attetion(input_id = x,
                         pre_padding_len = pre_padding_len,
+                        reorder_state = reorder_state,
                         pre_layernorm = self.pre_layernorm,
                         add_redusial = self.add_redusial,
                         first_pass = first_pass)
@@ -200,6 +203,7 @@ class EETTransformerDecoderLayer():
             ''' self_attn -> ffn'''
             self_attn_out = self.attetion(input_id = x,
                         pre_padding_len = pre_padding_len,
+                        reorder_state = reorder_state,
                         pre_layernorm = self.pre_layernorm,
                         add_redusial = self.add_redusial,
                         first_pass = first_pass)
@@ -242,9 +246,10 @@ class EETTransformerDecoder():
         self.share_input_output_embed = args.share_decoder_input_output_embed
         self.output_embed_dim = args.decoder_output_dim
         self.embed_tokens = embed_tokens
-        self.pre_padding_len = torch.empty(0)
+        self.pre_padding_len = torch.empty(0).long()
         self.positions = torch.empty(0).long()
         # self.pre_padding_len = None
+        self.reorder_state = torch.empty(0).long()
 
         self.max_target_positions = args.max_target_positions
         if args.adaptive_softmax_cutoff is not None:
@@ -266,6 +271,7 @@ class EETTransformerDecoder():
     def __call__(
         self,
         prev_output_tokens,
+        reorder_state = None,
         encoder_out: Optional[Dict[str, List[Tensor]]] = None,
         features_only: bool = False,
         first_pass = False
@@ -302,9 +308,14 @@ class EETTransformerDecoder():
         else:
             encoder_out = None
         
+        if reorder_state is not None:
+            self.reorder_state = reorder_state.long()
+
+
         for layer in self.layers:
             x = layer(x,
                     pre_padding_len = self.pre_padding_len,
+                    reorder_state = self.reorder_state,
                     encoder_out = encoder_out,
                     encoder_padding_mask = encoder_padding_mask,
                     first_pass = first_pass)
