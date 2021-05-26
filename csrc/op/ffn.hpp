@@ -32,12 +32,12 @@ namespace eet{
 
             void add_bias_act(Buffer& ffn_inner);
 
-            void fc2_mul(const Buffer& ffn_inner, torch::Tensor& output);
+            void fc2_mul(const Buffer& ffn_inner, Buffer& output);
 
-            void add_input_bias_layernorm(torch::Tensor& output,torch::Tensor& input_tensor,bool pre_layernorm, bool add_redusial);
+            void add_input_bias_layernorm(Buffer& output,torch::Tensor& input_tensor,bool pre_layernorm, bool add_redusial);
 
             MetaDesc desc_;
-            torch::Tensor output_;
+            // torch::Tensor output_;
 
             cublasGemmAlgo_t fc1_algo_, fc2_algo_;
             int act_type_;

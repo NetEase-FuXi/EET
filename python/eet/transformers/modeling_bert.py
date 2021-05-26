@@ -20,7 +20,7 @@ from EET import FeedForwardNetwork as eet_ffn
 from EET import MultiHeadAttention as eet_attention
 from EET import Embedding as eet_embedding
 
-Beginning_of_param = 8
+BEGIN_OF_PARAM = 8
 
 __all__ = [
     'EETBertEmbedding', 'EETBertFeedforward', 'EETBertAttention', 'EETBertEncoderLayer', 'EETBertEncoder', 'EETBertModel'
@@ -84,10 +84,10 @@ class EETBertAttention():
 
     def __call__(self,
                 input_id,
-                mask_padding,
+                pre_padding_len,
                 pre_layernorm = False,
                 add_redusial = True):
-        return self.attention.forward(input_id,mask_padding,pre_layernorm,add_redusial)
+        return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial)
 
     @staticmethod
     def from_torch(config,model_dict,layer_id,data_type = torch.float32):
@@ -101,14 +101,14 @@ class EETBertEncoderLayer():
 
     def __call__(self,
                 x,
-                mask_padding = None,
+                pre_padding_len = None,
                 normalize_before = False):
 
         if normalize_before:
             ''' gpt2 model struct '''
             ''' layernorm->self_attention-> project->addinputbias->layernorm->ffn->addinputbias'''
             self_attn_out = self.attetion(input_id = x,
-                        mask_padding = mask_padding,
+                        pre_padding_len = pre_padding_len,
                         pre_layernorm = True,
                         add_redusial = True)
             out = self.feedforward(self_attn_out,
@@ -116,7 +116,7 @@ class EETBertEncoderLayer():
                         add_redusial = True)
         else:
             self_attn_out = self.attetion(input_id = x,
-                        mask_padding = mask_padding,
+                        pre_padding_len = pre_padding_len,
                         pre_layernorm = False,
                         add_redusial = True)
             out = self.feedforward(self_attn_out,
@@ -137,12 +137,12 @@ class EETBertEncoder():
     def __call__(
         self,
         x,
-        mask_padding = None,
+        pre_padding_len = None,
         normalize_before = False
     ):
         for layer in self.layers:
             x = layer(x,
-                      mask_padding = mask_padding,
+                      pre_padding_len = pre_padding_len,
                       normalize_before = False)
         return x
     
@@ -171,8 +171,7 @@ class EETBertModel():
     def __init__(self,config,embedding,encoder):
         self.embedding = embedding
         self.encoder = encoder
-        self.mask_padding = torch.empty(0)
-
+        self.pre_padding_len = torch.empty(0).long()
         self.position_ids = torch.arange(0,config.max_position_embeddings).reshape(1,config.max_position_embeddings).cuda()
     def __call__(
         self,
@@ -195,16 +194,15 @@ class EETBertModel():
             token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
         
         if attention_mask is None:
-            mask_padding = self.mask_padding
+            pre_padding_len = self.pre_padding_len
         else:
-            attention_mask = attention_mask.view(-1, 1, 1, input_shape[1])
-            m2 = torch.ones(input_shape[0],1,input_shape[1],1).cuda()
-            mask_padding = attention_mask * m2
-        # mask_padding = torch.ones(input_shape, dtype=torch.long, device=input_ids.device)
+            # transformers 0 - padding;1 - nopadding
+            pre_padding_len =  torch.sum(1 - attention_mask,1).long().cuda()
+            
         embedding_out = self.embedding(input_ids,position_ids,token_type_ids)
-
+        
         encoder_out = self.encoder(embedding_out,
-                    mask_padding = mask_padding,
+                    pre_padding_len = pre_padding_len,
                     normalize_before = False)
 
 
@@ -223,12 +221,12 @@ class EETBertModel():
             if 'embeddings' in k:
                 embedding_dict[k] = v
             if 'layer' in k:
-                #Beginning_of_param(Length of the beginning of the parameter):
-                #like 'encoder.layer.0.attention.self.query.weight',the Beginning_of_param is the length of 'encoder.'-->8
-                k = k[Beginning_of_param:]
+                #BEGIN_OF_PARAM(Length of the beginning of the parameter):
+                #like 'encoder.layer.0.attention.self.query.weight',the BEGIN_OF_PARAM is the length of 'encoder.'-->8
+                k = k[BEGIN_OF_PARAM:]
                 model_dict[k] = v
         from itertools import groupby
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:Beginning_of_param])}
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:BEGIN_OF_PARAM])}
 
         device = "cuda:0"
         activation_fn = cfg.hidden_act

@@ -89,22 +89,22 @@ void position_encoding(T* output,const int64_t* positions,int seq_len, int step,
 
   int cuda_step = 0;
   // full decoder
-  if (seq_len >1)
-  {
-    cuda_step = positions[bid]; /*bid % seq_len + padding_idx + 1;*/
-  }
-  else
-  {
-    cuda_step = step + padding_idx + 1;
-  }
-  
+  T encoding_val = 0;
   float log_result = __logf(10000) / (half_n - 1.f);
   float exp_result = __expf( (tid % (int)half_n) * -1 * log_result );
-  float scaled_time = exp_result *  cuda_step;
-  
-  T encoding_val = (tid < half_n) ? (T) __sinf(scaled_time) : (T) __cosf(scaled_time);
+  if (seq_len >1 && positions[bid] != 1)
+  {
+    cuda_step = positions[bid]; /*bid % seq_len + padding_idx + 1;*/
+    float scaled_time = exp_result *  cuda_step;
+    encoding_val = (tid < half_n) ? (T) __sinf(scaled_time) : (T) __cosf(scaled_time);
+  }
+  else if (seq_len == 1)
+  {
+    cuda_step = step + padding_idx + 1;
+    float scaled_time = exp_result *  cuda_step;
+    encoding_val = (tid < half_n) ? (T) __sinf(scaled_time) : (T) __cosf(scaled_time);
+  }
   output[bid * n + tid] = output[bid * n + tid]  + encoding_val;
-
 }
 
 template<typename T>
@@ -128,6 +128,7 @@ void position_encoding_kernel(
   }
   dim3 grid(m , fold_coeff);
   dim3 block(k / fold_coeff);
+  // printf("step:%d\n",step);
   position_encoding<T><<<grid, block, 0, stream>>>((T*)output,positions, seq_len,step,padding_idx, n);
 }
 

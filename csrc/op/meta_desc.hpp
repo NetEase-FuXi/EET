@@ -87,6 +87,7 @@ class MetaDesc{
             check_cuda_error(cudaStreamCreate(&stream));
             check_cuda_error(cublasSetStream(cublasHandle, stream));
         }
+
     }
 
     MetaDesc(const MetaDesc& meta) = default;

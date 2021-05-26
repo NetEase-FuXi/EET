@@ -23,7 +23,8 @@ namespace eet
         cur_batch_size_(0),
         cur_seq_len_(0)
         {
-            output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
+            // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
+            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_ffn_cache");
         }
 
         // embed tokens and positions
@@ -39,8 +40,14 @@ namespace eet
             const int64_t *input_ids = input_tensor.data_ptr<int64_t>();
 
             const int64_t *positions = positions_mask.data_ptr<int64_t>();
+            if (positions != nullptr)
+            {
+                step_ = 0;
+            }
+            // printf("step:%d\n",step_);
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_ffn_cache");
 
-            RUN_KERNEL(embedding_lookup_kernel, desc_.dtype_,embedding_weights_, input_ids,output_.data_ptr(),
+            RUN_KERNEL(embedding_lookup_kernel, desc_.dtype_,embedding_weights_, input_ids,output.data_ptr(),
                         embedding_num, desc_.hidden_units_, desc_.stream,/*acc=*/false,/*ratio=*/1,no_scale_embedding);
             
             
@@ -50,7 +57,7 @@ namespace eet
             #endif
             int m = embedding_num;
             int n = desc_.hidden_units_;
-            RUN_KERNEL(position_encoding_kernel, desc_.dtype_,output_.data_ptr(),positions,
+            RUN_KERNEL(position_encoding_kernel, desc_.dtype_,output.data_ptr(),positions,
                         cur_seq_len_,step_, padding_idx,m , n, desc_.stream);
 
             #ifdef _DEBUG_MODE_
@@ -59,7 +66,7 @@ namespace eet
             #endif
             step_ += cur_seq_len_;
 
-            auto res = torch::from_blob(output_.data_ptr(),{cur_batch_size_, cur_seq_len_,desc_.hidden_units_} ,desc_.options_);
+            auto res = torch::from_blob(output.data_ptr(),{cur_batch_size_, cur_seq_len_,desc_.hidden_units_} ,desc_.options_);
             return std::move(res);
         }
 
@@ -69,6 +76,7 @@ namespace eet
         {
             cur_batch_size_ = input_tensor.sizes()[0];
             cur_seq_len_ = input_tensor.sizes()[1];
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_ffn_cache");
 
             if(if_layernorm)
             {
@@ -78,16 +86,16 @@ namespace eet
                 fused_embedding(input_tensor,position_ids,token_type_ids,embedding_out.data_ptr());
                 
                 // layernorm
-                layer_norm(embedding_out,output_);
+                layer_norm(embedding_out,output);
                 embedding_out.free();
-                auto res = torch::from_blob(output_.data_ptr(),{cur_batch_size_, cur_seq_len_,desc_.hidden_units_} ,desc_.options_);
+                auto res = torch::from_blob(output.data_ptr(),{cur_batch_size_, cur_seq_len_,desc_.hidden_units_} ,desc_.options_);
                 return std::move(res);
             }
             else
             {
                 // embedding                    
-                fused_embedding(input_tensor,position_ids,token_type_ids,output_.data_ptr());
-                auto res = torch::from_blob(output_.data_ptr(),{cur_batch_size_, cur_seq_len_,desc_.hidden_units_} ,desc_.options_);
+                fused_embedding(input_tensor,position_ids,token_type_ids,output.data_ptr());
+                auto res = torch::from_blob(output.data_ptr(),{cur_batch_size_, cur_seq_len_,desc_.hidden_units_} ,desc_.options_);
                 return std::move(res);
             }
         }
@@ -132,7 +140,7 @@ namespace eet
 #endif
         }
 
-        void Embedding::layer_norm(Buffer& input,torch::Tensor& out)
+        void Embedding::layer_norm(Buffer& input,Buffer& out)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;

@@ -21,7 +21,7 @@ setup.py
 /home/ligz/project/EET/csrc/op/meta_desc.cpp
 /home/ligz/project/EET/csrc/op/mmanager.cpp
 /home/ligz/project/EET/csrc/op/multi_head_attention.cpp
-/home/ligz/project/EET/csrc/py11/gpt2_attention2py.cpp
+/home/ligz/project/EET/csrc/py11/eet2py.cpp
 python/EET.egg-info/PKG-INFO
 python/EET.egg-info/SOURCES.txt
 python/EET.egg-info/dependency_links.txt

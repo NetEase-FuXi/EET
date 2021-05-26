@@ -93,11 +93,10 @@ void add_QKV_bias_opt<half>( half* Q, const half* bias_Q, half* K, const half* b
 template<typename T>
 void add_QKV_bias_opt_kernel( void* Q, const void* bias_Q, void* K, const void* bias_K,  void* V, const void* bias_V, void* q_buf_, void* k_buf_, void* v_buf_,
                   const int& batch_size, const int& seq_len, const int& head_num, const int& size_per_head, const cudaStream_t stream){
-        // printf("inner add_qkv_bias\n");
         int qkv_types = 3;
         int m = batch_size * seq_len;
         int k = head_num * size_per_head;
-        assert(m * qkv_types <= 65536 && "batch_size * seq_len must <= 65536"); 
+        //assert(m * qkv_types <= 65536 && "batch_size * seq_len must <= 65536");
         int fold_coeff = 1;
         dim3 grid;
         dim3 block;

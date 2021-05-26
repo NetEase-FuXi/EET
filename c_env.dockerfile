@@ -28,12 +28,13 @@ RUN pip3 install --upgrade pip
 RUN ln -sf /usr/bin/python3.7 /usr/bin/python
 RUN ln -sf /usr/bin/pip3.7 /usr/bin/pip
 
-COPY . /workspace/EET
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.17.2/cmake-3.17.2-Linux-x86_64.sh \
+      -q -O /tmp/cmake-install.sh \
+      && chmod u+x /tmp/cmake-install.sh \
+      && mkdir -p /workspace/bin/cmake \
+      && /tmp/cmake-install.sh --skip-license --prefix=/workspace/bin/cmake \
+      && rm /tmp/cmake-install.sh
 
-RUN pip install -r /workspace/EET/requirements.txt
+ENV PATH="/workspace/bin/cmake/bin:${PATH}"
 
-WORKDIR /workspace/EET
 
-RUN pip install .
-
-WORKDIR /workspace
