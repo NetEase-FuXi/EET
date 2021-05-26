@@ -71,7 +71,8 @@ namespace eet{
         }
 
         torch::Tensor MaskedMultiHeadAttention::forward(torch::Tensor& input,
-                                    const torch::Tensor& pre_padding_length,
+                                    const torch::Tensor& pre_padding_len,
+                                    const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
                                     bool add_redusial,
                                     bool first_pass){
@@ -81,7 +82,7 @@ namespace eet{
             }
             else
             {
-                return forward_inc(input,pre_padding_length,pre_layernorm,add_redusial);
+                return forward_inc(input,pre_padding_len,reorder_state,pre_layernorm,add_redusial);
             }
         }
 
@@ -180,6 +181,7 @@ namespace eet{
         // incremental decoder
         torch::Tensor MaskedMultiHeadAttention::forward_inc(torch::Tensor& input,
                                     const torch::Tensor& pre_padding_len,
+                                    const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
                                     bool add_redusial){
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttention's dtype");
@@ -215,9 +217,10 @@ namespace eet{
 
             //masked_attention_dispatch
             const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
+            const int64_t *reorder_index = reorder_state.data_ptr<int64_t>();
 
-            masked_attention(k_buffer,v_buffer,q_buffer,context_buf,padding_len);
-        
+            masked_attention(k_buffer,v_buffer,q_buffer,context_buf,padding_len,reorder_index);
+
             q_buffer.free();
             k_buffer.free();
             v_buffer.free();
@@ -408,11 +411,12 @@ namespace eet{
                                                         const Buffer& v_buffer,
                                                         const Buffer& q_buffer,
                                                         Buffer& context_buf,
-                                                        const int64_t *padding_len)
+                                                        const int64_t *padding_len,
+                                                        const int64_t *reorder_index)
          {
             RUN_KERNEL(masked_attention_dispatch,desc_.dtype_,k_buffer.data_ptr(),v_buffer.data_ptr(),q_buffer.data_ptr(),
                         q_bias_,k_cache_.data_ptr(),k_bias_,v_cache_.data_ptr(),v_bias_,
-                        context_buf.data_ptr(),cur_batch_size_,desc_.head_num_,size_per_head_,step_, desc_.stream, padding_len);
+                        context_buf.data_ptr(),cur_batch_size_,desc_.head_num_,size_per_head_,step_, desc_.stream, padding_len,reorder_index);
             #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
