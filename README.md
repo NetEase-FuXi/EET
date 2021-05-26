@@ -183,18 +183,20 @@ Please make sure the dynamic-batch is open if you want a higher throughput.
 We measure the inference time and memory occupancy in different scenarios.
 Note : Total time are measured with 50% of the context
 * 3090 (batch_size=4, max_sequence_length=1024, context_length=512, precision=half)
-| Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
-| GPT-3 Small| 125M   | 12     | 768          | 3ms                         | 1.67s                     |
-| GPT-3 Medium | 350M | 24     | 1024         | 7ms                         | 3.546s                    |  
-| GPT-3 Large | 760M  | 24     | 1536         | 8ms                         | 4.361s                    | 
-| GPT-3 XL   | 1.3B   | 24     | 2048         | 10m                         |  5.091s                   | 
-| GPT-3 2.7B | 2.7B   | 32     | 2560         | 60ms                        |  31s                      | 
-| GPT-3 5B | 5B       | 45     | 3072         | 25ms                        |  13.149s                  |
-| GPT-3 8B   | 8B     | 40     | 4096         |  30ms                   | 15.97s                        |
-| GPT-3 10B | 10B     | 36     | 5120         | outOfMemory             | outOfMemory                   |
+    | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
+    |-------------|-------|--------|--------------|-----------------------------|---------------------------|
+    | GPT-3 Small| 125M   | 12     | 768          | 3ms                         | 1.67s                     |
+    | GPT-3 Medium | 350M | 24     | 1024         | 7ms                         | 3.546s                    |  
+    | GPT-3 Large | 760M  | 24     | 1536         | 8ms                         | 4.361s                    | 
+    | GPT-3 XL   | 1.3B   | 24     | 2048         | 10m                         |  5.091s                   | 
+    | GPT-3 2.7B | 2.7B   | 32     | 2560         | 60ms                        |  31s                      | 
+    | GPT-3 5B | 5B       | 45     | 3072         | 25ms                        |  13.149s                  |
+    | GPT-3 8B   | 8B     | 40     | 4096         |  30ms                   | 15.97s                        |
+    | GPT-3 10B | 10B     | 36     | 5120         | outOfMemory             | outOfMemory                   |
 
 * 3090 (batch_size=16, max_sequence_length=1024, context_length=512, precision=half)
   | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
+  |-------------|-------|--------|--------------|-----------------------------|---------------------------|
   | GPT-3 Small| 125M   | 12     | 768          | 3ms                         | 1.61s                     |
   | GPT-3 Medium | 350M | 24     | 1024         | 6ms                         | 3.416s                    |  
   | GPT-3 Large | 760M  | 24     | 1536         | 8ms                         | 4.402s                    |

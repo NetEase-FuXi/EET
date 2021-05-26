@@ -171,6 +171,7 @@ EET提供了python API接口([python/eet](./python/eet))，用法非常简单，
 Note : 在总时间的测试中，假设了上下文的比例为５０％
 * 3090 (batch_size=4, max_sequence_length=1024, context_length=512, precision=half)
   | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
+  |-------------|-------|--------|--------------|-----------------------------|---------------------------|
   | GPT-3 Small| 125M   | 12     | 768          | 3ms                         | 1.67s                     |
   | GPT-3 Medium | 350M | 24     | 1024         | 7ms                         | 3.546s                    |  
   | GPT-3 Large | 760M  | 24     | 1536         | 8ms                         | 4.361s                    |
@@ -182,6 +183,7 @@ Note : 在总时间的测试中，假设了上下文的比例为５０％
 
 * 3090 (batch_size=16, max_sequence_length=1024, context_length=512, precision=half)
   | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
+  |-------------|-------|--------|--------------|-----------------------------|---------------------------|
   | GPT-3 Small| 125M   | 12     | 768          | 3ms                         | 1.61s                     |
   | GPT-3 Medium | 350M | 24     | 1024         | 6ms                         | 3.416s                    |  
   | GPT-3 Large | 760M  | 24     | 1536         | 8ms                         | 4.402s                    |
