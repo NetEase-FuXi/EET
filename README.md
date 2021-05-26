@@ -180,7 +180,7 @@ Please make sure the dynamic-batch is open if you want a higher throughput.
 ## Performance
 
 ### GPT-3 memory usage and performance
-We measure the inference time and memory occupancy in different scenarios.
+We measure the inference time and memory occupancy in different scenarios. 
 Note : Total time are measured with 50% of the context
 * 3090 (batch_size=4, max_sequence_length=1024, context_length=512, precision=half)
     | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
