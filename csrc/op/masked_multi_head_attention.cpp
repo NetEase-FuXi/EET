@@ -78,7 +78,7 @@ namespace eet{
                                     bool first_pass){
             if(first_pass)
             {
-                return forward_full(input,pre_padding_length,pre_layernorm,add_redusial);
+                return forward_full(input,pre_padding_len,pre_layernorm,add_redusial);
             }
             else
             {

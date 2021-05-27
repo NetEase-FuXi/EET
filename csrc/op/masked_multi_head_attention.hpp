@@ -24,12 +24,8 @@ namespace eet{
                                     const torch::Tensor& layernorm_bias);
 
             torch::Tensor forward(torch::Tensor& input, 
-<<<<<<< HEAD
-                                    const torch::Tensor& pre_padding_length,
-=======
                                     const torch::Tensor& pre_padding_len,
                                     const torch::Tensor& reorder_state,
->>>>>>> 3f53f5b2a02bf304bcde9a04d96ff2b6d841ceb2
                                     bool pre_layernorm,
                                     bool add_redusial,
                                     bool first_pass);
