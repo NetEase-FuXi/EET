@@ -5,7 +5,7 @@ LABEL maintainer="eet 2021"
 #COPY sources.list /etc/apt/sources.list
 
 # If you get an error executing apt-get update, you can try executing this command, and if it doesn't report an error, you can remove this line
-RUN rm -rf  /etc/apt/sources.list.d/cuda.list
+#RUN rm -rf  /etc/apt/sources.list.d/cuda.list
 
 RUN apt-get update \
     && apt-get install -y \
@@ -33,6 +33,8 @@ COPY . /workspace/EET
 RUN pip install -r /workspace/EET/requirements.txt
 
 WORKDIR /workspace/EET
+
+ENV TORCH_CUDA_ARCH_LIST "7.0 7.5 8.0"
 
 RUN pip install .
 

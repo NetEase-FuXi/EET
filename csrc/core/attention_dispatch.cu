@@ -150,7 +150,7 @@ void masked_attention_kernel_opt(
 
   __shared__ float_n_t sq[block_sz];
 
-  __shared__ float logits[1024]; // only use [0 ~ step-1], the step should be smaller than 1024
+  __shared__ float logits[4096]; // only use [0 ~ step-1], the step should be smaller than 4096
 
   const int tid = threadIdx.x;
   const int warp_num = block_sz / WARP_SIZE;

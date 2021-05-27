@@ -107,6 +107,45 @@ T blockReduceMax(T val)
   return val;
 }
 
+template <typename T, int item_per_thread>
+__inline__ __device__
+T warpReduceMax_opt(T* val)
+{
+    T max_val = val[0];
+    for (int i = 0 ; i < item_per_thread; i++){
+        max_val = val[i] > max_val?val[i]:max_val;
+    }
+    for(int mask = 16; mask > 0; mask >>= 1)
+        max_val = max(max_val, __shfl_xor_sync(FINAL_MASK, max_val, mask, 32));
+    return max_val;
+
+}
+/* Calculate the sum of all elements in a block */
+template <typename T, int item_per_thread>
+__inline__ __device__
+T blockReduceMax_opt(T* val)
+{
+    static __shared__ T shared[32];
+    // __shared__ T shared[32];
+    int lane = threadIdx.x & 0x1f;
+    int wid = threadIdx.x >> 5;
+
+    T sum_in_warp = 0;
+    sum_in_warp = warpReduceMax_opt<T, item_per_thread>(val);
+
+    if(lane == 0)
+        shared[wid] = sum_in_warp;
+
+    __syncthreads();
+
+
+    float l2_val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : -1e20f;
+
+    l2_val = warpReduceMax<T>(l2_val);
+    return l2_val;
+}
+
+
 __inline__ __device__
 int target_index(int id1, int id2, int id3, int id4, int dim_1, int dim_2, int dim_3, int dim_4)
 {

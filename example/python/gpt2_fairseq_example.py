@@ -1,10 +1,18 @@
 import torch
+import time
+import numpy as np
 from torch import nn
 from fairseq.data.dictionary import Dictionary
 from eet.fairseq.transformer import EETTransformerDecoder
 
+using_pytorch = True
+using_eet = True
 using_half = False
-full_seq_len = 512 # prompt length
+
+prompt_seq_len = 4
+
+# eet supports a maximum seq_len of 4096 
+max_seq_len = 1024
 batch = 4
 
 class Args(object):
@@ -51,42 +59,56 @@ class Args(object):
 
         assert self.decoder_embed_dim == self.decoder_output_dim
 
-args = Args(0, True, 1280, 1280, 1024, False, False, False, True, 36, 20, 5120, None, 0.1, 0.1)
+args = Args(0, True, 512, 512, 1024, False, False, False, False, 6, 8, 2048, None, 0.1, 0.1)
+embedding = nn.Embedding(13672, 512, padding_idx=1)
 
-vocab_size = 13672
-embedding = nn.Embedding(vocab_size, 1280, padding_idx=1)
-
-dictionary = Dictionary.load('resource/dict.txt')
+dictionary = Dictionary.load('../../resource/data/dict.txt')
 
 def main():
-    model_id_or_path = 'python/resource/model/checkpoint_best.pt'
+    model_id_or_path = '../../resource/model/checkpoint_best.pt'
     torch.set_grad_enabled(False)
+    pretrained_dict = torch.load(model_id_or_path)
+    model_dict = {}
+    tokens = np.random.randint(3,13672,max_seq_len * batch,dtype="int64")
+    tokens = torch.from_numpy(tokens).long().reshape(batch, max_seq_len).cuda()
+    # tokens[2:4,0:2] = 1
+    if using_eet:
+        data_type = torch.float32
+        if using_half:
+            data_type = torch.float16
+        eet_config = {"data_type":data_type,"max_batch":batch,"full_seq_len":prompt_seq_len}
+        eet_model = EETTransformerDecoder.from_torch(model_id_or_path = model_id_or_path,dictionary = dictionary,args = args,config = eet_config,no_encoder_attn = True)
 
-    # prompt context for full docoder
-    inputs = np.random.randint(0,vocab_size,1 * batch,dtype="int64")
-    input_full_decoder = torch.from_numpy(input).long().reshape(batch, seq_len).cuda()
 
-    # fake prediction results for incremental decoder
-    input = np.random.randint(0,vocab_size,seq_len * batch,dtype="int64")
-    input_inc_decoder = torch.from_numpy(inputs).long().reshape(batch, 1).cuda()
-
-
-    data_type = torch.float32
-    embedding.cuda()
-    if using_half:
-        data_type = torch.float16
-        embedding.half()
-    eet_config = {"data_type":data_type,"embed_tokens":embedding,"max_batch":batch,"full_seq_len":full_seq_len} 
-    eet_model = EETTransformerDecoder.from_torch(model_id_or_path = model_id_or_path,dictionary = dictionary,args = args,config = eet_config,no_encoder_attn = True)
-
-    input_ids = input_full_decoder
+    total_time_eet = 0
     first_pass = True
+    reorder_state = None
+    for step in range(prompt_seq_len-1, max_seq_len):
+        print('step:',step)
+        torch.cuda.synchronize()
+        t1 = time.perf_counter()
+        if first_pass:
+            input_ids_eet = torch.clone(tokens[:, :step + 1].contiguous()).cuda().long()
+        else:
+            input_ids_eet = torch.clone(tokens[:, step:step + 1].contiguous()).cuda().long()
+        res_eet = eet_model(input_ids_eet, reorder_state = reorder_state,first_pass = first_pass)
+        torch.cuda.synchronize()
+        t2 = time.perf_counter()
+        print('eet time : ', t2 - t1)
+        total_time_eet += (t2 - t1)
 
-    for i in range(100):
-        print('i--:',i)
-        res_eet = eet_model(input_ids, first_pass = first_pass)
-        input_ids = input_inc_decoder
+        # eet support dynamic batch according to the reorder_state
+        reorder_state = torch.tensor([1,0,2,3]).cuda()
+
+        tokens[:, : step + 1] = torch.index_select(
+            tokens[:, : step + 1], dim=0, index=reorder_state
+        )
+
         if first_pass == True:
             first_pass = False
+
+        
+    print('total time for eet : ', total_time_eet)
+
 if __name__ == '__main__':
     main()

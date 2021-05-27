@@ -251,7 +251,7 @@ class EETGPT2Model():
         self.decoder = decoder
         self.layer_norm = layer_norm
         self.position_ids = torch.arange(0,config.n_positions).reshape(1,config.n_positions).cuda()
-        self.self_attn_padding_mask = torch.empty(0)
+        self.self_attn_padding_mask = torch.empty(0).long()
         self.encoder_attention_mask = torch.empty(0)
         self.reorder_state = torch.empty(0).long()
 
