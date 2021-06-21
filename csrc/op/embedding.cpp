@@ -28,7 +28,7 @@ namespace eet
         }
 
         // embed tokens and positions
-        torch::Tensor Embedding::forward_fairseq(const torch::Tensor &input_tensor,const torch::Tensor &positions_mask,bool no_scale_embedding,int padding_idx)
+        torch::Tensor Embedding::forward_fairseq(const torch::Tensor &input_tensor,const torch::Tensor &positions_mask,bool no_scale_embedding,int padding_idx,bool first_pass)
         {
             cur_batch_size_ = input_tensor.sizes()[0];
             cur_seq_len_ = input_tensor.sizes()[1];
@@ -40,7 +40,7 @@ namespace eet
             const int64_t *input_ids = input_tensor.data_ptr<int64_t>();
 
             const int64_t *positions = positions_mask.data_ptr<int64_t>();
-            if (positions != nullptr)
+            if (first_pass)
             {
                 step_ = 0;
             }

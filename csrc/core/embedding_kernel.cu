@@ -92,7 +92,7 @@ void position_encoding(T* output,const int64_t* positions,int seq_len, int step,
   T encoding_val = 0;
   float log_result = __logf(10000) / (half_n - 1.f);
   float exp_result = __expf( (tid % (int)half_n) * -1 * log_result );
-  if (seq_len >1 && positions[bid] != 1)
+  if (step == 0)
   {
     cuda_step = positions[bid]; /*bid % seq_len + padding_idx + 1;*/
     float scaled_time = exp_result *  cuda_step;
@@ -100,7 +100,7 @@ void position_encoding(T* output,const int64_t* positions,int seq_len, int step,
   }
   else if (seq_len == 1)
   {
-    cuda_step = step + padding_idx + 1;
+    cuda_step = step + padding_idx + 1 - positions[bid];
     float scaled_time = exp_result *  cuda_step;
     encoding_val = (tid < half_n) ? (T) __sinf(scaled_time) : (T) __cosf(scaled_time);
   }

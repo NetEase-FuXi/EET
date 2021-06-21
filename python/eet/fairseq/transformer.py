@@ -60,9 +60,10 @@ class EETTransformerEmbedding():
 
     def __call__(self,
                 tokens,
-                positions):
+                positions,
+                first_pass):
         # positional_encode + embedding_lookup
-        return self.embedding.forward_fairseq(tokens,positions, self.embed_scale,self.padding_idx)
+        return self.embedding.forward_fairseq(tokens,positions, self.embed_scale,self.padding_idx,first_pass)
     
     @staticmethod
     def from_torch(args,meta_des,embedding_weights,data_type =  torch.float32):
@@ -294,8 +295,8 @@ class EETTransformerDecoder():
             pre_padding_len = prev_output_tokens.size(1) - torch.sum(mask,1)
             self.pre_padding_len = pre_padding_len.long()
         else:
-            positions = self.positions
-        x = self.embed_tokens(prev_output_tokens,positions)
+            positions = self.pre_padding_len
+        x = self.embed_tokens(prev_output_tokens,positions,first_pass)
 
         if (encoder_out is not None and len(encoder_out["encoder_padding_mask"]) > 0):
             encoder_padding_mask = encoder_out["encoder_padding_mask"][0]
