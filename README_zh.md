@@ -9,12 +9,12 @@ EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型
 
 ## 功能特性
 * Pre-padding解码：Pre-padding保证了上下文和生成序列之间的相对位置不变，和训练阶段了保持一致，进而不用关心推理时候的位置编码问题。基于此策略，EET实现了对上下文的并行推理和对生成序列的增量解码。
-* 高性能：设计高度优化的CUDA内核，参考[NVIDIA Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1)，该内核支持长序列以及大型模型。 
+* 高性能：设计高度优化的CUDA内核，参考[NVIDIA Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1)。 
 * 灵活： 提供算子级和模型级API，允许用户自定义模型或者只更新部分算法逻辑。  
 * 动态batch： EET支持动态batch，根据reorder_state变化batch的顺序，并能提前结束某个batch。 
 * 超大维度和超长序列： EET支持GPT最大16384的hidden_units和最长4096的序列长度。 
 * 易于使用： EET可以直接集成到Fairseq和Transformes中，无需任何代码改动，只需要替换指定文件即可完成从训练到推理的转换。   
-* 智能部署：支持动态批处理和可变的输入长度，结合[python web](https://github.com/ShannonAI/service-streamer)可以轻松部署EET。   
+   
 
 EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lofter，天谕等。未来EET将致力于万亿模型的线上推理。
 
