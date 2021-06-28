@@ -79,7 +79,7 @@ Due to the compilation of a large number of cuda kernels, the installation time 
 #### From Docker
 
 ```bash
-$ git clone git@github.com:NetEase-FuXi/EET.git
+$ git clone https://github.com/NetEase-FuXi/EET.git
 $ cd EET/docker
 $ docker build -t your_docker_name:your_docker_version .
 $ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  your_Docker_Name:your_docker_version bash
