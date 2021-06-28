@@ -88,13 +88,13 @@ EET has been installed in the docker.
 ### Run
 #### run BERT in Transformers
 ```bash
-$ cd EET/example  
+$ cd EET/example/python  
 $ python bert_transformers_example.py
 ```
 
 #### run GPT2 in Transformers
 ```bash
-$ cd EET/example    
+$ cd EET/example/python   
 $ python gpt2_transformers_example.py
 ```
 
