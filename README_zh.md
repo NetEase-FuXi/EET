@@ -75,7 +75,6 @@ $ pip install .
 
 ```bash
 $ git clone https://github.com/NetEase-FuXi/EET.git
-$ cd EET/docker
 $ docker build -t your_docker_name:your_docker_version .
 $ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  your_Docker_Name:your_docker_version bash
 ```
