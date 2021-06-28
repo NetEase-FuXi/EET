@@ -69,8 +69,9 @@ If you are installing from source, you will need install the necessary [environm
 
 ```bash
 $ git clone git@github.com:NetEase-FuXi/EET.git
-$ pip install transformers==3.5.0
-$ pip install fairseq==0.10.0
+# to run the demo in the examples for comparsion, we need to install the transformers and fairseq
+$ pip install transformers==3.5.0 
+$ pip install fairseq==0.10.0 
 $ pip install .
 ```
 Due to the compilation of a large number of cuda kernels, the installation time is relatively long, please be patient. 
