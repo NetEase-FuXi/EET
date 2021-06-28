@@ -68,7 +68,7 @@ EET has been applied to a variety of NetEase online services,such as NiShuiHan, 
 If you are installing from source, you will need install the necessary [environment](#environment).Then, proceed as follows: 
 
 ```bash
-$ git clone git@github.com:NetEase-FuXi/EET.git
+$ git clone https://github.com/NetEase-FuXi/EET.git
 # to run the demo in the examples for comparsion, we need to install the transformers and fairseq
 $ pip install transformers==3.5.0 
 $ pip install fairseq==0.10.0 
