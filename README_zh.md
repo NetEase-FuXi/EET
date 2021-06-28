@@ -63,7 +63,7 @@ EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lo
 #### 源码安装
 如果从源代码安装，则需要安装必要的[environment](#environment)。然后，按以下步骤进行。 
 ```bash
-$ git clone git@github.com:NetEase-FuXi/EET.git
+$ git clone https://github.com/NetEase-FuXi/EET.git
 #to run the demo in the examples for comparsion, we need to install the transformers and fairseq
 $ pip install transformers==3.5.0
 $ pip install fairseq==0.10.0
