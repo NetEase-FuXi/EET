@@ -85,14 +85,14 @@ $ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  
 #### 运行BERT-适配transformers
 [bert_transformers_example](example/python/bert_transformers_example.py)
 ```bash
-$ cd EET/example  
+$ cd EET/example/python 
 $ python bert_transformers_example.py
 ```
 
 #### 运行GPT2-适配transformers
 [gpt2_transformers_example](example/python/gpt2_transformers_example.py)
 ```bash
-$ cd EET/example    
+$ cd EET/example/python   
 $ python gpt2_transformers_example.py
 ```
 
