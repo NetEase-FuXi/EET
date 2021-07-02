@@ -292,11 +292,20 @@ class EETTransformerDecoder():
         if first_pass:
             mask = prev_output_tokens.ne(self.embed_tokens.padding_idx).int()
             positions = (torch.cumsum(mask, dim=1).type_as(mask) * mask).long() + self.embed_tokens.padding_idx
-            pre_padding_len = prev_output_tokens.size(1) - torch.sum(mask,1)
-            self.pre_padding_len = pre_padding_len.long()
+            pre_padding_len = (prev_output_tokens.size(1) - torch.sum(mask,1)).cuda()
+            self.pre_padding_len = pre_padding_len.long().cuda()
+            self.positions = positions.cuda()
         else:
+            self.positions = self.pre_padding_len
             positions = self.pre_padding_len
+
+        if reorder_state is not None:
+            self.reorder_state = reorder_state.long()
+            positions = torch.index_select(self.positions, dim=0, index=reorder_state)
+            # pre_padding_len = torch.index_select(self.pre_padding_len, dim=0, index=reorder_state)
+
         x = self.embed_tokens(prev_output_tokens,positions,first_pass)
+
 
         if (encoder_out is not None and len(encoder_out["encoder_padding_mask"]) > 0):
             encoder_padding_mask = encoder_out["encoder_padding_mask"][0]
@@ -308,8 +317,8 @@ class EETTransformerDecoder():
         else:
             encoder_out = None
         
-        if reorder_state is not None:
-            self.reorder_state = reorder_state.long()
+        # if reorder_state is not None:
+        #     self.reorder_state = reorder_state.long()
 
 
         for layer in self.layers:

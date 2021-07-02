@@ -201,8 +201,10 @@ void masked_attention_kernel_opt(
   }
   int padding_len = 0;
   if (pre_padding_len != nullptr){
-      padding_len = pre_padding_len[batch_id];
+      padding_len = pre_padding_len[cache_id];
   }
+  // printf("padding_len:%d cache_id:%d batch_id:%d\n",padding_len,cache_id,batch_id);
+
   //offset for each step
   int offset = first_batch_size * head_num * size_per_head;
   bias_r.v = *((float_n_t *) self_K_bias + lane_id);
