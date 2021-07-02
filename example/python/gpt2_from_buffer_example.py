@@ -7,10 +7,9 @@ from fairseq.models.transformer import TransformerDecoder
 from eet.fairseq.transformer import EETTransformerDecoder
 import sys
 
-using_eet = True
-using_half = False
-seq_len = 102
+context_len = 512
 batch = 4
+max_seq_len = 1024
 
 class Args(object):
     def __init__(self,
@@ -56,56 +55,54 @@ class Args(object):
 
         assert self.decoder_embed_dim == self.decoder_output_dim
 
-args = Args(0, True, 768, 768, 1024, False, False, False, True, 1, 16, 3192, None, 0.1, 0.1)
-embedding = nn.Embedding(13672, 768, padding_idx=1)
+#1280 -- hidden_units
+#16   -- layer num
+args = Args(0, True, 1024, 1024, max_seq_len, False, False, False, True, 24, 16, 1024 * 4, None, 0.1, 0.1)
+embedding = nn.Embedding(13672, 1024, padding_idx=1)
 
 dictionary = Dictionary.load('resource/dict.txt')
 
 def main():
     torch.set_grad_enabled(False)
 
-    input = np.random.randint(3,9000,seq_len * batch,dtype="int64")
-    inputs = np.random.randint(3,9000,1 * batch,dtype="int64")
+    tokens = np.random.randint(3,13672,max_seq_len * batch,dtype="int64")
+    tokens = torch.from_numpy(tokens).long().reshape(batch, max_seq_len).cuda()
 
-    input_full = torch.from_numpy(input).long().reshape(batch, seq_len).cuda()
-    input_inc = torch.from_numpy(inputs).long().reshape(batch, 1).cuda()
+    torch_decoder = TransformerDecoder(args, dictionary, embedding, True).cuda().half().eval()
 
-    data_type = torch.float32
-    if using_half:
-        data_type = torch.float16
-    torch_decoder = TransformerDecoder(args, dictionary, embedding, True)
-    if using_half:
-        torch_decoder.half()
-    torch_decoder.cuda().eval()
-    eet_config = {"data_type":data_type,"max_batch":batch,"full_seq_len":seq_len}
+    eet_config = {"data_type":torch.float16,"max_batch":batch,"full_seq_len":context_len}
     eet_model = EETTransformerDecoder.from_buffer(torch_decoder = torch_decoder,dictionary = dictionary,args = args,config = eet_config,no_encoder_attn = True)
 
-    total_time_ft = 0
-    full_decoder_time_ft = 0
-    inc_decoder_time_ft = 0
+    torch.cuda.synchronize()
+    t1 = time.perf_counter()
 
-    input_ids = input_full
-    first_pass = True
+    for i in range(100):
+        first_pass = True
+        reorder_state = None
+        for step in range(context_len - 1, max_seq_len):
+            if first_pass:
+                res_eet = eet_model(tokens[:,:step+1],reorder_state=reorder_state, first_pass = first_pass)
+                first_pass = False
+            else:
+                res_eet = eet_model(tokens[:,step:step+1],reorder_state=reorder_state,first_pass=first_pass)
 
-    for i in range(1024 - seq_len):
-        torch.cuda.synchronize()
-        t1 = time.perf_counter()
-        res_ft = eet_model(input_ids, first_pass = first_pass)
-        torch.cuda.synchronize()
-        t2 = time.perf_counter()
-        if i == 0:
-            full_decoder_time_ft = (t2 - t1)
-        else:
-            inc_decoder_time_ft += (t2 - t1)
-        print('ft time : ',i, t2 - t1)
-        total_time_ft += (t2 - t1)
-        input_ids = input_inc
-        if first_pass == True:
-            first_pass = False
+    torch.cuda.synchronize()
+    t2 = time.perf_counter()
+    print('Time for EET : ', t2 - t1)
 
-    print('full_decoder time for ft : ', full_decoder_time_ft)
-    print('inc_decoder time for ft : ', inc_decoder_time_ft)
-    print('total time for ft : ', total_time_ft)
+    torch.cuda.synchronize()
+    t3 = time.perf_counter()
+
+    for i in range(100):
+        incremental_state = {}
+        for step in range(0, max_seq_len):
+            res_torch, incremental_state = torch_decoder(tokens[:,:step+1], incremental_state=incremental_state)
+
+    torch.cuda.synchronize()
+    t4 = time.perf_counter()
+    print('Time for Fairseq : ', t4 - t3)
+    print('SpeedUp is : ', (t4 - t3)/(t2- t1))
+
 
 if __name__ == '__main__':
     main()
