@@ -95,6 +95,7 @@ namespace eet{
             cublasGemmAlgo_t qkv_weights_algo_, q_k_algo_, attn_v_algo_;
 
             int cur_batch_size_;
+            int first_batch_size_;
             int cur_seq_len_;
             int size_per_head_;
             int step_;

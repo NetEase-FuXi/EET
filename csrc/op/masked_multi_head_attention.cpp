@@ -95,6 +95,7 @@ namespace eet{
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttention's dtype");
             step_ = 1;
             cur_batch_size_ = input.sizes()[0];
+            first_batch_size_ = cur_batch_size_;
             cur_seq_len_ = input.sizes()[1];
             assert((cur_seq_len_ <= desc_.max_full_seq_len_)&& "cur_seq_len must be less than or equal to max_full_seq_len_");
             Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
@@ -416,7 +417,7 @@ namespace eet{
          {
             RUN_KERNEL(masked_attention_dispatch,desc_.dtype_,k_buffer.data_ptr(),v_buffer.data_ptr(),q_buffer.data_ptr(),
                         q_bias_,k_cache_.data_ptr(),k_bias_,v_cache_.data_ptr(),v_bias_,
-                        context_buf.data_ptr(),cur_batch_size_,desc_.head_num_,size_per_head_,step_, desc_.stream, padding_len,reorder_index);
+                        context_buf.data_ptr(),cur_batch_size_,first_batch_size_,desc_.head_num_,size_per_head_,step_, desc_.stream, padding_len,reorder_index);
             #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
