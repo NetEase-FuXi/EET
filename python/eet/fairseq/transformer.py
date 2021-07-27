@@ -386,7 +386,9 @@ class EETTransformerDecoder():
             model_dict[k] = v
         from itertools import groupby
         # Intercept k,num = length of 'decoder.layers.**'=17; If your weight name has changed please change it here
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:FROM_TORCH_PARAM_LEN])}
+        model_dict_list = list(model_dict.items())
+        model_dict_list.sort(key = lambda item: item[0][:FROM_TORCH_PARAM_LEN])
+        layer_model_dict = {k: dict(v) for k, v in groupby(model_dict_list, lambda item: item[0][:FROM_TORCH_PARAM_LEN])}
 
         device = "cuda:0"
         activation_fn = args.activation_fn
@@ -453,7 +455,9 @@ class EETTransformerDecoder():
             model_dict[k] = v
         from itertools import groupby
         # Intercept k,num = length of 'decoder.layers.**'=17; If your weight name has changed please change it here
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:FROM_BUFFER_PARAM_LEN])}
+        model_dict_list = list(model_dict.items())
+        model_dict_list.sort(key = lambda item: item[0][:FROM_TORCH_PARAM_LEN])
+        layer_model_dict = {k: dict(v) for k, v in groupby(model_dict_list, lambda item: item[0][:FROM_BUFFER_PARAM_LEN])}
 
         device = "cuda:0"
         activation_fn = args.activation_fn
