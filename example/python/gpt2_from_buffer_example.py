@@ -81,10 +81,11 @@ def main():
         reorder_state = None
         for step in range(context_len - 1, max_seq_len):
             if first_pass:
-                res_eet = eet_model(tokens[:,:step+1],reorder_state=reorder_state, first_pass = first_pass)
-                first_pass = False
+                input_ids_eet = tokens[:, :step + 1].contiguous().cuda().long()
             else:
-                res_eet = eet_model(tokens[:,step:step+1],reorder_state=reorder_state,first_pass=first_pass)
+                input_ids_eet = tokens[:, step:step + 1].contiguous().cuda().long()
+            res_eet = eet_model(input_ids_eet,reorder_state=reorder_state, first_pass = first_pass)
+            first_pass = False
 
     torch.cuda.synchronize()
     t2 = time.perf_counter()
