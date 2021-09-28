@@ -186,29 +186,27 @@ Please make sure the dynamic-batch is open if you want a higher throughput.
 ### GPT-3 memory usage and performance
 We measure the inference time and memory occupancy in different scenarios. 
 Note : Total time are measured with 50% of the context
-* 3090 (batch_size=4, max_sequence_length=1024, context_length=512, precision=half)
-    | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
-    |-------------|-------|--------|--------------|-----------------------------|---------------------------|
-    | GPT-3 Small| 125M   | 12     | 768          | 3ms                         | 1.67s                     |
-    | GPT-3 Medium | 350M | 24     | 1024         | 7ms                         | 3.546s                    |  
-    | GPT-3 Large | 760M  | 24     | 1536         | 8ms                         | 4.361s                    | 
-    | GPT-3 XL   | 1.3B   | 24     | 2048         | 10m                         |  5.091s                   | 
-    | GPT-3 2.7B | 2.7B   | 32     | 2560         | 60ms                        |  31s                      | 
-    | GPT-3 5B | 5B       | 45     | 3072         | 25ms                        |  13.149s                  |
-    | GPT-3 8B   | 8B     | 40     | 4096         |  30ms                   | 15.97s                        |
-    | GPT-3 10B | 10B     | 36     | 5120         | outOfMemory             | outOfMemory                   |
-
-* 3090 (batch_size=16, max_sequence_length=1024, context_length=512, precision=half)
+* A100 (batch_size=4, max_sequence_length=1024, context_length=512, precision=half)
   | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
   |-------------|-------|--------|--------------|-----------------------------|---------------------------|
-  | GPT-3 Small| 125M   | 12     | 768          | 3ms                         | 1.61s                     |
-  | GPT-3 Medium | 350M | 24     | 1024         | 6ms                         | 3.416s                    |  
-  | GPT-3 Large | 760M  | 24     | 1536         | 8ms                         | 4.402s                    |
-  | GPT-3 XL   | 1.3B   | 24     | 2048         | 11m                         |  6.374s                   | 
-  | GPT-3 2.7B | 2.7B   | 32     | 2560         | 175ms                        |  91s                      |
-  | GPT-3 5B | 5B       | 45     | 3072         | 31ms                        |  19.565s                   |
-  | GPT-3 8B   | 8B     | 40     | 4096         |  outOfMemory                | outOfMemory                |
-  | GPT-3 10B | 10B     | 36     | 5120         | outOfMemory                 | outOfMemory                |
+  | GPT-3 Small| 125M   | 12     | 768          | 2.69ms                         | 1.38s                  |
+  | GPT-3 Medium | 350M | 24     | 1024         | 5.58ms                         | 2.86s                  |  
+  | GPT-3 Large | 760M  | 24     | 1536         | 6.64ms                         | 3.41s                  |
+  | GPT-3 XL   | 1.3B   | 24     | 2048         | 7.3m                           | 3.76s                  |
+  | GPT-3 2.7B | 2.7B   | 32     | 2560         | 46.1ms                         | 23.6s                  |
+  | GPT-3 6.7B | 6.7B   | 32     | 4096         | 17.2ms                         | 8.85s                  |
+  | GPT-3 13B | 13B     | 40     | 5120         | 29.3ms                         | 15.12s                 |
+
+* A100 (batch_size=16, max_sequence_length=1024, context_length=512, precision=half)
+  | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
+  |-------------|-------|--------|--------------|-----------------------------|---------------------------|
+  | GPT-3 Small| 125M   | 12     | 768          | 2.84ms                         | 1.46s                     |
+  | GPT-3 Medium | 350M | 24     | 1024         | 6ms                         | 3.11s                    |  
+  | GPT-3 Large | 760M  | 24     | 1536         | 7.39ms                         | 3.80s                    |
+  | GPT-3 XL   | 1.3B   | 24     | 2048         | 8.27m                         |  4.26s                   |
+  | GPT-3 2.7B | 2.7B   | 32     | 2560         | 116ms                        |  59.8s                      |
+  | GPT-3 6.7B | 6.7B     | 32     | 4096         |  23.18ms                | 12.25s                |
+  | GPT-3 13B | 13B     | 40     | 5120         | 43.42ms                 | 22.58s                |
   
 We tested the performance of EET on two GPU hardware platforms. We chose pytorch, NVIDIA Faster Transformers, and lightseq implementations for comparison.
 
