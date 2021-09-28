@@ -173,17 +173,16 @@ EET提供了python API接口([python/eet](./python/eet))，用法非常简单，
 ## 性能
 在不同场景下测试EET的性能数据如下：
 Note : 在总时间的测试中，假设了上下文的比例为５０％
-* 3090 (batch_size=4, max_sequence_length=1024, context_length=512, precision=half)
+* A100 (batch_size=4, max_sequence_length=1024, context_length=512, precision=half)
   | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
   |-------------|-------|--------|--------------|-----------------------------|---------------------------|
-  | GPT-3 Small| 125M   | 12     | 768          | 3ms                         | 1.67s                     |
-  | GPT-3 Medium | 350M | 24     | 1024         | 7ms                         | 3.546s                    |  
-  | GPT-3 Large | 760M  | 24     | 1536         | 8ms                         | 4.361s                    |
-  | GPT-3 XL   | 1.3B   | 24     | 2048         | 10m                         |  5.091s                   |
-  | GPT-3 2.7B | 2.7B   | 32     | 2560         | 60ms                        |  31s                      |
-  | GPT-3 5B | 5B       | 45     | 3072         | 25ms                        |  13.149s                  |
-  | GPT-3 8B   | 8B     | 40     | 4096         |  30ms                   | 15.97s                        |
-  | GPT-3 10B | 10B     | 36     | 5120         | outOfMemory             | outOfMemory                   |
+  | GPT-3 Small| 125M   | 12     | 768          | 2.69ms                         | 1.38s                  |
+  | GPT-3 Medium | 350M | 24     | 1024         | 5.58ms                         | 2.86s                  |  
+  | GPT-3 Large | 760M  | 24     | 1536         | 6.64ms                         | 3.41s                  |
+  | GPT-3 XL   | 1.3B   | 24     | 2048         | 7.3m                           | 3.76s                  |
+  | GPT-3 2.7B | 2.7B   | 32     | 2560         | 46.1ms                         | 23.6s                  |
+  | GPT-3 6.7B | 6.7B   | 32     | 4096         | 17.2ms                         | 8.85s                  |
+  | GPT-3 13B | 13B     | 40     | 5120         | 29.3ms                         | 15.12s                 |
 
 * 3090 (batch_size=16, max_sequence_length=1024, context_length=512, precision=half)
   | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
