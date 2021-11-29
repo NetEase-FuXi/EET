@@ -9,9 +9,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from typing import Any, Dict, List, Optional, Tuple
-from transformers import GPT2Model,GPT2PreTrainedModel
-from transformers.configuration_gpt2 import GPT2Config
-from transformers.configuration_utils import PretrainedConfig
+from transformers import GPT2Model
 
 from EET import MetaDesc as meta_desc
 from EET import LayerNorm as eet_layernorm
@@ -106,15 +104,13 @@ class EETGPT2Attention():
             self.layernorm_weights = [x[1] for x in model_dict.items() if 'ln_1.weight' in x[0]][0].cuda().type(data_type)
             self.layernorm_bias = [x[1] for x in model_dict.items() if 'ln_1.bias' in x[0]][0].cuda().type(data_type)
             emb_size = self.layernorm_bias.size()[0]
-            self.q_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'c_attn.weight' in x[0]][0].transpose(0,1)[:emb_size]).contiguous()).cuda().type(data_type)
-            self.k_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'c_attn.weight' in x[0]][0].transpose(0,1)[emb_size:emb_size*2]).contiguous()).cuda().type(data_type)
-            self.v_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'c_attn.weight' in x[0]][0].transpose(0,1)[emb_size*2:]).contiguous()).cuda().type(data_type)
+            self.qkv_weights = torch.t([x[1] for x in model_dict.items() if 'c_attn.weight' in x[0]][0].transpose(0,1)).contiguous().cuda().type(data_type)
             self.q_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][:emb_size].cuda().type(data_type)
             self.k_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][emb_size:emb_size*2].cuda().type(data_type)
             self.v_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][emb_size*2:].cuda().type(data_type)
             self.out_weights = [x[1] for x in model_dict.items() if 'attn.c_proj.weight' in x[0]][0].cuda().type(data_type)
             self.out_bias = [x[1] for x in model_dict.items() if 'attn.c_proj.bias' in x[0]][0].cuda().type(data_type)
-            self.attention = eet_attention(meta_des,self.q_weights,self.k_weights,self.v_weights,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
+            self.attention = eet_attention(meta_des,self.qkv_weights,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
 
     def __call__(self,
                 input_id,

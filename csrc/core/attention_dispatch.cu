@@ -770,3 +770,276 @@ template void cross_attention_dispatch<float>(void *query_buf, const void *Q_bia
 template void cross_attention_dispatch<half>(void *query_buf, const void *Q_bias,
                                               void *key_cache, const void *K_bias, void *value_cache, const void *V_bias, const int *length,
                                               void *context_buf, int &batch_size, int &head_num, int &size_per_head, int &step, int seq_len, cudaStream_t stream);
+
+
+
+
+template <int size_per_head, int block_sz, typename T>
+__global__ 
+void fused_masked_attention_kernel(
+  T* __restrict qkv_buf, const T* __restrict self_Q_bias, 
+  T* __restrict key_cache, const T* __restrict self_K_bias, 
+  T* __restrict value_cache, const T* __restrict self_V_bias,
+  T* __restrict context_buf, int first_batch_size, int head_num, 
+  const int step, const T scalar, const int64_t* pre_padding_len,const int64_t *reorder_index)
+{
+  // typedef Copy_t<T, size_per_head> copy_t;
+  const int elems_per_thread = size_per_head / WARP_SIZE;
+
+  typedef struct Float_n_t
+  {
+    T x[elems_per_thread];
+  } float_n_t;
+
+  union Access_t
+  {
+    float_n_t v;
+    T x[elems_per_thread];
+  };
+
+  __shared__ float_n_t sq[block_sz];
+
+  __shared__ float logits[4096]; // only use [0 ~ step-1], the step should be smaller than 4096
+
+  const int tid = threadIdx.x;
+  const int warp_num = block_sz / WARP_SIZE;
+  const int bid = blockIdx.x;
+  const int batch_id = blockIdx.x / head_num;
+  const int head_id = blockIdx.x % head_num;
+  const int warp_id = tid / WARP_SIZE; // warp_id in block
+  const int lane_id = tid % WARP_SIZE; // lane_id in warp
+
+  typedef cub::BlockReduce<float, block_sz> MaxValBlockReduce;
+  typedef cub::BlockReduce<float, block_sz> BlockReduce;
+  __shared__ typename MaxValBlockReduce::TempStorage max_val_block_temp_storage;
+  __shared__ typename BlockReduce::TempStorage block_temp_storage;
+  __shared__ typename cub::WarpReduce<float>::TempStorage temp_storage[warp_num];
+
+  int qkv_id = bid * size_per_head;
+  int qkv_bias_id = head_id * size_per_head;
+  int cache_id = batch_id;
+  if (reorder_index != nullptr){
+      cache_id = reorder_index[batch_id];
+  }
+  int inx_id = (cache_id * head_num + head_id) * size_per_head;
+  // printf("bid:%d batch_id:%d qkv_id:%d\n",bid,batch_id,qkv_id);
+  // int qkv_id = bid * size_per_head;
+  int q_id = qkv_id + 2 * size_per_head * head_num * batch_id;
+  // printf("q_id:%d qkv_id:%d\n",q_id,qkv_id);
+
+
+  qkv_buf = &qkv_buf[q_id];
+  // key_buf = &qkv_buf[qkv_id];
+  // value_buf = &qkv_buf[qkv_id];
+  self_K_bias = &self_K_bias[qkv_bias_id];
+  key_cache = &key_cache[inx_id];
+  self_Q_bias = &self_Q_bias[qkv_bias_id];
+  self_V_bias = &self_V_bias[qkv_bias_id];
+  value_cache = &value_cache[inx_id];
+  context_buf = &context_buf[qkv_id];
+
+  Access_t bias_r, query_buf_r;
+  Access_t key_val_r, key_buf_r;
+  Access_t value_val_r, value_buf_r;
+
+  // each warp will have its own copy of sq
+  query_buf_r.v = *((float_n_t *)qkv_buf + lane_id);
+  key_buf_r.v = *((float_n_t *)qkv_buf + lane_id + size_per_head * head_num/elems_per_thread);
+  bias_r.v = *((float_n_t *)self_Q_bias + lane_id);
+  float qb_r[elems_per_thread];
+  for (int i = 0; i < elems_per_thread; ++i)
+  {
+    qb_r[i] =  (float)query_buf_r.x[i] + (float)bias_r.x[i];
+    // printf("qb_r:%f %f %f %d\n",qb_r[i],(float)query_buf_r.x[i],(float)bias_r.x[i],q_id);
+  }
+  int padding_len = 0;
+  if (pre_padding_len != nullptr){
+      padding_len = pre_padding_len[cache_id];
+  }
+  // printf("padding_len:%d cache_id:%d batch_id:%d\n",padding_len,cache_id,batch_id);
+
+  //offset for each step
+  int offset = first_batch_size * head_num * size_per_head;
+  bias_r.v = *((float_n_t *) self_K_bias + lane_id);
+  for(int ite = warp_id; ite < step; ite += warp_num)
+  {
+    if (ite < padding_len){
+        logits[ite] = (T)-1e20f;
+    }else {
+        key_val_r.v = *((float_n_t *) &key_cache[ite * offset] + lane_id);
+        //for the last step, we should update K + bias_K to the cache
+        if (ite == step - 1) {
+            for (int i = 0; i < elems_per_thread; i++) {
+                key_val_r.x[i] = (float) key_buf_r.x[i] + (float) bias_r.x[i];
+                // printf("%f %f %d %d\n",(float)key_buf_r.x[i],(float)bias_r.x[i],q_id, size_per_head * head_num);
+
+            }
+            *((float_n_t *) &key_cache[ite * offset] + lane_id) = key_val_r.v;
+            //*((copy_t *)&key_cache_t[ite * size_per_head] + lane_id) = key_val_r.v;
+        }
+        float val = 0.f;
+        for (int i = 0; i < elems_per_thread; i++) {
+            val = val + (float) key_val_r.x[i] * qb_r[i] * (float) scalar;
+        }
+        float qk = cub::WarpReduce<float>(temp_storage[warp_id]).Sum(val);
+        if (lane_id == 0)
+        {
+            logits[ite] = (T)qk;
+        }
+    }
+  }
+  __syncthreads();
+
+  __shared__ float s_max_val, s_sum;
+
+  float local_i = -1e20f;
+  for(int i = tid; i < step; i += blockDim.x)
+    local_i = max(local_i, logits[i]);
+
+  float max_val = MaxValBlockReduce(max_val_block_temp_storage).Reduce(local_i, cub::Max());
+  if(tid == 0)
+    s_max_val = max_val;
+  __syncthreads();
+
+
+  float local_o = 0.0f;
+  for(int i = tid; i < step; i += blockDim.x)
+  {
+    logits[i] = __expf(logits[i] - s_max_val);
+    local_o += logits[i];
+  }
+  float val = BlockReduce(block_temp_storage).Sum(local_o);
+
+  if(tid == 0)
+    s_sum = val + 1e-6;
+  __syncthreads();
+
+  float s_sum_inverse = __fdividef(1.0f, s_sum);
+  for(int i = tid; i < step; i += blockDim.x)
+  {
+    logits[i] = logits[i] * s_sum_inverse;
+  }
+  __syncthreads(); 
+
+  // This optimization introduces discrepancy because of different order in FP32 summation
+  float sum_r[elems_per_thread] = {0.f};
+  bias_r.v = *((float_n_t *) self_V_bias + lane_id);
+  value_buf_r.v = *((float_n_t *)qkv_buf + lane_id + 2 * size_per_head * head_num/elems_per_thread);
+
+  for(int ite = warp_id; ite < step; ite += warp_num)
+  {
+    if(ite < padding_len)
+        continue;
+    value_val_r.v = *((float_n_t *)&value_cache[ite * offset] + lane_id);
+    //for the last step, we should update K + bias_K to the cache
+    if(ite == step - 1)
+    {
+      for (int i = 0; i < elems_per_thread; i++)
+      {
+        value_val_r.x[i] = (float)value_buf_r.x[i] + (float)bias_r.x[i];
+      }
+      *((float_n_t *)&value_cache[ite * offset] + lane_id) = value_val_r.v;
+    }
+
+    for (int i = 0; i < elems_per_thread; ++i)
+    {
+      sum_r[i] += (float)value_val_r.x[i] * logits[ite]; 
+    }
+  }
+  for (int i = 0; i < elems_per_thread; i++)
+  {
+    sq[warp_id * WARP_SIZE + lane_id].x[i] = sum_r[i];
+  }
+  __syncthreads();
+  if (warp_id == 0)
+  {
+    #pragma unroll
+    for (int j = 1; j < warp_num; j++)
+    {
+      for (int i = 0; i < elems_per_thread; ++i)
+      {
+        sum_r[i] = sum_r[i] + (float)sq[j * WARP_SIZE + tid].x[i];
+      }
+    }
+  }
+  __syncthreads();
+  #pragma unroll
+  for (int i = 0; i < elems_per_thread; i++)
+  {
+    value_val_r.x[i] = sum_r[i];
+  }
+  if (warp_id == 0)
+  {
+    *((float_n_t *)context_buf + lane_id) = value_val_r.v;
+  }
+}
+
+
+template <typename T>
+void fused_masked_attention_dispatch(
+  void* qkv_buf,const void* self_Q_bias, 
+  void* key_cache, const void* self_K_bias, 
+  void* value_cache, const void* self_V_bias,
+  void* context_buf, int& batch_size, int& first_batch_size,
+  int& head_num, int& size_per_head,
+  const int& step, cudaStream_t stream, 
+  const int64_t* pre_padding_len,const int64_t *reorder_index)
+  {
+    #if 1
+    const int block_sz = ATTENTION_BLOCK_SIZE;
+    T scalar = (T)(1.f / sqrtf(size_per_head * 1.0f));
+
+    dim3 grid(batch_size * head_num);
+
+    int cond = size_per_head * ((ATTENION_OPT)? 1:0);
+    switch (cond)
+    {
+      case 32:
+        fused_masked_attention_kernel<32, block_sz, T><<<grid, block_sz, 0, stream>>>(
+          (T*)qkv_buf,  (T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
+          first_batch_size, head_num, step, scalar, pre_padding_len,reorder_index); 
+        break;
+      case 64:
+        fused_masked_attention_kernel<64, block_sz, T><<<grid, block_sz, 0, stream>>>(
+          (T*)qkv_buf, (T*)self_Q_bias,  
+          (T*)key_cache, (T*)self_K_bias, 
+          (T*)value_cache, (T*)self_V_bias, 
+          (T*)context_buf, 
+          first_batch_size, head_num, step, scalar, pre_padding_len,reorder_index);
+        break;
+      // case 80:
+      //   masked_attention_kernel_opt<80, block_sz, T><<<grid, block_sz, 0, stream>>>(
+      //     (T*)key_buf, (T*)value_buf,
+      //     (T*)query_buf, (T*)self_Q_bias,  
+      //     (T*)key_cache, (T*)self_K_bias, 
+      //     (T*)value_cache, (T*)self_V_bias, 
+      //     (T*)context_buf, 
+      //     first_batch_size, head_num, step, scalar, pre_padding_len);
+      //   break;
+      case 96:
+        fused_masked_attention_kernel<96, block_sz, T><<<grid, block_sz, 0, stream>>>(
+          (T*)qkv_buf,(T*)self_Q_bias,  
+          (T*)key_cache, (T*)self_K_bias, 
+          (T*)value_cache, (T*)self_V_bias, 
+          (T*)context_buf, 
+          first_batch_size, head_num, step, scalar, pre_padding_len,reorder_index);
+        break;
+      case 128:
+        fused_masked_attention_kernel<128, block_sz, T><<<grid, block_sz, 0, stream>>>(
+          (T*)qkv_buf,(T*)self_Q_bias,  (T*)key_cache, (T*)self_K_bias, (T*)value_cache, (T*)self_V_bias, (T*)context_buf, 
+          first_batch_size, head_num, step, scalar, pre_padding_len,reorder_index);
+        break;
+      default:
+        assert(false);
+    }
+   #endif
+  }
+
+
+template void fused_masked_attention_dispatch<float>(void* qkv_buf,const void* self_Q_bias, 
+                                              void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
+                                              void* context_buf, int& batch_size,int& first_batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len,const int64_t *reorder_index);
+
+template void fused_masked_attention_dispatch<half>(void* qkv_buf ,const void* self_Q_bias, 
+                                              void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
+                                              void* context_buf, int& batch_size,int& first_batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len,const int64_t *reorder_index);

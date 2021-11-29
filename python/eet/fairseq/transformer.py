@@ -73,9 +73,9 @@ class EETTransformerEmbedding():
 class EETTransformerFeedforward():
     def __init__(self,meta_des,model_dict,data_type =  torch.float32):
 
-        self.intermediate_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'fc1.weight' in x[0]][0]).contiguous()).contiguous().cuda().type(data_type)
+        self.intermediate_weights = torch.t([x[1] for x in model_dict.items() if 'fc1.weight' in x[0]][0]).contiguous().cuda().type(data_type)
         self.intermediate_bias = [x[1] for x in model_dict.items() if 'fc1.bias' in x[0]][0].cuda().type(data_type)
-        self.output_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'fc2.weight' in x[0]][0]).contiguous()).contiguous().cuda().type(data_type)
+        self.output_weights = torch.t([x[1] for x in model_dict.items() if 'fc2.weight' in x[0]][0]).contiguous().cuda().type(data_type)
         self.output_bias = [x[1] for x in model_dict.items() if 'fc2.bias' in x[0]][0].cuda().type(data_type)
         self.layernorm_weights = [x[1] for x in model_dict.items() if 'final_layer_norm.weight' in x[0]][0].cuda().type(data_type)
         self.layernorm_bias = [x[1] for x in model_dict.items() if 'final_layer_norm.bias' in x[0]][0].cuda().type(data_type)
@@ -99,40 +99,40 @@ class EETTransformerAttention():
         self.is_encoder = is_encoder
         if is_encoder is False:
             if no_encoder_attn is True:
-                # cross_attention
-                self.q_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self_attn.q_proj.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
-                self.k_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self_attn.k_proj.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
-                self.v_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self_attn.v_proj.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
+                q_weights = [x[1] for x in model_dict.items() if 'self_attn.q_proj.weight' in x[0]][0].contiguous().cuda().type(data_type)
+                k_weights = [x[1] for x in model_dict.items() if 'self_attn.k_proj.weight' in x[0]][0].contiguous().cuda().type(data_type)
+                v_weights = [x[1] for x in model_dict.items() if 'self_attn.v_proj.weight' in x[0]][0].contiguous().cuda().type(data_type)
+                self.qkv_weight = torch.cat((q_weights,k_weights,v_weights),0).transpose(0,1).contiguous()
                 self.q_bias = [x[1] for x in model_dict.items() if 'self_attn.q_proj.bias' in x[0]][0].cuda().type(data_type)
                 self.k_bias = [x[1] for x in model_dict.items() if 'self_attn.k_proj.bias' in x[0]][0].cuda().type(data_type)
                 self.v_bias = [x[1] for x in model_dict.items() if 'self_attn.v_proj.bias' in x[0]][0].cuda().type(data_type)
-                self.out_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self_attn.out_proj.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
+                self.out_weights = torch.t([x[1] for x in model_dict.items() if 'self_attn.out_proj.weight' in x[0]][0]).contiguous().cuda().type(data_type)
                 self.out_bias = [x[1] for x in model_dict.items() if 'self_attn.out_proj.bias' in x[0]][0].cuda().type(data_type)
                 self.layernorm_weights = [x[1] for x in model_dict.items() if 'self_attn_layer_norm.weight' in x[0]][0].cuda().type(data_type)
                 self.layernorm_bias = [x[1] for x in model_dict.items() if 'self_attn_layer_norm.bias' in x[0]][0].cuda().type(data_type)
-                self.attention = eet_attention(meta_des,self.q_weights,self.k_weights,self.v_weights,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
+                self.attention = eet_attention(meta_des,self.qkv_weight,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
 
             else:
-                self.q_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'encoder_attn.q_proj.weight' in x[0]][0]).contiguous()).cuda()
-                self.k_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'encoder_attn.k_proj.weight' in x[0]][0]).contiguous()).cuda()
-                self.v_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'encoder_attn.v_proj.weight' in x[0]][0]).contiguous()).cuda()
+                self.q_weights = torch.t([x[1] for x in model_dict.items() if 'encoder_attn.q_proj.weight' in x[0]][0]).contiguous().cuda()
+                self.k_weights = torch.t([x[1] for x in model_dict.items() if 'encoder_attn.k_proj.weight' in x[0]][0]).contiguous().cuda()
+                self.v_weights = torch.t([x[1] for x in model_dict.items() if 'encoder_attn.v_proj.weight' in x[0]][0]).contiguous().cuda()
                 self.q_bias = [x[1] for x in model_dict.items() if 'encoder_attn.q_proj.bias' in x[0]][0].cuda()
                 self.k_bias = [x[1] for x in model_dict.items() if 'encoder_attn.k_proj.bias' in x[0]][0].cuda()
                 self.v_bias = [x[1] for x in model_dict.items() if 'encoder_attn.v_proj.bias' in x[0]][0].cuda()
-                self.out_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'encoder_attn.out_proj.weight' in x[0]][0]).contiguous()).cuda()
+                self.out_weights = torch.t([x[1] for x in model_dict.items() if 'encoder_attn.out_proj.weight' in x[0]][0].contiguous()).cuda()
                 self.out_bias = [x[1] for x in model_dict.items() if 'encoder_attn.out_proj.bias' in x[0]][0].cuda()
                 self.layernorm_weights = [x[1] for x in model_dict.items() if 'encoder_attn_layer_norm.weight' in x[0]][0].cuda()
                 self.layernorm_bias = [x[1] for x in model_dict.items() if 'encoder_attn_layer_norm.bias' in x[0]][0].cuda()
                 self.attention = eet_cross_attention(meta_des,self.q_weights,self.k_weights,self.v_weights,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
         else:
             # transformer encoder
-            self.q_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self_attn.q_proj.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
-            self.k_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self_attn.k_proj.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
-            self.v_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self_attn.v_proj.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
+            self.q_weights = torch.t([x[1] for x in model_dict.items() if 'self_attn.q_proj.weight' in x[0]][0]).contiguous().cuda().type(data_type)
+            self.k_weights = torch.t([x[1] for x in model_dict.items() if 'self_attn.k_proj.weight' in x[0]][0]).contiguous().cuda().type(data_type)
+            self.v_weights = torch.t([x[1] for x in model_dict.items() if 'self_attn.v_proj.weight' in x[0]][0]).contiguous().cuda().type(data_type)
             self.q_bias = [x[1] for x in model_dict.items() if 'self_attn.q_proj.bias' in x[0]][0].cuda().type(data_type)
             self.k_bias = [x[1] for x in model_dict.items() if 'self_attn.k_proj.bias' in x[0]][0].cuda().type(data_type)
             self.v_bias = [x[1] for x in model_dict.items() if 'self_attn.v_proj.bias' in x[0]][0].cuda().type(data_type)
-            self.out_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self_attn.out_proj.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
+            self.out_weights = torch.t([x[1] for x in model_dict.items() if 'self_attn.out_proj.weight' in x[0]][0]).contiguous().cuda().type(data_type)
             self.out_bias = [x[1] for x in model_dict.items() if 'self_attn.out_proj.bias' in x[0]][0].cuda().type(data_type)
             self.layernorm_weights = [x[1] for x in model_dict.items() if 'self_attn_layer_norm.weight' in x[0]][0].cuda().type(data_type)
             self.layernorm_bias = [x[1] for x in model_dict.items() if 'self_attn_layer_norm.bias' in x[0]][0].cuda().type(data_type)

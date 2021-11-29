@@ -11,9 +11,7 @@ namespace eet{
         class MultiHeadAttention : public OpBase {
         public:
             MultiHeadAttention(MetaDesc desc,
-                                    const torch::Tensor& Q_weights,
-                                    const torch::Tensor& K_weights,
-                                    const torch::Tensor& V_weights,
+                                    const torch::Tensor& QKV_weights,
                                     const torch::Tensor& Q_bias,
                                     const torch::Tensor& K_bias,
                                     const torch::Tensor& V_bias,
@@ -36,13 +34,9 @@ namespace eet{
                                     Buffer& layernorm_query);
 
             void qkv_weights_mul(void* input, 
-                                Buffer& q_buffer,
-                                Buffer& k_buffer,
-                                Buffer& v_buffer);
+                                Buffer& qkv_buffer);
 
-             void qkv_add_bias(const Buffer& q_buffer,
-                                const Buffer& k_buffer,
-                                const Buffer& v_buffer,
+             void qkv_add_bias(const Buffer& qkv_buffer,
                                 Buffer& q_buf,
                                 Buffer& k_buf,
                                 Buffer& v_buf);
@@ -79,9 +73,7 @@ namespace eet{
             int max_len_;
 
         private:
-            void* q_weights_;
-            void* k_weights_;
-            void* v_weights_;
+            void* qkv_weights_;
             void* q_bias_;
             void* k_bias_;
             void* v_bias_;

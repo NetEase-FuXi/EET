@@ -12,9 +12,7 @@ namespace eet{
         class MaskedMultiHeadAttention : public OpBase{
         public:
             MaskedMultiHeadAttention(MetaDesc desc,
-                                    const torch::Tensor& Q_weights,
-                                    const torch::Tensor& K_weights,
-                                    const torch::Tensor& V_weights,
+                                    const torch::Tensor& QKV_weights,
                                     const torch::Tensor& Q_bias,
                                     const torch::Tensor& K_bias,
                                     const torch::Tensor& V_bias,
@@ -53,13 +51,9 @@ namespace eet{
                                     Buffer& layernorm_query);
 
             void qkv_weights_mul(void* input, 
-                                Buffer& q_buffer,
-                                Buffer& k_buffer,
-                                Buffer& v_buffer);
+                                Buffer& qkv_buffer);
 
-             void qkv_add_bias(const Buffer& q_buffer,
-                                const Buffer& k_buffer,
-                                const Buffer& v_buffer,
+             void qkv_add_bias(const Buffer& qkv_buffer,
                                 Buffer& q_buf,
                                 Buffer& k_buf,
                                 Buffer& v_buf);
@@ -80,9 +74,7 @@ namespace eet{
                         bool pre_layernorm,
                         bool add_redusial);
 
-            void masked_attention(const Buffer& k_buffer,
-                                const Buffer& v_buffer,
-                                const Buffer& q_buffer,
+            void masked_attention(const Buffer& qkv_buffer,
                                 Buffer& context_buf,
                                 const int64_t *padding_len,
                                 const int64_t *reorder_index);
@@ -107,9 +99,7 @@ namespace eet{
             void** qkv_buf_;
 
         private:
-            void* q_weights_;
-            void* k_weights_;
-            void* v_weights_;
+            void* qkv_weights_;
             void* q_bias_;
             void* k_bias_;
             void* v_bias_;

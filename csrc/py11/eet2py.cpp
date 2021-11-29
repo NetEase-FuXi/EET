@@ -21,8 +21,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         .def(py::init<const int&, const int&,const int&, const int&, const int&,const int&, const py::object&, const std::string& ,const bool&, const std::string& >());
 
     py::class_<eet::op::MaskedMultiHeadAttention>(m, "MaskedMultiHeadAttention")
-        .def(py::init<eet::MetaDesc,const torch::Tensor& ,const torch::Tensor&,
-                                const torch::Tensor& ,const torch::Tensor&,
+        .def(py::init<eet::MetaDesc,const torch::Tensor&,const torch::Tensor&,
                                 const torch::Tensor&,const torch::Tensor&,
                                 const torch::Tensor&,const torch::Tensor&,
                                 const torch::Tensor&,const torch::Tensor&>())
@@ -38,7 +37,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
     py::class_<eet::op::MultiHeadAttention>(m, "MultiHeadAttention")
     .def(py::init<eet::MetaDesc,const torch::Tensor& ,const torch::Tensor&,
-                            const torch::Tensor& ,const torch::Tensor&,
                             const torch::Tensor&,const torch::Tensor&,
                             const torch::Tensor&,const torch::Tensor&,
                             const torch::Tensor&,const torch::Tensor&>())

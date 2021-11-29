@@ -2,8 +2,8 @@ from setuptools import find_packages, setup, Extension
 from torch.utils import cpp_extension
 import glob
 import os
-
-__version__ = "0.0.1 beta"
+import subprocess
+__version__ = "0.0.1"
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 cuda_sources = glob.glob(os.path.join(current_dir, 'csrc', 'core', '*.cu'))
@@ -14,6 +14,24 @@ sources = cuda_sources + cpp_sources + py11_sources
 cuda_include_paths = cpp_extension.include_paths(cuda=True)
 self_include_paths = [os.path.join(current_dir, 'csrc')]
 include_paths = cuda_include_paths + self_include_paths
+
+
+def get_cuda_bare_metal_version(cuda_dir):
+    raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
+    output = raw_output.split()
+    release_idx = output.index("release") + 1
+    release = output[release_idx].split(".")
+    bare_metal_major = release[0]
+    bare_metal_minor = release[1][0]
+
+    return raw_output, bare_metal_major, bare_metal_minor
+
+_, bare_metal_major, _ = get_cuda_bare_metal_version(cpp_extension.CUDA_HOME)
+if int(bare_metal_major) == 11:
+    os.environ["TORCH_CUDA_ARCH_LIST"] = "6.0;6.1;6.2;7.0;7.5;8.0"
+else:
+    os.environ["TORCH_CUDA_ARCH_LIST"] = "6.0;6.1;6.2;7.0;7.5"
+
 
 setup(
     name='EET',

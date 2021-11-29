@@ -11,9 +11,7 @@
 namespace eet{
     namespace op{
         MultiHeadAttention::MultiHeadAttention(MetaDesc desc,
-                                    const torch::Tensor& Q_weights,
-                                    const torch::Tensor& K_weights,
-                                    const torch::Tensor& V_weights,
+                                    const torch::Tensor& QKV_weights,
                                     const torch::Tensor& Q_bias,
                                     const torch::Tensor& K_bias,
                                     const torch::Tensor& V_bias,
@@ -23,9 +21,7 @@ namespace eet{
                                     const torch::Tensor& layernorm_bias):
             desc_(desc),
             max_len_(0),
-            q_weights_(Q_weights.data_ptr()),
-            k_weights_(K_weights.data_ptr()),
-            v_weights_(V_weights.data_ptr()),
+            qkv_weights_(QKV_weights.data_ptr()),
             q_bias_(Q_bias.data_ptr()),
             k_bias_(K_bias.data_ptr()),
             v_bias_(V_bias.data_ptr()),
@@ -79,12 +75,8 @@ namespace eet{
             cur_seq_len_ = input.sizes()[1];
             assert((cur_batch_size_ <= desc_.batch_size_)&& "cur_batch_size_ must be less than or equal to max_batch_size_");
 
-            Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+            Buffer& qkv_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
+                                    desc_.hidden_units_ * 3, desc_.dtype_, desc_.options_);
             if(pre_layernorm)
             {
                 // pre_layerNorm
@@ -93,12 +85,12 @@ namespace eet{
                 layer_norm(input,layernormed_query);
 
                 //qkv * weights
-                qkv_weights_mul(layernormed_query.data_ptr(), q_buffer,k_buffer,v_buffer);
+                qkv_weights_mul(layernormed_query.data_ptr(), qkv_buffer);
                 layernormed_query.free();
             }
             else{
                 //qkv * weights
-                qkv_weights_mul(input.data_ptr(), q_buffer,k_buffer,v_buffer);
+                qkv_weights_mul(input.data_ptr(), qkv_buffer);
             }
 
             //qkv add bias                
@@ -108,11 +100,10 @@ namespace eet{
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            qkv_add_bias(q_buffer, k_buffer, v_buffer, q_buf, k_buf, v_buf);
+            qkv_add_bias(qkv_buffer, q_buf, k_buf, v_buf);
             
-            q_buffer.free();
-            k_buffer.free();
-            v_buffer.free();
+            qkv_buffer.free();
+
 
             //q * k
             Buffer& qk_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.head_num_ *
@@ -169,47 +160,36 @@ namespace eet{
         }
 
         void MultiHeadAttention::qkv_weights_mul(void* input, 
-                                    Buffer& q_buffer,
-                                    Buffer& k_buffer,
-                                    Buffer& v_buffer){
+                                    Buffer& qkv_buffer){
+            const int m = cur_batch_size_ * cur_seq_len_;
+            const int k = desc_.hidden_units_;
+            const int n = 3 * k;
 
-                const int m = cur_batch_size_ * cur_seq_len_;
-                const int k = desc_.hidden_units_;
-                const int n = k;
-                const void *hA[]{q_weights_,k_weights_,v_weights_,
-                                input, input, input,
-                                q_buffer.data_ptr(), k_buffer.data_ptr(), v_buffer.data_ptr()};
-                check_cuda_error(cudaMemcpyAsync((void *)qkv_kernel_, hA, sizeof(void *) * FUSED_QKV_PTR_SIZE, cudaMemcpyHostToDevice));
+            check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                CUBLAS_OP_N, CUBLAS_OP_N,
+                n, m, k,
+                alpha_,
+                qkv_weights_, desc_.computeType_, n,
+                input, desc_.computeType_, k,
+                beta_,
+                qkv_buffer.data_ptr(), desc_.computeType_, n,
+                desc_.computeType_,
+                qkv_weights_algo_));
 
-                check_cuda_error(cublasGemmBatchedEx(desc_.cublasHandle,
-                            CUBLAS_OP_N, CUBLAS_OP_N,
-                            n, m, k,
-                            alpha_,
-                            (const void *const *)qkv_kernel_, desc_.computeType_, n,
-                            (const void *const *)qkv_input_, desc_.computeType_, k,
-                            beta_,
-                            (void *const *)qkv_buf_, desc_.computeType_, n,
-                            QKV_PTR_SIZE,
-                            desc_.computeType_,
-                            q_k_algo_));
 #ifdef _DEBUG_MODE_
         cudaDeviceSynchronize();
         check_cuda_error(cudaGetLastError());
 #endif
         }
 
-        void MultiHeadAttention::qkv_add_bias(const Buffer &q_buffer,
-                                                       const Buffer &k_buffer,
-                                                       const Buffer &v_buffer,
+        void MultiHeadAttention::qkv_add_bias(const Buffer &qkv_buffer,
                                                        Buffer &q_buf,
                                                        Buffer &k_buf,
                                                        Buffer &v_buf)
         {
-
-            RUN_KERNEL(add_QKV_bias_opt_kernel, desc_.dtype_, q_buffer.data_ptr(),q_bias_,
-                        k_buffer.data_ptr(), k_bias_, v_buffer.data_ptr(), v_bias_,
-                        q_buf.data_ptr(), k_buf.data_ptr(), v_buf.data_ptr(),
-                        cur_batch_size_, cur_seq_len_, desc_.head_num_, size_per_head_, desc_.stream);
+            RUN_KERNEL(fused_add_QKV_bias_kernel,desc_.dtype_,qkv_buffer.data_ptr(),q_bias_,
+                       k_bias_, v_bias_, q_buf.data_ptr(), k_buf.data_ptr(), v_buf.data_ptr(),
+                       cur_batch_size_, cur_seq_len_, desc_.head_num_, size_per_head_, desc_.stream);
 
 #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();

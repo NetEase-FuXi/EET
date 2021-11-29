@@ -10,10 +10,8 @@ import torch.nn as nn
 import numpy as np
 from torch import Tensor
 from typing import Any, Dict, List, Optional, Tuple
-from transformers import BertModel,BertPreTrainedModel
-from transformers.modeling_bert import BertEncoder
-from transformers.configuration_bert import BertConfig
-from transformers.configuration_utils import PretrainedConfig
+from transformers import BertModel
+
 
 from EET import MetaDesc as meta_desc
 from EET import FeedForwardNetwork as eet_ffn
@@ -48,9 +46,9 @@ class EETBertEmbedding():
 
 class EETBertFeedforward():
     def __init__(self,config,model_dict,layer_id,data_type = torch.float32):
-        self.intermediate_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'intermediate.dense.weight' in x[0]][0]).contiguous()).contiguous().cuda().type(data_type)
+        self.intermediate_weights = torch.t([x[1] for x in model_dict.items() if 'intermediate.dense.weight' in x[0]][0]).contiguous().cuda().type(data_type)
         self.intermediate_bias = [x[1] for x in model_dict.items() if 'intermediate.dense.bias' in x[0]][0].cuda().type(data_type)
-        self.output_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if str(layer_id)+'.output.dense.weight' in x[0]][0]).contiguous()).contiguous().cuda().type(data_type)
+        self.output_weights = torch.t([x[1] for x in model_dict.items() if str(layer_id)+'.output.dense.weight' in x[0]][0]).contiguous().cuda().type(data_type)
         self.output_bias = [x[1] for x in model_dict.items() if str(layer_id)+'.output.dense.bias' in x[0]][0].cuda().type(data_type)
         self.layernorm_weights = [x[1] for x in model_dict.items() if str(layer_id)+'.output.LayerNorm.weight' in x[0]][0].cuda().type(data_type)
         self.layernorm_bias = [x[1] for x in model_dict.items() if str(layer_id)+'.output.LayerNorm.bias' in x[0]][0].cuda().type(data_type)
@@ -69,18 +67,19 @@ class EETBertFeedforward():
 
 class EETBertAttention():
     def __init__(self,config, model_dict,layer_id,data_type = torch.float32):
-        self.q_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self.query.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
-        self.k_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self.key.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
-        self.v_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'self.value.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
+        q_weights = [x[1] for x in model_dict.items() if 'self.query.weight' in x[0]][0].contiguous().cuda().type(data_type)
+        k_weights = [x[1] for x in model_dict.items() if 'self.key.weight' in x[0]][0].contiguous().cuda().type(data_type)
+        v_weights = [x[1] for x in model_dict.items() if 'self.value.weight' in x[0]][0].contiguous().cuda().type(data_type)
+        self.qkv_weight = torch.cat((q_weights,k_weights,v_weights),0).transpose(0,1).contiguous()
         self.q_bias = [x[1] for x in model_dict.items() if 'self.query.bias' in x[0]][0].cuda().type(data_type)
         self.k_bias = [x[1] for x in model_dict.items() if 'self.key.bias' in x[0]][0].cuda().type(data_type)
         self.v_bias = [x[1] for x in model_dict.items() if 'self.value.bias' in x[0]][0].cuda().type(data_type)
-        self.out_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'attention.output.dense.weight' in x[0]][0]).contiguous()).cuda().type(data_type)
+        self.out_weights = torch.t([x[1] for x in model_dict.items() if 'attention.output.dense.weight' in x[0]][0]).contiguous().cuda().type(data_type)
         self.out_bias = [x[1] for x in model_dict.items() if 'attention.output.dense.bias' in x[0]][0].cuda().type(data_type)
         self.layernorm_weights = [x[1] for x in model_dict.items() if 'attention.output.LayerNorm.weight' in x[0]][0].cuda().type(data_type)
         self.layernorm_bias = [x[1] for x in model_dict.items() if 'attention.output.LayerNorm.bias' in x[0]][0].cuda().type(data_type)
 
-        self.attention = eet_attention(config,self.q_weights,self.k_weights,self.v_weights,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
+        self.attention = eet_attention(config,self.qkv_weight,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
 
     def __call__(self,
                 input_id,
@@ -104,24 +103,16 @@ class EETBertEncoderLayer():
                 pre_padding_len = None,
                 normalize_before = False):
 
-        if normalize_before:
-            ''' gpt2 model struct '''
-            ''' layernorm->self_attention-> project->addinputbias->layernorm->ffn->addinputbias'''
-            self_attn_out = self.attetion(input_id = x,
-                        pre_padding_len = pre_padding_len,
-                        pre_layernorm = True,
-                        add_redusial = True)
-            out = self.feedforward(self_attn_out,
-                        pre_layernorm = True,
-                        add_redusial = True)
-        else:
-            self_attn_out = self.attetion(input_id = x,
-                        pre_padding_len = pre_padding_len,
-                        pre_layernorm = False,
-                        add_redusial = True)
-            out = self.feedforward(self_attn_out,
-                        pre_layernorm = False,
-                        add_redusial = True)
+        ''' gpt2 model struct '''
+        ''' layernorm->self_attention-> project->addinputbias->layernorm->ffn->addinputbias'''
+        self_attn_out = self.attetion(input_id = x,
+                    pre_padding_len = pre_padding_len,
+                    pre_layernorm = normalize_before,
+                    add_redusial = True)
+        out = self.feedforward(self_attn_out,
+                    pre_layernorm = normalize_before,
+                    add_redusial = True)
+
         return out
 
     @staticmethod
