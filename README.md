@@ -119,7 +119,7 @@ We currenly support the GPT-2, Bert.
 <div  align="left"> <img src="./doc/image/bert.jpg" width = "400" height = "463" alt="bert"/></div>
 
 ## Usage
-EET provides python User-friendly APIs([python/eet](./python/eet)), integrated into Fairseq and Transformers with just a few lines of code. 
+EET provides python User-friendly APIs([python/eet](./python/eet)), integrated into Fairseq and Transformers with just a few lines of code. It should be noted that we only support padding on the left.
 
 >1、How to inference 
 <div  align="left"> <img src="./doc/image/use_bert.png" width = "850" height = "325" alt="useofbert"/></div>

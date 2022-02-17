@@ -22,6 +22,9 @@ def main():
     ts_model = BertModel.from_pretrained('bert-base-uncased').cuda().half()
   
     attention_mask = None
+    # padding on the left
+    # attention_mask = torch.tensor([[0, 0, 1, 1],
+    #     [1, 1, 1, 1]]).cuda().long()
     t1 = time.perf_counter()
     for i in range(loop):
         res_eet = eet_model(input_ids, attention_mask=attention_mask)

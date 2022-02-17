@@ -21,11 +21,14 @@ def main():
     # load pytorch model
     eet_model = EETGPT2Model.from_pretrained('gpt2',max_batch = batch, full_seq_len = seq_len,data_type = data_type)
     input_ids = input_full_decoder
-
+    # padding on the left
+    # attention_mask = torch.tensor([[0, 0, 1, 1],
+    #     [1, 1, 1, 1]]).cuda().long()
+    attention_mask = None
     first_pass = True
     for i in range(100):
         print('i--:',i)
-        res_eet = eet_model(input_ids,first_pass= first_pass)
+        res_eet = eet_model(input_ids,first_pass= first_pass,attention_mask = attention_mask)
         if first_pass:
             first_pass = False
         input_ids = input_inc_decoder

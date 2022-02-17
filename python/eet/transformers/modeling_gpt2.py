@@ -269,7 +269,7 @@ class EETGPT2Model():
         if attention_mask is  None:
             pre_padding_len = self.self_attn_padding_mask
         else:
-            pre_padding_len = torch.sum(attention_mask, 1, True).cuda().long()
+            pre_padding_len = torch.sum(1 - attention_mask, 1, True).cuda().long()
 
         position_ids = self.position_ids[:, :input_shape[1]]
         if token_type_ids is not None:
