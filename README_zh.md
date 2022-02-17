@@ -115,7 +115,7 @@ $ python gpt2_fairseq_example.py
 <div  align="left"> <img src="./doc/image/gpt2.jpg" width = "400" height = "632" alt="gpt2"/></div>
 
 ## 使用方式
-EET提供了python API接口([python/eet](./python/eet))，用法非常简单，仅三行代码就可以完全适配fairseq和transformers。
+EET提供了python API接口([python/eet](./python/eet))，用法非常简单，仅三行代码就可以完全适配fairseq和transformers。需要注意的是，EET只支持左边打padding。
 
 * 具体用法   
 >1、 如何加载EET模块；如何加载预训练模型；如何做推理  
