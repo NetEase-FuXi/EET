@@ -1,3 +1,4 @@
+from pytools import F
 import torch
 import numpy as np
 from eet.transformers.modeling_bert import EETBertModel
@@ -25,16 +26,25 @@ def main():
     # padding on the left
     # attention_mask = torch.tensor([[0, 0, 1, 1],
     #     [1, 1, 1, 1]]).cuda().long()
+    for i in range(loop):
+        res_eet = eet_model(input_ids, attention_mask=attention_mask)
+
+    torch.cuda.synchronize()
     t1 = time.perf_counter()
     for i in range(loop):
         res_eet = eet_model(input_ids, attention_mask=attention_mask)
+    torch.cuda.synchronize()
+
     t2 = time.perf_counter()
     time_eet = t2 - t1
     print('Time for EET : ', time_eet)
+    torch.cuda.synchronize()
 
     t3 = time.perf_counter()
     for i in range(loop):
         res_ts = ts_model(input_ids,attention_mask)
+    torch.cuda.synchronize()
+
     t4= time.perf_counter()
     time_ts = t4 -t3
     print('Time for Transformers: ', time_ts)

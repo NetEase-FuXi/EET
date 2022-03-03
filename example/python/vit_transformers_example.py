@@ -37,7 +37,10 @@ def main():
 
     # Inference using transformers
     # The first inference takes a long time
-    res_ts = ts_model(input_states, attention_mask)
+    for i in range(loop):
+        res_ts = ts_model(input_states, attention_mask)
+
+
     t3 = time.perf_counter()
     for i in range(loop):
         res_ts = ts_model(input_states, attention_mask)
