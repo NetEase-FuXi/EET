@@ -13,7 +13,8 @@ EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型
 * 灵活： 提供算子级和模型级API，允许用户自定义模型或者只更新部分算法逻辑。  
 * 动态batch： EET支持动态batch，根据reorder_state变化batch的顺序，并能提前结束某个batch。 
 * 超大维度和超长序列： EET支持GPT最大16384的hidden_units和最长4096的序列长度。 
-* 易于使用： EET可以直接集成到Fairseq和Transformes中，无需任何代码改动，只需要替换指定文件即可完成从训练到推理的转换。   
+* 易于使用： EET可以直接集成到Fairseq和Transformes中，无需任何代码改动，只需要替换指定文件即可完成从训练到推理的转换。  
+* 支持多种模型：gpt2、bert、roberta、albert、vit等，后续会支持T5、clip等模型。
    
 
 EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lofter，天谕等。未来EET将致力于万亿模型的线上推理。
