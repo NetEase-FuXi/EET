@@ -14,7 +14,7 @@ EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin foc
 >4、Easy to use. EET could be integrated into Fairseq and Transformers directly by replacement of sepcified files, without any code change.  
 >5、Dynamic batch. EET supports dynamic batch, which changes the order of the batch according to the reorder_state and can end a batch early.    
 >6、Extra-large dimension and extra-long sequences. EET supports GPT hidden_units up to 16384 and sequence lengths up to 4096.  
-
+>7、Support multiple models, including gpt2, bert, albert, roberta, vit.
 
 EET has been applied to a variety of NetEase online services,such as NiShuiHan, NetEase's cloud music, TianYu, Lofter, etc. In the future, EET will work on urtra-large-scale model inference of trillion parameters.   
 
