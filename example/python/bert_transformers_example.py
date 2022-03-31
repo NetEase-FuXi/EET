@@ -13,15 +13,15 @@ loop = 100
 def main():
     torch.set_grad_enabled(False)
 
-    input = np.random.randint(1000,9000,seq_len * batch,dtype="int64")
+    input = np.random.randint(1000, 9000, seq_len * batch, dtype="int64")
     input_ids = torch.from_numpy(input).long().reshape(batch, seq_len).cuda()
 
     data_type = torch.float32
     if using_half:
         data_type = torch.float16
-    eet_model = EETBertModel.from_pretrained('bert-base-uncased',max_batch = batch,data_type = data_type)
+    eet_model = EETBertModel.from_pretrained('bert-base-uncased', max_batch=batch, data_type=data_type)
     ts_model = BertModel.from_pretrained('bert-base-uncased').cuda().half()
-  
+
     attention_mask = None
     # padding on the left
     # attention_mask = torch.tensor([[0, 0, 1, 1],
@@ -41,12 +41,14 @@ def main():
     torch.cuda.synchronize()
 
     t3 = time.perf_counter()
-    for i in range(loop):
-        res_ts = ts_model(input_ids,attention_mask)
+    with torch.no_grad():
+        for i in range(loop):
+            res_ts = ts_model(input_ids, attention_mask)
     torch.cuda.synchronize()
 
-    t4= time.perf_counter()
+    t4 = time.perf_counter()
     time_ts = t4 -t3
+    
     print('Time for Transformers: ', time_ts)
     print('SpeedUp is ', time_ts / time_eet)
 

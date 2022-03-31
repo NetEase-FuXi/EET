@@ -12,7 +12,6 @@ loop = 100
 def main():
     torch.set_grad_enabled(False)
 
-    print("bs: ", batch, " seq_len: ", seq_len)
     input = np.random.randint(1000, 9000, seq_len * batch, dtype="int64")
     input_ids = torch.from_numpy(input).long().reshape(batch, seq_len).cuda()
 
@@ -29,14 +28,15 @@ def main():
         res_eet = eet_model(input_ids, attention_mask=attention_mask)
     t2 = time.perf_counter()
     time_eet = t2 - t1
-    print('Time for EET : ', time_eet)
 
     t3 = time.perf_counter()
-    for i in range(loop):
-        res_ts = ts_model(input_ids, attention_mask)
+    with torch.no_grad():
+        for i in range(loop):
+            res_ts = ts_model(input_ids, attention_mask=attention_mask)
     t4= time.perf_counter()
     time_ts = t4 - t3
-    
+
+    print('Time for EET : ', time_eet)
     print('Time for Transformers: ', time_ts)
     print('SpeedUp is ', time_ts / time_eet)
 

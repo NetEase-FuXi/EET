@@ -42,8 +42,9 @@ def main():
 
 
     t3 = time.perf_counter()
-    for i in range(loop):
-        res_ts = ts_model(input_states, attention_mask)
+    with torch.no_grad():
+        for i in range(loop):
+            res_ts = ts_model(input_states, attention_mask)
     t4 = time.perf_counter()
     time_ts = t4 - t3
     
@@ -52,8 +53,10 @@ def main():
     for i in range(loop):
         res_eet = eet_model(input_states, attention_mask=attention_mask)
     t2 = time.perf_counter()
-    
     time_eet = t2 - t1
+
+    print('ts output: ', res_ts.pooler_output)
+    print('eet output: ', res_eet)
     print('Time for EET: ', time_eet)
     print('Time for Transformers: ', time_ts)
     print('SpeedUp is ', time_ts / time_eet)

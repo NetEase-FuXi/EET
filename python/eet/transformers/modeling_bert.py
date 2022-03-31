@@ -11,7 +11,8 @@ import numpy as np
 from torch import Tensor
 from typing import Any, Dict, List, Optional, Tuple
 from transformers import BertModel
-
+from eet.transformers.modeling_transformer import *
+from eet.utils.mapping import convert_name
 
 from EET import MetaDesc as meta_desc
 from EET import FeedForwardNetwork as eet_ffn
@@ -20,9 +21,7 @@ from EET import Embedding as eet_embedding
 
 BEGIN_OF_PARAM = 8
 
-__all__ = [
-    'EETBertEmbedding', 'EETBertFeedforward', 'EETBertAttention', 'EETBertEncoderLayer', 'EETBertEncoder', 'EETBertModel'
-]
+__all__ = ['EETBertEmbedding', 'EETBertModel']
 
 class EETBertEmbedding():
     def __init__(self,config,embedding_dict,data_type = torch.float32):
@@ -44,119 +43,6 @@ class EETBertEmbedding():
         feedforward = EETBertEmbedding(config,embedding_dict,data_type = data_type)
         return feedforward
 
-class EETBertFeedforward():
-    def __init__(self,config,model_dict,layer_id,data_type = torch.float32):
-        self.intermediate_weights = torch.t([x[1] for x in model_dict.items() if 'intermediate.dense.weight' in x[0]][0]).contiguous().cuda().type(data_type)
-        self.intermediate_bias = [x[1] for x in model_dict.items() if 'intermediate.dense.bias' in x[0]][0].cuda().type(data_type)
-        self.output_weights = torch.t([x[1] for x in model_dict.items() if str(layer_id)+'.output.dense.weight' in x[0]][0]).contiguous().cuda().type(data_type)
-        self.output_bias = [x[1] for x in model_dict.items() if str(layer_id)+'.output.dense.bias' in x[0]][0].cuda().type(data_type)
-        self.layernorm_weights = [x[1] for x in model_dict.items() if str(layer_id)+'.output.LayerNorm.weight' in x[0]][0].cuda().type(data_type)
-        self.layernorm_bias = [x[1] for x in model_dict.items() if str(layer_id)+'.output.LayerNorm.bias' in x[0]][0].cuda().type(data_type)
-
-        self.ffn = eet_ffn(config,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias)
-    def __call__(self,
-                input_id,
-                pre_layernorm = True,
-                add_redusial = True):
-        return self.ffn.forward(input_id,pre_layernorm,add_redusial)
-    
-    @staticmethod
-    def from_torch(config,model_dict,layer_id,data_type = torch.float32):
-        feedforward = EETBertFeedforward(config,model_dict,layer_id,data_type = data_type)
-        return feedforward
-
-class EETBertAttention():
-    def __init__(self,config, model_dict,layer_id,data_type = torch.float32):
-        q_weights = [x[1] for x in model_dict.items() if 'self.query.weight' in x[0]][0].contiguous().cuda().type(data_type)
-        k_weights = [x[1] for x in model_dict.items() if 'self.key.weight' in x[0]][0].contiguous().cuda().type(data_type)
-        v_weights = [x[1] for x in model_dict.items() if 'self.value.weight' in x[0]][0].contiguous().cuda().type(data_type)
-        self.qkv_weight = torch.cat((q_weights,k_weights,v_weights),0).transpose(0,1).contiguous()
-        self.q_bias = [x[1] for x in model_dict.items() if 'self.query.bias' in x[0]][0].cuda().type(data_type)
-        self.k_bias = [x[1] for x in model_dict.items() if 'self.key.bias' in x[0]][0].cuda().type(data_type)
-        self.v_bias = [x[1] for x in model_dict.items() if 'self.value.bias' in x[0]][0].cuda().type(data_type)
-        self.out_weights = torch.t([x[1] for x in model_dict.items() if 'attention.output.dense.weight' in x[0]][0]).contiguous().cuda().type(data_type)
-        self.out_bias = [x[1] for x in model_dict.items() if 'attention.output.dense.bias' in x[0]][0].cuda().type(data_type)
-        self.layernorm_weights = [x[1] for x in model_dict.items() if 'attention.output.LayerNorm.weight' in x[0]][0].cuda().type(data_type)
-        self.layernorm_bias = [x[1] for x in model_dict.items() if 'attention.output.LayerNorm.bias' in x[0]][0].cuda().type(data_type)
-
-        self.attention = eet_attention(config,self.qkv_weight,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
-
-    def __call__(self,
-                input_id,
-                pre_padding_len,
-                pre_layernorm = False,
-                add_redusial = True):
-        return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial)
-
-    @staticmethod
-    def from_torch(config,model_dict,layer_id,data_type = torch.float32):
-        attention = EETBertAttention(config,model_dict,layer_id,data_type = data_type)
-        return attention
-
-class EETBertEncoderLayer():
-    def __init__(self, config, attention,feedforward):
-        self.attetion = attention
-        self.feedforward = feedforward
-
-    def __call__(self,
-                x,
-                pre_padding_len = None,
-                normalize_before = False):
-
-        ''' gpt2 model struct '''
-        ''' layernorm->self_attention-> project->addinputbias->layernorm->ffn->addinputbias'''
-        self_attn_out = self.attetion(input_id = x,
-                    pre_padding_len = pre_padding_len,
-                    pre_layernorm = normalize_before,
-                    add_redusial = True)
-        out = self.feedforward(self_attn_out,
-                    pre_layernorm = normalize_before,
-                    add_redusial = True)
-
-        return out
-
-    @staticmethod
-    def from_torch(config, model_dict,layer_id,data_type = torch.float32):
-        attention = EETBertAttention.from_torch(config = config, model_dict = model_dict, layer_id = layer_id,data_type = data_type)
-        feedforward = EETBertFeedforward.from_torch(config = config, model_dict = model_dict, layer_id = layer_id,data_type = data_type)
-        layer = EETBertEncoderLayer(config, attention, feedforward)
-        return layer
-
-class EETBertEncoder():
-    def __init__(self,EncoderLayers):
-        self.layers = EncoderLayers
-    def __call__(
-        self,
-        x,
-        pre_padding_len = None,
-        normalize_before = False
-    ):
-        for layer in self.layers:
-            x = layer(x,
-                      pre_padding_len = pre_padding_len,
-                      normalize_before = False)
-        return x
-    
-    @staticmethod
-    def from_torch(layer_model_dict,config,layer_num,data_type = torch.float32):
-        """from torch."""
-        EncoderLayers = []
-        for i in range(layer_num):
-            if i < 10:
-                EncoderLayers.extend(
-                    [
-                        EETBertEncoderLayer.from_torch(config,layer_model_dict['layer.'+str(i)+'.'],i,data_type = data_type)
-                    ]
-                )
-            else:
-                EncoderLayers.extend(
-                    [
-                        EETBertEncoderLayer.from_torch(config,layer_model_dict['layer.'+str(i)],i,data_type = data_type)
-                    ]
-                )
-
-        eet_encoder =  EETBertEncoder(EncoderLayers)
-        return eet_encoder
 
 class EETBertModel():
     def __init__(self,config,embedding,encoder):
@@ -206,26 +92,31 @@ class EETBertModel():
         model_dict = {}
         embedding_dict = {}
         torch_model = BertModel.from_pretrained(model_id_or_path)
+        model_name = type(torch_model).__name__
         cfg = torch_model.config
-
         for k, v in torch_model.state_dict().items():
-            if 'embeddings' in k:
+            if 'embeddings.' in k:
                 embedding_dict[k] = v
-            if 'layer' in k:
-                #BEGIN_OF_PARAM(Length of the beginning of the parameter):
-                #like 'encoder.layer.0.attention.self.query.weight',the BEGIN_OF_PARAM is the length of 'encoder.'-->8
-                k = k[BEGIN_OF_PARAM:]
+            if 'layer.' in k:
+                # Structure mapping
+                k = convert_name(k, model_name)
+                k = k[k.find('layer.'):]
                 model_dict[k] = v
+
+        # group by 'layer.n'
         from itertools import groupby
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:BEGIN_OF_PARAM])}
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
+                                                           lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
         device = "cuda:0"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers , cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
+        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers,
+                           cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False,
+                           activation_fn)
 
-        embedding = EETBertEmbedding.from_torch(config,embedding_dict,data_type)
+        embedding = EETBertEmbedding.from_torch(config, embedding_dict, data_type)
         # embedding = None
-        encoder = EETBertEncoder.from_torch(layer_model_dict,config, cfg.num_hidden_layers,data_type)
-        eet_model =  EETBertModel(cfg,embedding, encoder)
+        encoder = EETEncoder.from_torch(config, layer_model_dict, cfg.num_hidden_layers, data_type)
+        eet_model = EETBertModel(cfg, embedding, encoder)
         return eet_model
