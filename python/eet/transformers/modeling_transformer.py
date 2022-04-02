@@ -55,7 +55,7 @@ class EETLayerNorm():
         return self.layernorm.layer_norm(input)
     
     @staticmethod
-    def from_torch(config, layernorm_weight, layernorm_bias,data_type = torch.float32):
+    def from_torch(config, layernorm_weight, layernorm_bias, data_type=torch.float32):
         layernorm = EETLayerNorm(config, layernorm_weight, layernorm_bias, data_type=data_type)
         return layernorm
 
@@ -71,11 +71,13 @@ class EETFeedforward():
 
         self.ffn = eet_ffn(config, self.intermediate_weights, self.intermediate_bias, self.output_weights, self.output_bias, self.layernorm_weights, self.layernorm_bias)
 
-    def __call__(self,
-                 x,
-                 pre_layernorm=True,
-                 add_redusial=True):
-        return self.ffn.forward(x, pre_layernorm, add_redusial)
+    def __call__(
+        self,
+        hidden_states,
+        pre_layernorm=True,
+        add_redusial=True
+    ):
+        return self.ffn.forward(hidden_states, pre_layernorm, add_redusial)
 
     @staticmethod
     def from_torch(config, model_dict, layer_id, data_type=torch.float32):
@@ -100,12 +102,15 @@ class EETSelfAttention():
         self.attention = eet_attention(config, self.qkv_weight, self.q_bias, self.k_bias, self.v_bias,
                                        self.out_weights, self.out_bias, self.layernorm_weights, self.layernorm_bias)
 
-    def __call__(self,
-                 x,
-                 pre_padding_len,
-                 pre_layernorm=False,
-                 add_redusial=True):
-        return self.attention.forward(x, pre_padding_len, pre_layernorm, add_redusial)
+    def __call__(
+        self,
+        hidden_states,
+        pre_padding_len,
+        pre_layernorm=False,
+        add_redusial=True,
+        need_sequence_mask=False,
+    ):
+        return self.attention.forward(hidden_states, pre_padding_len, pre_layernorm, add_redusial, need_sequence_mask)
 
     @staticmethod
     def from_torch(config, model_dict, layer_id, data_type=torch.float32):
@@ -118,18 +123,26 @@ class EETEncoderLayer():
         self.attention = attention
         self.feedforward = feedforward
 
-    def __call__(self,
-                 x,
-                 pre_padding_len=None,
-                 normalize_before=False):
+    def __call__(
+        self,
+        hidden_states,
+        pre_padding_len=None,
+        normalize_before=False,
+        need_sequence_mask=False
+    ):
 
-        self_attn_out = self.attention(x,
-                                       pre_padding_len=pre_padding_len,
-                                       pre_layernorm=normalize_before,
-                                       add_redusial=True)
-        out = self.feedforward(self_attn_out,
-                               pre_layernorm=normalize_before,
-                               add_redusial=True)
+        self_attn_out = self.attention(
+            hidden_states,
+            pre_padding_len=pre_padding_len,
+            pre_layernorm=normalize_before,
+            add_redusial=True,
+            need_sequence_mask=need_sequence_mask
+        )
+        out = self.feedforward(
+            self_attn_out,
+            pre_layernorm=normalize_before,
+            add_redusial=True
+        )
         return out
 
     @staticmethod
@@ -144,15 +157,21 @@ class EETEncoder():
     def __init__(self, EncoderLayers):
         self.layers = EncoderLayers
 
-    def __call__(self,
-                 x,
-                 pre_padding_len=None,
-                 normalize_before=False):
+    def __call__(
+        self,
+        hidden_states,
+        pre_padding_len=None,
+        normalize_before=False,
+        need_sequence_mask=False,
+    ):
         for layer in self.layers:
-            x = layer(x,
-                      pre_padding_len=pre_padding_len,
-                      normalize_before=normalize_before)
-        return x
+            hidden_states = layer(
+                hidden_states,
+                pre_padding_len=pre_padding_len,
+                normalize_before=normalize_before,
+                need_sequence_mask=need_sequence_mask
+            )
+        return hidden_states
 
     @staticmethod
     def from_torch(config, layer_model_dict, layer_num, data_type=torch.float32):
@@ -161,8 +180,7 @@ class EETEncoder():
         for i in range(layer_num):
             EncoderLayers.extend(
                 [
-                    EETEncoderLayer.from_torch(
-                        config, layer_model_dict['layer.' + str(i)], i, data_type=data_type)
+                    EETEncoderLayer.from_torch(config, layer_model_dict['layer.' + str(i)], i, data_type=data_type)
                 ]
             )
         eet_encoder = EETEncoder(EncoderLayers)

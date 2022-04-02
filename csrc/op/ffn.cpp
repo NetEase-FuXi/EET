@@ -24,7 +24,11 @@ namespace eet
         layernorm_bias_(layernorm_bias.data_ptr())
         {   
             // Currently only supports gelu and relu
-            if (desc_.activation_fn_ == "gelu" || desc_.activation_fn_ == "gelu_new" || desc_.activation_fn_ == "gelu_fast")
+            if (desc_.activation_fn_ == "quick_gelu")
+            {
+                act_type_ = 2;
+            }
+            else if (desc_.activation_fn_ == "gelu" || desc_.activation_fn_ == "gelu_new" || desc_.activation_fn_ == "gelu_fast")
             {
                 act_type_ = 1;
             }

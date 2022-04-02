@@ -94,6 +94,7 @@ class EETBertModel():
         torch_model = BertModel.from_pretrained(model_id_or_path)
         model_name = type(torch_model).__name__
         cfg = torch_model.config
+        
         for k, v in torch_model.state_dict().items():
             if 'embeddings.' in k:
                 embedding_dict[k] = v

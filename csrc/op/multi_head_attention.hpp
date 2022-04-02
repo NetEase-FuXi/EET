@@ -20,11 +20,12 @@ namespace eet{
                                     const torch::Tensor& layernorm_weights,
                                     const torch::Tensor& layernorm_bias);
 
-            torch::Tensor forward(torch::Tensor& input, 
-                                    const torch::Tensor& padding_mask,
-                                    bool pre_layernorm,
-                                    bool add_redusial);
-            
+            torch::Tensor forward(torch::Tensor &input,
+                                  const torch::Tensor &padding_mask,
+                                  bool pre_layernorm,
+                                  bool add_redusial,
+                                  bool need_sequence_mask = false);
+
             ~MultiHeadAttention(){
                 // check_cuda_error(cudaFree(&fused_qkv_ptr_));
             };
@@ -44,7 +45,7 @@ namespace eet{
             void q_k_mul(const Buffer& q_buf, const Buffer& k_buf, 
                             Buffer& qk_buf);
 
-            void qk_softmax(Buffer& qk_buf,const int64_t * padding_len);
+            void qk_softmax(Buffer &qk_buf, const int64_t *padding_len, bool need_sequence_mask = false);
 
             void attn_v_mul(const Buffer& qk_buf, const Buffer& v_buf,
                             Buffer& transpose_dst);

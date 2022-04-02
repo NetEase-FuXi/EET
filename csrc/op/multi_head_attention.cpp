@@ -69,7 +69,8 @@ namespace eet{
         torch::Tensor MultiHeadAttention::forward(torch::Tensor& input,
                                     const torch::Tensor& pre_padding_len,
                                     bool pre_layernorm,
-                                    bool add_redusial){
+                                    bool add_redusial,
+                                    bool need_sequence_mask){
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MultiHeadAttention's dtype");
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
@@ -115,7 +116,7 @@ namespace eet{
             //softmax
             const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
 
-            qk_softmax(qk_buf,padding_len);
+            qk_softmax(qk_buf, padding_len, need_sequence_mask);
 
             //attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
@@ -217,17 +218,15 @@ namespace eet{
 #endif
         }
 
-        void MultiHeadAttention::qk_softmax(Buffer& qk_buf,const int64_t * padding_len){
+        void MultiHeadAttention::qk_softmax(Buffer &qk_buf, const int64_t *padding_len, bool need_sequence_mask) {
             float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
-
-            RUN_KERNEL(bert_softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), padding_len, cur_batch_size_,
-                    desc_.head_num_,cur_seq_len_, scalar, desc_.stream);
+            RUN_KERNEL(bert_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), padding_len, cur_batch_size_,
+                       desc_.head_num_, cur_seq_len_, scalar, need_sequence_mask, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
     check_cuda_error(cudaGetLastError());
-#endif 
+#endif
         }
-        
 
         void MultiHeadAttention::attn_v_mul(const Buffer& qk_buf,
                                              const Buffer& v_buf,

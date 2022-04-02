@@ -4,6 +4,7 @@ Mappings = {
     "ViTModel": "transformers_vit_mapping",
     "AlbertModel": "transformers_albert_mapping",
     "GPTModel": "transformers_gpt_mapping",
+    "CLIPModel": "transformers_clip_mapping",
 }
 
 transformers_bert_mapping = {
@@ -50,6 +51,46 @@ transformers_vit_mapping = {
     },
 }
 
+transformers_clip_mapping = {
+    "logit_scale": {"__name__":"logit_scale"},
+    "text_model": {"__name__":"text_model",
+        "encoder": {"__name__":"encoder",
+            "layers": {"__name__":"layer",
+                "$": {"__name__":"$",
+                    "self_attn": {"__name__":"self_attn",
+                        "q_proj": {"__name__":"q_proj"},
+                        "k_proj": {"__name__":"k_proj"},
+                        "v_proj": {"__name__":"v_proj"},
+                        "out_proj": {"__name__":"out_proj"},
+                    },
+                    "layer_norm1": {"__name__":"self_attn.layernorm"},
+                    "mlp.fc1": {"__name__":"ffn.intermediate"},
+                    "mlp.fc2": {"__name__":"ffn.output"},
+                    "layer_norm2": {"__name__":"ffn.layernorm"},       
+                }
+            }
+        },    
+    },
+    "vision_model": {"__name__":"vision_model",
+        "encoder": {"__name__":"encoder",
+            "layers": {"__name__":"layer",
+                "$": {"__name__":"$",
+                    "self_attn": {"__name__":"self_attn",
+                        "q_proj": {"__name__":"q_proj"},
+                        "k_proj": {"__name__":"k_proj"},
+                        "v_proj": {"__name__":"v_proj"},
+                        "out_proj": {"__name__":"out_proj"},
+                    },
+                    "layer_norm1": {"__name__":"self_attn.layernorm"},
+                    "mlp.fc1": {"__name__":"ffn.intermediate"},
+                    "mlp.fc2": {"__name__":"ffn.output"},
+                    "layer_norm2": {"__name__":"ffn.layernorm"},       
+                }
+            }
+        },    
+    },
+
+}
 
 def convert_name(org_key, model_name, verbose=False):
     segments = org_key.split(".")
