@@ -5,6 +5,7 @@
 
 import math
 import time
+from turtle import forward
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,7 +16,11 @@ from fairseq.models.transformer import TransformerEncoder
 from fairseq.modules import  AdaptiveSoftmax
 from fairseq import options
 from fairseq import utils
+from fairseq.data.dictionary import Dictionary
 
+from ..pipelines.generation import GenerationMixin_EET
+from transformers.file_utils import ModelOutput
+from transformers import GPT2Config
 from EET import MetaDesc as meta_desc
 from EET import LayerNorm as eet_layernorm
 from EET import Embedding as eet_embedding
@@ -32,6 +37,14 @@ __all__ = [
     'EETTransformerLayerNorm', 'EETTransformerEmbedding', 'EETTransformerFeedforward', 'EETTransformerAttention', 
     'EETTransformerDecoderLayer', 'EETTransformerDecoder'
 ]
+
+class CausalLMOutputWithCrossAttentions(ModelOutput):
+    loss: Optional[torch.FloatTensor] = None
+    logits: torch.FloatTensor = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    cross_attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 class EETTransformerLayerNorm():
     def __init__(self,args, meta_des,layernorm_weights,layernorm_bias,data_type = torch.float32):
@@ -55,7 +68,6 @@ class EETTransformerEmbedding():
         self.padding_idx = 1
         self.weight = self.embedding_weights
         self.embed_scale = args.no_scale_embedding
-        # print('self.embedding_weights:',self.embedding_weights,self.embedding_weights.size())
         self.embedding = eet_embedding(meta_des,self.embedding_weights,self.embedding_weights,self.embedding_weights ,self.embedding_weights ,self.embedding_weights)
 
     def __call__(self,
@@ -224,7 +236,7 @@ class EETTransformerDecoderLayer():
             layer = EETTransformerDecoderLayer(args, attention, feedforward,no_encoder_attn)
         return layer
 
-class EETTransformerDecoder():
+class EETTransformerDecoder(GenerationMixin_EET):
     """
     EETTransformerDecoder consisting of layers. Each layer
     is a :class:`EETTransformerDecoderLayer`.
@@ -239,7 +251,7 @@ class EETTransformerDecoder():
         no_encoder_attn (bool, optional): whether to attend to encoder outputs
             (default: False).
     """
-    def __init__(self, args, max_batch, dictionary, embed_tokens, DecoderLayers, layer_norm):
+    def __init__(self, args,gpt2_config, max_batch, dictionary, embed_tokens, DecoderLayers, layer_norm):
         self.layers = DecoderLayers
         self.layer_norm = layer_norm
         self.cross_self_attention = False
@@ -251,8 +263,11 @@ class EETTransformerDecoder():
         self.positions = torch.empty(0).long()
         # self.pre_padding_len = None
         self.reorder_state = torch.empty(0).long()
-
+        self.config = gpt2_config
         self.max_target_positions = args.max_target_positions
+        self.main_input_name = "input_ids"
+        self.device = "cuda:0"
+
         if args.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
                 len(dictionary),
@@ -269,9 +284,37 @@ class EETTransformerDecoder():
             )
             nn.init.normal_(self.embed_out, mean=0, std=self.output_embed_dim ** -0.5)
 
-    def __call__(
+    def prepare_inputs_for_generation(self, input_ids,first_pass = True, past=None, **kwargs):
+        token_type_ids = kwargs.get("token_type_ids", None)
+        # only last token for inputs_ids if past is defined in kwargs
+        if first_pass == False:
+            input_ids = input_ids[:, -1].unsqueeze(-1)
+            if token_type_ids is not None:
+                token_type_ids = token_type_ids[:, -1].unsqueeze(-1)
+
+        attention_mask = kwargs.get("attention_mask", None)
+        position_ids = kwargs.get("position_ids", None)
+
+        if attention_mask is not None and position_ids is None:
+            # create position_ids on the fly for batch generation
+            position_ids = attention_mask.long().cumsum(-1) - 1
+            position_ids.masked_fill_(attention_mask == 0, 1)
+            if first_pass == False:
+                position_ids = position_ids[:, -1].unsqueeze(-1)
+        else:
+            position_ids = None
+        return {
+            "input_ids": input_ids,
+            "past_key_values": past,
+            "use_cache": kwargs.get("use_cache"),
+            "position_ids": position_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
+        }
+
+    def forward(
         self,
-        prev_output_tokens,
+        input_ids,
         reorder_state = None,
         encoder_out: Optional[Dict[str, List[Tensor]]] = None,
         features_only: bool = False,
@@ -290,9 +333,9 @@ class EETTransformerDecoder():
             the decoder's output of shape `(batch, tgt_len, vocab)`
         """
         if first_pass:
-            mask = prev_output_tokens.ne(self.embed_tokens.padding_idx).int()
+            mask = input_ids.ne(self.embed_tokens.padding_idx).int()
             positions = (torch.cumsum(mask, dim=1).type_as(mask) * mask).long() + self.embed_tokens.padding_idx
-            pre_padding_len = (prev_output_tokens.size(1) - torch.sum(mask,1)).cuda()
+            pre_padding_len = (input_ids.size(1) - torch.sum(mask,1)).cuda()
             self.pre_padding_len = pre_padding_len.long().cuda()
             self.positions = positions.cuda()
         else:
@@ -303,9 +346,7 @@ class EETTransformerDecoder():
             self.reorder_state = reorder_state.long()
             positions = torch.index_select(self.positions, dim=0, index=reorder_state)
             # pre_padding_len = torch.index_select(self.pre_padding_len, dim=0, index=reorder_state)
-
-        x = self.embed_tokens(prev_output_tokens,positions,first_pass)
-
+        x = self.embed_tokens(input_ids,positions,first_pass)
 
         if (encoder_out is not None and len(encoder_out["encoder_padding_mask"]) > 0):
             encoder_padding_mask = encoder_out["encoder_padding_mask"][0]
@@ -320,7 +361,6 @@ class EETTransformerDecoder():
         # if reorder_state is not None:
         #     self.reorder_state = reorder_state.long()
 
-
         for layer in self.layers:
             x = layer(x,
                     pre_padding_len = self.pre_padding_len,
@@ -333,8 +373,43 @@ class EETTransformerDecoder():
             x = self.layer_norm(x)
         if not features_only:
             x = self.output_layer(x)
-        
-        return x
+        lm_logits = x
+        return CausalLMOutputWithCrossAttentions(
+            loss=None,
+            logits=lm_logits,
+            past_key_values=None,
+            hidden_states=None,
+            attentions=None,
+            cross_attentions=None,
+        )
+    
+    def __call__(
+        self,
+        input_ids=None,
+        past_key_values=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        labels=None,
+        use_cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+        first_pass = True,
+        reorder_state = None,
+        encoder_out: Optional[Dict[str, List[Tensor]]] = None,
+        features_only: bool = False,
+    ):
+        return self.forward(        
+            input_ids=input_ids,
+            first_pass = first_pass,
+            reorder_state = reorder_state,
+            encoder_out = encoder_out,
+            features_only = features_only,
+            )
+
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""
@@ -354,13 +429,12 @@ class EETTransformerDecoder():
             return DEFAULT_MAX_TARGER_POSITIONS
 
     @staticmethod
-    def from_torch(model_id_or_path: str, dictionary, args, config:dict, no_encoder_attn=False):
-        """from torch."""
+    def from_pretrained(model_id_or_path: str,max_batch, full_seq_len,data_type, no_encoder_attn=True):                  
+        """from_pretrained."""
         """
         Args:
             model_id_or_path : pytorch model path
             dictionary (~fairseq.data.Dictionary): decoding dictionary
-            args (argparse.Namespace): parsed command-line arguments
             config:dic[max_full_seq_len,max_batch,data_type]
             {   
                 full_seq_len: The maximum length that can be supported by full decoding 
@@ -374,11 +448,12 @@ class EETTransformerDecoder():
         """
 
         torch.set_grad_enabled(False)
-        pretrained_dict = torch.load(model_id_or_path)
-
-        full_seq_len = config['full_seq_len']
-        batch_size = config['max_batch']
-        data_type = config['data_type']
+        pretrained_dict = torch.load(model_id_or_path+'/checkpoint_best.pt')
+        dictionary = Dictionary.load(model_id_or_path + '/dict.txt')
+        gpt2_config = GPT2Config.from_pretrained(model_id_or_path)
+        full_seq_len = full_seq_len
+        batch_size = max_batch
+        # data_type = data_type
 
         model_dict = {}
         DecoderLayers = []
@@ -389,8 +464,8 @@ class EETTransformerDecoder():
         model_dict_list = list(model_dict.items())
         model_dict_list.sort(key = lambda item: item[0][:FROM_TORCH_PARAM_LEN])
         layer_model_dict = {k: dict(v) for k, v in groupby(model_dict_list, lambda item: item[0][:FROM_TORCH_PARAM_LEN])}
-
         device = "cuda:0"
+        args = pretrained_dict['args']
         activation_fn = args.activation_fn
 
         if args.max_target_positions is None:
@@ -416,12 +491,12 @@ class EETTransformerDecoder():
                     ]
                 )
 
-        eet_decoder = EETTransformerDecoder(args, batch_size, dictionary, embedding, DecoderLayers,layer_norm)
+        eet_decoder = EETTransformerDecoder(args,gpt2_config, batch_size, dictionary, embedding, DecoderLayers,layer_norm)
 
         return eet_decoder
 
     @staticmethod
-    def from_buffer(torch_decoder, dictionary,args,config:dict,no_encoder_attn=False):
+    def from_torch(torch_decoder, dictionary,args,config:dict,no_encoder_attn=False):
         """from torch."""
         """
         Args:
@@ -451,7 +526,6 @@ class EETTransformerDecoder():
         DecoderLayers = []
         
         for k, v in dict(torch_decoder.state_dict()).items():
-            # print(k,v.size())
             model_dict[k] = v
         from itertools import groupby
         # Intercept k,num = length of 'decoder.layers.**'=17; If your weight name has changed please change it here
@@ -484,7 +558,7 @@ class EETTransformerDecoder():
                         EETTransformerDecoderLayer.from_torch(args,meta_des,layer_model_dict['layers.'+str(i)],no_encoder_attn,data_type)
                     ]
                 )
-
-        eet_decoder =  EETTransformerDecoder(args,batch_size,dictionary,embedding, DecoderLayers,layer_norm)
+        gpt2_config = None
+        eet_decoder =  EETTransformerDecoder(args,gpt2_config,batch_size,dictionary,embedding, DecoderLayers,layer_norm)
 
         return eet_decoder

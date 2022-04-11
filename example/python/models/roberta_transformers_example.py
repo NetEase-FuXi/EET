@@ -5,7 +5,7 @@ from transformers import RobertaModel
 import time
 
 using_half = True
-seq_len = 128
+seq_len = 32
 batch = 4
 loop = 100
 

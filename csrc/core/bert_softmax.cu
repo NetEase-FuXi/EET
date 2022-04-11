@@ -6,7 +6,7 @@
 // https://github.com/NVIDIA/DeepLearningExamples/blob/master/FasterTransformer/v3.1/fastertransformer/cuda/open_attention.cu#L1399-L1583
 
 template <typename T>
-__global__ void softmax_kernel_bert(T *qk_buf, const int64_t *padding_len, const int head_num, const int seq_len, const T scalar)
+__global__ void softmax_kernel_bert(T *qk_buf, const int64_t *padding_len, const int head_num, const int seq_len)
 {
   int batch_id = blockIdx.x / head_num;
   int qk_offset = blockIdx.x * seq_len * seq_len;
@@ -24,7 +24,7 @@ __global__ void softmax_kernel_bert(T *qk_buf, const int64_t *padding_len, const
     float qk = threadIdx.x < seq_len ? (float)qk_buf[threadIdx.x + qk_offset] : 0.0f;
     float padding_val = (threadIdx.x >= seq_len - right_padding_len) ? -1e20f : 0.0f;
 
-    float tmp = threadIdx.x < seq_len ? (float)(qk * (float)scalar + padding_val) : -1e20f;
+    float tmp = threadIdx.x < seq_len ? (float)(qk + padding_val) : -1e20f;
 
     float max_val = blockReduceMax<float>(tmp);
 
@@ -56,7 +56,7 @@ __global__ void softmax_kernel_bert(T *qk_buf, const int64_t *padding_len, const
 }
 
 template <typename T>
-__global__ void softmax_kernel_v2(T *qk_buf, const int64_t *padding_len, const int head_num, const int seq_len, const T scalar)
+__global__ void softmax_kernel_v2(T *qk_buf, const int64_t *padding_len, const int head_num, const int seq_len)
 {
   int batch_id = blockIdx.x / head_num;
   int qk_offset = blockIdx.x * seq_len * seq_len;
@@ -74,7 +74,7 @@ __global__ void softmax_kernel_v2(T *qk_buf, const int64_t *padding_len, const i
     float qk = threadIdx.x < seq_len ? (float)qk_buf[threadIdx.x + qk_offset] : 0.0f;
     float padding_val = (threadIdx.x > i || threadIdx.x >= seq_len - right_padding_len) ? -1e20f : 0.0f;
 
-    float tmp = threadIdx.x < seq_len ? (float)(qk * (float)scalar + padding_val) : -1e20f;
+    float tmp = threadIdx.x < seq_len ? (float)(qk + padding_val) : -1e20f;
     float max_val = blockReduceMax<float>(tmp);
 
     if (threadIdx.x == 0)
@@ -107,7 +107,7 @@ __global__ void softmax_kernel_v2(T *qk_buf, const int64_t *padding_len, const i
 
 template <class T>
 void bert_softmax_kernel(void *qk_buf, const int64_t *padding_len, const int &batch_size, const int &head_num,
-                         const int &seq_len, const float &scalar, bool need_sequence_mask, const cudaStream_t stream)
+                         const int &seq_len, bool need_sequence_mask, const cudaStream_t stream)
 {
   dim3 grid, block;
 
@@ -126,13 +126,13 @@ void bert_softmax_kernel(void *qk_buf, const int64_t *padding_len, const int &ba
 
   grid.x = batch_size * head_num;
   if (need_sequence_mask) {
-    softmax_kernel_v2<T><<<grid, block, 0, stream>>>((T*)qk_buf, padding_len, head_num, seq_len, scalar);
+    softmax_kernel_v2<T><<<grid, block, 0, stream>>>((T*)qk_buf, padding_len, head_num, seq_len);
   } else {
-    softmax_kernel_bert<T><<<grid, block, 0, stream>>>((T *)qk_buf, padding_len, head_num, seq_len, scalar);
+    softmax_kernel_bert<T><<<grid, block, 0, stream>>>((T *)qk_buf, padding_len, head_num, seq_len);
   }
 }
 
 template void bert_softmax_kernel<float>(void *qk_buf, const int64_t *padding_len, const int &batch_size,
-                                         const int &head_num, const int &seq_len, const float &scalar, bool need_sequence_mask, const cudaStream_t stream);
+                                         const int &head_num, const int &seq_len, bool need_sequence_mask, const cudaStream_t stream);
 template void bert_softmax_kernel<half>(void *qk_buf, const int64_t *padding_len, const int &batch_size,
-                                        const int &head_num, const int &seq_len, const float &scalar, bool need_sequence_mask, const cudaStream_t stream);
+                                        const int &head_num, const int &seq_len, bool need_sequence_mask, const cudaStream_t stream);

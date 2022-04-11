@@ -8,7 +8,7 @@ from transformers import AlbertModel
 import time
 
 using_half = True
-seq_len = 128
+seq_len = 32
 batch = 4
 loop = 100
 
@@ -42,7 +42,8 @@ def main():
     torch.cuda.synchronize()
     t3 = time.perf_counter()
     for i in range(loop):
-        res_ts = ts_model(input_ids,attention_mask)
+        with torch.no_grad():
+            res_ts = ts_model(input_ids,attention_mask)
     torch.cuda.synchronize()
     t4= time.perf_counter()
     time_ts = t4 -t3

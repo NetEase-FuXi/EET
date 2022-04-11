@@ -1,5 +1,5 @@
 #
-# Created by wlc.
+# Created by djz.
 #
 """EET transformers albert model. """
 
@@ -11,18 +11,47 @@ import torch.nn.functional as F
 import numpy as np
 from torch import Tensor
 from typing import Any, Dict, List, Optional, Tuple
-from transformers import AlbertModel
-
+from dataclasses import dataclass
+from transformers import  (
+    AlbertModel,
+    AlbertForPreTraining,
+    AlbertForMaskedLM,
+    AlbertForSequenceClassification,
+    AlbertForTokenClassification,
+    AlbertForQuestionAnswering,
+    AlbertForMultipleChoice,
+)
+from transformers.file_utils import ModelOutput
+from transformers.modeling_outputs import (
+    MaskedLMOutput,
+    MultipleChoiceModelOutput,
+    QuestionAnsweringModelOutput,
+    SequenceClassifierOutput,
+    TokenClassifierOutput,
+)
 from EET import MetaDesc as meta_desc
 from EET import FeedForwardNetwork as eet_ffn
 from EET import MultiHeadAttention as eet_attention
 from EET import Embedding as eet_embedding
 
 BEGIN_OF_PARAM = 8
+BEGIN_OF_ALBERT = 7
 
 __all__ = [
-    'EETAlbertEmbedding', 'EETAlbertFeedforward', 'EETAlbertAttention', 'EETAlbertEncoderLayer', 'EETAlbertEncoder', 'EETAlbertModel'
+    'EETAlbertEmbedding', 'EETAlbertFeedforward', 'EETAlbertAttention', 'EETAlbertEncoderLayer', 'EETAlbertEncoder', 'EETAlbertModel',
+    'EETAlbertForPreTraining','EETAlbertForMaskedLM','EETAlbertForSequenceClassification','EETAlbertForTokenClassification','EETAlbertForQuestionAnswering',
+    'EETAlbertForMultipleChoice',
 ]
+
+@dataclass
+class AlbertForPreTrainingOutput(ModelOutput):
+    loss: Optional[torch.FloatTensor] = None
+    prediction_logits: torch.FloatTensor = None
+    sop_logits: torch.FloatTensor = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+
+
 
 class EETAlbertEmbedding():
     def __init__(self,config,embedding_dict,data_type = torch.float32):
@@ -91,8 +120,9 @@ class EETAlbertAttention():
                 input_id,
                 pre_padding_len,
                 pre_layernorm = False,
-                add_redusial = True):
-        return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial)
+                add_redusial = True,
+                need_sequence_mask = False):
+        return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial,need_sequence_mask)
 
     @staticmethod
     def from_torch(config,model_dict,layer_id,data_type = torch.float32):
@@ -162,11 +192,17 @@ class EETAlbertEncoder():
         return eet_encoder
 
 class EETAlbertModel():
-    def __init__(self,config, embedding,encoder):
+    def __init__(self,config, embedding,encoder,pooler_activation,pooler):
         self.embedding = embedding
         self.encoder = encoder
         self.pre_padding_len = torch.empty(0).long()
         self.position_ids = torch.arange(0,config.max_position_embeddings).reshape(1,config.max_position_embeddings).cuda()
+        if pooler is not None:
+            self.pooler = pooler.cuda()
+            self.pooler_activation = pooler_activation.cuda()
+        else:
+            self.pooler = None
+            self.pooler_activation = None
     def __call__(
         self,
         input_ids,
@@ -195,16 +231,17 @@ class EETAlbertModel():
             
         embedding_out = self.embedding(input_ids,position_ids,token_type_ids)
 
-        encoder_out = self.encoder(embedding_out,
+        sequence_output = self.encoder(embedding_out,
                     pre_padding_len = pre_padding_len,
                     normalize_before = False)
 
+        pooled_output = self.pooler_activation(self.pooler(sequence_output[:, 0])) if self.pooler is not None else None
 
-        return encoder_out
-    
+        return sequence_output,pooled_output
+
     @staticmethod
     def from_pretrained(model_id_or_path: str,max_batch, data_type):
-        """from torch."""
+        """from_pretrained."""
     
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -233,5 +270,299 @@ class EETAlbertModel():
         embedding = EETAlbertEmbedding.from_torch(config_emb,embedding_dict,data_type)
         # embedding = None
         encoder = EETAlbertEncoder.from_torch(layer_model_dict,config, cfg, data_type)
-        eet_model =  EETAlbertModel(cfg,embedding, encoder)
+        if data_type == torch.float32:
+            torch_model = torch_model.float()
+        else:
+            torch_model = torch_model.half()
+        eet_model =  EETAlbertModel(cfg,embedding, encoder,torch_model.pooler_activation,torch_model.pooler)
         return eet_model
+
+    def from_torch(torch_model,max_batch, data_type):
+        """from torch."""
+        torch.set_grad_enabled(False)
+        model_dict = {}
+        embedding_dict = {}
+        cfg = torch_model.config
+        for k, v in torch_model.state_dict().items():
+            if 'embeddings' in k:
+                k = k[BEGIN_OF_ALBERT:]
+                embedding_dict[k] = v
+            if ('layer' in k) or ('hidden_mapping' in k):
+                #BEGIN_OF_PARAM(Length of the beginning of the parameter):
+                #like 'encoder.layer.0.attention.self.query.weight',the BEGIN_OF_PARAM is the length of 'encoder.'-->8
+                k = k[BEGIN_OF_PARAM + BEGIN_OF_ALBERT:]
+                model_dict[k] = v
+
+        from itertools import groupby
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:BEGIN_OF_PARAM])}
+
+        device = "cuda:0"
+        activation_fn = cfg.hidden_act
+        batch_size = max_batch
+        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers , cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
+        config_emb = meta_desc(batch_size, cfg.num_attention_heads, cfg.embedding_size, cfg.num_hidden_layers , cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
+
+        embedding = EETAlbertEmbedding.from_torch(config_emb,embedding_dict,data_type)
+        # embedding = None
+        encoder = EETAlbertEncoder.from_torch(layer_model_dict,config, cfg, data_type)
+        if data_type == torch.float32:
+            torch_model = torch_model.float()
+        else:
+            torch_model = torch_model.half()
+
+        eet_model =  EETAlbertModel(cfg,embedding, encoder,torch_model.albert.pooler_activation,torch_model.albert.pooler)
+        return eet_model
+
+class EETAlbertForPreTraining():
+    def __init__(self,albert,predictions,sop_classifier,config):
+        self.config = config
+        self.albert = albert
+        self.predictions = predictions
+        self.sop_classifier = sop_classifier
+
+    def __call__(
+        self,
+        input_ids,
+        position_ids = None,
+        token_type_ids = None,
+        attention_mask = None,
+    ) :
+
+        sequence_output, pooled_output = self.albert(
+            input_ids = input_ids,
+            position_ids = position_ids,
+            token_type_ids = token_type_ids,
+            attention_mask=attention_mask,
+        )
+
+        prediction_scores = self.predictions(sequence_output)
+        sop_scores = self.sop_classifier(pooled_output)
+
+        return AlbertForPreTrainingOutput(
+            loss=None,
+            prediction_logits=prediction_scores,
+            sop_logits=sop_scores,
+            hidden_states=None,
+            attentions=None,
+        )
+
+
+    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+        """from_pretrained"""
+        torch.set_grad_enabled(False)
+        model_dict = {}
+        embedding_dict = {}
+        torch_model = AlbertForPreTraining.from_pretrained(model_id_or_path)
+        albert = EETAlbertModel.from_torch(torch_model,max_batch,data_type)
+        predictions = torch_model.predictions.cuda()
+        sop_classifier = torch_model.sop_classifier.cuda()
+
+        model =  EETAlbertForPreTraining(albert, predictions,sop_classifier,torch_model.config)
+
+        return model
+
+class EETAlbertForMaskedLM():
+    def __init__(self,albert,predictions,config):
+        self.config = config
+        self.albert = albert
+        self.predictions = predictions
+
+    def __call__(
+        self,
+        input_ids,
+        position_ids = None,
+        token_type_ids = None,
+        attention_mask = None,
+    ) :
+
+        sequence_output, pooled_output = self.albert(
+            input_ids = input_ids,
+            position_ids = position_ids,
+            token_type_ids = token_type_ids,
+            attention_mask=attention_mask,
+        )
+        prediction_scores = self.predictions(sequence_output)
+
+        return MaskedLMOutput(
+            loss=None,
+            logits=prediction_scores,
+            hidden_states=None,
+            attentions=None,
+        )
+
+    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+        """from_pretrained"""
+        torch.set_grad_enabled(False)
+        model_dict = {}
+        embedding_dict = {}
+        torch_model = AlbertForMaskedLM.from_pretrained(model_id_or_path)
+        albert = EETAlbertModel.from_torch(torch_model,max_batch,data_type)
+        predictions = torch_model.predictions.cuda()
+        model =  EETAlbertForMaskedLM(albert, predictions,torch_model.config)
+
+        return model
+
+class EETAlbertForSequenceClassification():
+    def __init__(self,albert,classifier,config):
+        self.config = config
+        self.albert = albert
+        self.classifier = classifier
+
+    def __call__(
+        self,
+        input_ids,
+        position_ids = None,
+        token_type_ids = None,
+        attention_mask = None,
+    ) :
+
+        sequence_output, pooled_output = self.albert(
+            input_ids = input_ids,
+            position_ids = position_ids,
+            token_type_ids = token_type_ids,
+            attention_mask=attention_mask,
+        )
+        logits = self.classifier(pooled_output)
+
+        return SequenceClassifierOutput(
+            loss=None,
+            logits=logits,
+            hidden_states=None,
+            attentions=None,
+        )
+
+    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+        """from_pretrained"""
+        torch.set_grad_enabled(False)
+        model_dict = {}
+        embedding_dict = {}
+        torch_model = AlbertForSequenceClassification.from_pretrained(model_id_or_path)
+        albert = EETAlbertModel.from_torch(torch_model,max_batch,data_type)
+        classifier = torch_model.classifier.cuda()
+        model =  EETAlbertForSequenceClassification(albert, classifier,torch_model.config)
+
+        return model
+
+class EETAlbertForTokenClassification():
+    def __init__(self,albert,classifier,config):
+        self.config = config
+        self.albert = albert
+        self.classifier = classifier
+
+    def __call__(
+        self,
+        input_ids,
+        position_ids = None,
+        token_type_ids = None,
+        attention_mask = None,
+    ) :
+
+        sequence_output, pooled_output = self.albert(
+            input_ids = input_ids,
+            position_ids = position_ids,
+            token_type_ids = token_type_ids,
+            attention_mask=attention_mask,
+        )
+        logits = self.classifier(sequence_output)
+
+        return TokenClassifierOutput(
+            loss=None,
+            logits=logits,
+            hidden_states=None,
+            attentions=None,
+        )
+
+    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+        """from_pretrained"""
+        torch.set_grad_enabled(False)
+        model_dict = {}
+        embedding_dict = {}
+        torch_model = AlbertForTokenClassification.from_pretrained(model_id_or_path)
+        albert = EETAlbertModel.from_torch(torch_model,max_batch,data_type)
+        classifier = torch_model.classifier.cuda()
+        model =  EETAlbertForTokenClassification(albert, classifier,torch_model.config)
+        return model
+
+class EETAlbertForQuestionAnswering():
+    def __init__(self,albert,qa_outputs,config):
+        self.config = config
+        self.albert = albert
+        self.qa_outputs = qa_outputs
+
+    def __call__(
+        self,
+        input_ids,
+        position_ids = None,
+        token_type_ids = None,
+        attention_mask = None,
+    ) :
+        sequence_output, pooled_output = self.albert(
+            input_ids = input_ids,
+            position_ids = position_ids,
+            token_type_ids = token_type_ids,
+            attention_mask=attention_mask,
+        )
+        logits = self.qa_outputs(sequence_output)
+        start_logits, end_logits = logits.split(1, dim=-1)
+        start_logits = start_logits.squeeze(-1).contiguous()
+        end_logits = end_logits.squeeze(-1).contiguous()
+        return QuestionAnsweringModelOutput(
+            loss=None,
+            start_logits=start_logits,
+            end_logits=end_logits,
+            hidden_states=None,
+            attentions=None,
+        )
+
+    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+        """from_pretrained"""
+        torch.set_grad_enabled(False)
+        model_dict = {}
+        embedding_dict = {}
+        torch_model = AlbertForQuestionAnswering.from_pretrained(model_id_or_path)
+        albert = EETAlbertModel.from_torch(torch_model,max_batch,data_type)
+        qa_outputs = torch_model.qa_outputs.cuda()
+        model =  EETAlbertForQuestionAnswering(albert, qa_outputs,torch_model.config)
+        return model
+
+class EETAlbertForMultipleChoice():
+    def __init__(self,albert,classifier,config):
+        self.config = config
+        self.albert = albert
+        self.classifier = classifier
+
+    def __call__(
+        self,
+        input_ids,
+        position_ids = None,
+        token_type_ids = None,
+        attention_mask = None,
+    ) :
+        num_choices = input_ids.shape[1]
+
+        sequence_output, pooled_output = self.albert(
+            input_ids = input_ids,
+            position_ids = position_ids,
+            token_type_ids = token_type_ids,
+            attention_mask=attention_mask,
+        )
+        logits = self.classifier(pooled_output)
+        reshaped_logits = logits.view(-1, num_choices)
+
+        return MultipleChoiceModelOutput(
+            loss=None,
+            logits=reshaped_logits,
+            hidden_states=None,
+            attentions=None,
+        )
+
+    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+        """from_pretrained"""
+        torch.set_grad_enabled(False)
+        model_dict = {}
+        embedding_dict = {}
+        torch_model = AlbertForMultipleChoice.from_pretrained(model_id_or_path)
+        albert = EETAlbertModel.from_torch(torch_model,max_batch,data_type)
+        classifier = torch_model.classifier.cuda()
+        model =  EETAlbertForMultipleChoice(albert, classifier,torch_model.config)
+        return model

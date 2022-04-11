@@ -4,3 +4,4 @@ from .modeling_roberta import *
 from .modeling_vit import *
 from .modeling_transformer import *
 from .modeling_clip import *
+from .modeling_distilbert import *

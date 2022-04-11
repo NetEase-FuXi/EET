@@ -43,13 +43,15 @@ namespace eet{
             switch (desc_.dtype_)
             {
             case torch::kFloat32:
-                qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT;
-                q_k_algo_ = CUBLAS_GEMM_DEFAULT;
-                attn_v_algo_ = CUBLAS_GEMM_DEFAULT;
+                qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+                q_k_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+                attn_v_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
                 alpha_ = new float();
                 beta_ = new float();
+                atten_scaler_ = new float();
                 *((float *)alpha_) = 1.0f;
                 *((float *)beta_) = 0.0f;
+                *((float *)atten_scaler_) = sqrt(1.0f / size_per_head_);
                 break;
             case torch::kFloat16:
                 qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
@@ -57,8 +59,10 @@ namespace eet{
                 attn_v_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
                 alpha_ = new half();
                 beta_ = new half();
-                *((half *)alpha_) = (half)1.0f;
-                *((half *)beta_) = (half)0.0f;
+                atten_scaler_ = new half();
+                *((half *)alpha_) = 1.0f;
+                *((half *)beta_) = 0.0f;
+                *((half *)atten_scaler_) = sqrt(1.0f / size_per_head_);
                 break;
             //TODO
             case torch::kInt8:
@@ -289,10 +293,10 @@ namespace eet{
         }
 
         void MaskedMultiHeadAttention::qk_softmax(Buffer& qk_buf,const int64_t *padding_len){
-            float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
+            // float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
 
             RUN_KERNEL(softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), padding_len,  cur_batch_size_,
-                    desc_.head_num_,cur_seq_len_, scalar, desc_.stream);
+                    desc_.head_num_,cur_seq_len_, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
     check_cuda_error(cudaGetLastError());

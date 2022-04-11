@@ -14,8 +14,10 @@ EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型
 * 动态batch： EET支持动态batch，根据reorder_state变化batch的顺序，并能提前结束某个batch。 
 * 超大维度和超长序列： EET支持GPT最大16384的hidden_units和最长4096的序列长度。 
 * 易于使用： EET可以直接集成到Fairseq和Transformes中，无需任何代码改动，只需要替换指定文件即可完成从训练到推理的转换。  
-* 支持多种模型：gpt2、bert、roberta、albert、vit等，后续会支持T5、clip等模型。
-   
+* 支持多种模型：gpt2、bert、roberta、albert、vit、clip等，后续会支持T5等模型。
+* 新增pipelines功能，提升用户体验，支持fairseq模型和transformers模型。
+* bert模型整体性能加速1.2x到7.x倍，gpt模型整体性能加速2.x到7.x倍。
+
 
 EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lofter，天谕等。未来EET将致力于万亿模型的线上推理。
 
@@ -26,12 +28,9 @@ EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lo
     * [源码安装](#源码安装)
     * [docker镜像安装](#docker镜像安装)
   * [运行](#运行)
-    * [运行BERT\-适配transformers](#运行bert-适配transformers)
-    * [运行GPT2\-适配transformers](#运行gpt2-适配transformers)
-    * [运行GPT2\-适配Fairseq](#运行gpt2-适配fairseq)
+    * [Model API](#model-api)
+    * [pipelines方式](#pipelines方式)
 * [支持模型](#支持模型)
-  * [BERT](#bert)
-  * [GPT2](#gpt2)
 * [使用方式](#使用方式)
 * [性能](#性能)
 * [TODO](#todo)
@@ -59,64 +58,42 @@ EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lo
 * gcc:>= 7.4.0 
 * torch:>=1.5.0 
 * numpy:>=1.19.1 
+* fairseq
+* transformers
+
+上述环境是最低配置，最好是使用较新的版本。
+
+推荐使用nvcr.io/nvidia/镜像
 
 ### 安装
+
+推荐使用docker安装
+
 #### 源码安装
 如果从源代码安装，则需要安装必要的[environment](#environment)。然后，按以下步骤进行。 
 ```bash
 $ git clone https://github.com/NetEase-FuXi/EET.git
-#to run the demo in the examples for comparsion, we need to install the transformers and fairseq
-$ pip install transformers==3.5.0
-$ pip install fairseq==0.10.0
 $ pip install .
 ```
-由于编译了大量的cuda内核，因此安装时间相对较长，请耐心等待。 
 
 #### docker镜像安装
 
+推荐使用nvcr.io/nvidia/pytorch:21.12-py3等系列镜像，也可使用提供的Dockerfile文件
+
 ```bash
 $ git clone https://github.com/NetEase-FuXi/EET.git
-$ docker build -t your_docker_name:your_docker_version .
-$ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  your_Docker_Name:your_docker_version bash
+$ docker build -t eet_docker:0.1 .
+$ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  eet_docker:0.1 bash
 ```
 
-此时，EET已安装在docker中。
+此时，EET及其所需的环境均已安装在docker中。
 
 ### 运行
-#### 运行BERT-适配transformers
-[bert_transformers_example](example/python/bert_transformers_example.py)
-```bash
-$ cd EET/example/python 
-$ python bert_transformers_example.py
-```
+我们提供两种运行方式：
 
-#### 运行GPT2-适配transformers
-[gpt2_transformers_example](example/python/gpt2_transformers_example.py)
-```bash
-$ cd EET/example/python   
-$ python gpt2_transformers_example.py
-```
+#### Model API
 
-#### 运行GPT2-适配Fairseq
-[gpt2_fairseq_example](example/python/gpt2_fairseq_example.py)
-```bash
-$ cd EET
-$ wget https://github.com/NetEase-FuXi/EET/releases/download/EET_V0.0.1_fairseq0.10.0_transformers3.5.0/resource.zip
-$ cd example    
-$ python gpt2_fairseq_example.py
-```
-
-## 支持模型
-目前，我们支持GPT-2, Bert模型。
-
-### BERT
-<div  align="left"> <img src="./doc/image/bert.jpg" width = "400" height = "463" alt="bert"/></div>
-
-### GPT2
-<div  align="left"> <img src="./doc/image/gpt2.jpg" width = "400" height = "632" alt="gpt2"/></div>
-
-## 使用方式
-EET提供了python API接口([python/eet](./python/eet))，用法非常简单，仅三行代码就可以完全适配fairseq和transformers。需要注意的是，EET只支持左边打padding。
+用法非常简单，仅三行代码就可以完全适配transformers。需要注意的是，EET的GPT模型只支持左边打padding，其他模型支持右边打padding。
 
 * 具体用法   
 >1、 如何加载EET模块；如何加载预训练模型；如何做推理  
@@ -129,7 +106,52 @@ EET提供了python API接口([python/eet](./python/eet))，用法非常简单，
 你可以参考下面列出来的API列表，只需要修改[python/eet](./python/eet)下的文件就可以很方便的构建自己的模型结构。
 
 >4、如何将EET插入fairseq和transformers      
-如果你想将EET插入fairseq或者transformers里，对照下面给出的类的对照表，替换修改即可。
+如果你想将EET插入fairseq或者transformers里，对照下面给出的类的对照表，替换修改即可，并且我们提供了非常丰富的model api，可自行组合实现，更方便的是我们提供了pipelines方式，几行代码即可实现不同任务的推理。
+
+用户自行使用不同的model去做推理，具体使用方式见[example/python/models](./example/python/models/model)
+
+#### pipelines方式
+
+EET提供了现成的pipelines方式，基于EET支持的不同模型结构，提供不同任务的pipeline使用方案。
+
+使用方式非常简单：
+
+```python
+import torch
+from eet import pipeline
+max_batch_size = 1
+model_path = 'roberta-base'
+data_type = torch.float16
+input = ["My <mask> is Sarah and I live in London"]
+nlp = pipeline("fill-mask",model = model_path,data_type = data_type,max_batch_size = max_batch_size)
+out = nlp(input)
+```
+
+具体支持：
+
+1、text-classification 
+
+2、token-classification
+
+3、question-answering 
+
+4、fill-mask
+
+5、text-generation
+
+6、image-classification
+
+7、zero_shot_image_classification
+
+后续随着EET支持的模型越来越多，支持的pipeline任务也将越来越多。
+
+使用方式见[example/python/pipelines](./example/python/pipelines),在这些任务示例代码中，我们也提供了model api示例来实现同样的任务。
+
+## 支持模型
+目前，我们支持GPT-2、Bert、Roberta、albert、clip、vit、distilbert等模型。
+
+## 使用方式
+EET提供了python API接口([python/eet](./python/eet))
 
 * API  
     1.模型API：我们提供了现成的GPT2和BERT模型API，因此您可以加载PyTorch模型并仅用几行代码来进行推理，就像使用Fairseq或Transformers一样。  
@@ -159,6 +181,20 @@ EET提供了python API接口([python/eet](./python/eet))，用法非常简单，
     | EETGPT2Feedforward | MLP | No |
     | EETGPT2Embedding | nn.Embedding | No |
     | EETLayerNorm | nn.LayerNorm | No |
+
+    为了更好的适配transformers，我们根据transformers扩充了支持model api，譬如对于bert模型，我们新增了如下的api，用于支持不同的任务：
+    | EET | transformers| Remarks | 
+    |---------------|-----------------|----| 
+    | EETBertForPreTraining | BertForPreTraining | No |
+    | EETBertLMHeadModel | BertLMHeadModel | No |
+    | EETBertForMaskedLM | BertForMaskedLM | No |
+    | EETBertForNextSentencePrediction | BertForNextSentencePrediction | No |
+    | EETBertForSequenceClassification | BertForSequenceClassification | No |
+    | EETBertForMultipleChoice | BertForMultipleChoice | No |
+    | EETBertForTokenClassification | BertForTokenClassification | No |
+    | EETBertForQuestionAnswering | BertForQuestionAnswering | No |
+
+    其他模型结构均有做此类设计。
 
     2.算子API：我们提供了Transformer模型所需的所有算子，例如multiheadattention，layernorm，FFN等，您可以结合不同的算子来构建不同的模型结构。
 
@@ -196,43 +232,12 @@ Note : 在总时间的测试中，假设了上下文的比例为５０％
   | GPT-3 6.7B | 6.7B     | 32     | 4096         |  23.18ms                | 12.25s                |
   | GPT-3 13B | 13B     | 40     | 5120         | 43.42ms                 | 22.58s                |
 
-我们在两个GPU硬件平台上测试了EET的性能。并且选择pytorch、NVIDIA Faster Transformers以及lightseq进行比较。 
 
-### GPT-2推理性能
+### 推理性能
 
-* RTX 2080ti (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
+GPT及Bert模型推理详细性能数据请点击[链接](https://github.com/NetEase-FuXi/EET/blob/main/doc/benchmark.md)查看
 
-<div  align="left"> <img src="./doc/image/2080_gpt.svg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
-
-* RTX 2080ti (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
-<div  align="left"> <img src="./doc/image/gpt1.svg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
-
-* A100 (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
-
-<div  align="left"> <img src="./doc/image/a100_gpt.svg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
-
-* A100 (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
-
-<div  align="left"> <img src="./doc/image/gpt2.svg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
-
-中等规模(hidden_units=1024,max_seq_len=768),compare with lightseq:
-<div  align="left"> <img src="./doc/image/lightseq1.svg" width = "700" height = "318" alt="1024model_lightseq"/></div>
-
-小规模(hidden_units=768,max_seq_len=128),compare with lightseq:
-<div  align="left"> <img src="./doc/image/lightseq2.svg" width = "700" height = "318" alt="768model_lightseq"/></div>
-
-
-
-### BERT推理性能
-
-* RTX 2080ti
-
-<div  align="left"> <img src="./doc/image/bert_2080.svg" width = "700" height = "315" alt="bert_speedup_2080ti"/></div>
-
-* A100
-
-<div  align="left"> <img src="./doc/image/bert_a100.svg" width = "700" height = "315" alt="bert_speedup_A100"/></div>
-
+## TODO
 1. int8
 2. sparse
 

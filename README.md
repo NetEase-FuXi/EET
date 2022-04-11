@@ -15,6 +15,8 @@ EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin foc
 >5、Dynamic batch. EET supports dynamic batch, which changes the order of the batch according to the reorder_state and can end a batch early.    
 >6、Extra-large dimension and extra-long sequences. EET supports GPT hidden_units up to 16384 and sequence lengths up to 4096.  
 >7、Support multiple models, including gpt2, bert, albert, roberta, vit.
+>7、Support pipelines function to improve user experience, support fairseq model and transformers model
+>9、The overall performance of the bert model is accelerated by 1.2x to 7.x times, and the overall performance of the gpt model is accelerated by 2.x to 7.x times.
 
 EET has been applied to a variety of NetEase online services,such as NiShuiHan, NetEase's cloud music, TianYu, Lofter, etc. In the future, EET will work on urtra-large-scale model inference of trillion parameters.   
 
@@ -25,17 +27,12 @@ EET has been applied to a variety of NetEase online services,such as NiShuiHan, 
     * [From Source](#from-source)
     * [From Docker](#from-docker)
   * [Run](#run)
-    * [run BERT in Transformers](#run-bert-in-transformers)
-    * [run GPT2 in Transformers](#run-gpt2-in-transformers)
-    * [run GPT2 in Fairseq](#run-gpt2-in-fairseq)
+    * [Model API](#model-api)
+    * [pipelines](#pipelines)
 * [Supported Models](#supported-models)
-  * [GPT2](#gpt2)
-  * [BERT](#bert)
 * [Usage](#usage)
 * [APIs](#apis)
 * [Performance](#performance)
-  * [We show GPT2 inference performance here\.](#we-show-gpt2-inference-performance-here)
-  * [We show BERT inference performance here\.](#we-show-bert-inference-performance-here)
 * [TODO](#todo)
 * [Contact us](#contact-us)
 
@@ -62,64 +59,42 @@ EET has been applied to a variety of NetEase online services,such as NiShuiHan, 
 * gcc:>= 7.4.0 
 * torch:>=1.5.0 
 * numpy:>=1.19.1 
+* fairseq
+* transformers
+
+The above environment is the minimum configuration, and it is best to use a newer version.
+
+
 
 ### Installation
+
+Recommend using docker images
+
 #### From Source
 If you are installing from source, you will need install the necessary [environment](#environment).Then, proceed as follows: 
 
 ```bash
 $ git clone https://github.com/NetEase-FuXi/EET.git
-# to run the demo in the examples for comparsion, we need to install the transformers and fairseq
-$ pip install transformers==3.5.0 
-$ pip install fairseq==0.10.0 
 $ pip install .
 ```
-Due to the compilation of a large number of cuda kernels, the installation time is relatively long, please be patient. 
+Recommend using nvcr.io/nvidia/pytorch:21.12-py3 and other series of images, you can also use the provided Dockerfile file
 
 #### From Docker
 
 ```bash
 $ git clone https://github.com/NetEase-FuXi/EET.git
-$ docker build -t your_docker_name:your_docker_version .
-$ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  your_Docker_Name:your_docker_version bash
+$ docker build -t eet_docker:0.1 .
+$ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  eet_docker:0.1 bash
 ```
-EET has been installed in the docker.
+the EET and its required environment are installed in docker.
 
 ### Run
-#### run BERT in Transformers
-```bash
-$ cd EET/example/python  
-$ python bert_transformers_example.py
-```
 
-#### run GPT2 in Transformers
-```bash
-$ cd EET/example/python   
-$ python gpt2_transformers_example.py
-```
+We offer two types of operation.
 
-#### run GPT2 in Fairseq
-```bash
-$ cd EET
-$ wget https://github.com/NetEase-FuXi/EET/releases/download/EET_V0.0.1_fairseq0.10.0_transformers3.5.0/resource.zip
-$ cd example 
-$ python gpt2_fairseq_example.py
-```
+#### Model API
 
-## Supported Models
-
-We currenly support the GPT-2, Bert.
-
-### GPT2
-
-<div  align="left"> <img src="./doc/image/gpt2.jpg" width = "400" height = "632" alt="gpt2"/></div>
-
-### BERT
-
-<div  align="left"> <img src="./doc/image/bert.jpg" width = "400" height = "463" alt="bert"/></div>
-
-## Usage
-EET provides python User-friendly APIs([python/eet](./python/eet)), integrated into Fairseq and Transformers with just a few lines of code. It should be noted that we only support padding on the left.
+EET provides python User-friendly APIs([python/eet](./python/eet)), integrated into Fairseq and Transformers with just a few lines of code. It should be noted that for gpt we only support padding on the left.
 
 >1、How to inference 
 <div  align="left"> <img src="./doc/image/use_bert.png" width = "850" height = "325" alt="useofbert"/></div>
@@ -127,17 +102,56 @@ EET provides python User-friendly APIs([python/eet](./python/eet)), integrated i
 >2、How to customize model  
 You can refer to Operators APIs listed below to build your own model structure, just by modifying the files under [python/eet](./python/eet).
 
->3、How to integrate EET into fairseq  
-Replace the original transformer.py in Fairseq with our transformer.py and reinstall the Fairseq, that is all !
-[Transformer.py](./python/eet/fairseq/transformer.py) in EET corresponds to the fusion of [transformer.py](https://github.com/pytorch/fairseq/blob/master/fairseq/models/transformer.py) and [transformer_layer.py](https://github.com/pytorch/fairseq/blob/master/fairseq/modules/transformer_layer.py) in fairseq.
+>3、How to integrate EET into fairseq  and transformers 
+If you want to insert EET into fairseq or transformers, you can replace it with the class cross-reference table given below, and we provide a very rich model api that can be combined to achieve it by yourself.
 
->4、How to integrate EET into Transformers  
-Replace the original modeling_bert.py and modeling_gpt2.py in Transformers with our modeling_bert.py and modeling_gpt2.py and reinstall the Transformers, that is all !
-[modeling_bert.py](./python/eet/transformers/modeling_bert.py) in EET corresponds to [modeling_bert.py](https://github.com/huggingface/transformers/blob/v3.0.2/src/transformers/modeling_bert.py) in transformers;[modeling_gpt2.py](./python/eet/transformers/modeling_gpt2.py) in EET corresponds to [modelling_gpt2.py](https://github.com/huggingface/transformers/blob/v3.0.2/src/transformers/modelling_gpt2.py) in transformers.
-
->5、How to make a server  
+>4、How to make a server  
 We choose  [service-streamer](https://github.com/ShannonAI/service-streamer) to make the model server, building the service based on your python project directly. 
 Please make sure the dynamic-batch is open if you want a higher throughput.
+
+#### pipelines
+
+EET provides a ready-made pipelines approach to provide pipeline usage options for different tasks based on the different model structures supported by EET.
+
+The usage is very simple:
+
+```python
+import torch
+from eet import pipeline
+max_batch_size = 1
+model_path = 'roberta-base'
+data_type = torch.float16
+input = ["My <mask> is Sarah and I live in London"]
+nlp = pipeline("fill-mask",model = model_path,data_type = data_type,max_batch_size = max_batch_size)
+out = nlp(input)
+```
+
+support：
+
+1、text-classification 
+
+2、token-classification
+
+3、question-answering 
+
+4、fill-mask
+
+5、text-generation
+
+6、image-classification
+
+7、zero_shot_image_classification
+
+Later on, as more and more models are supported by EET, more and more pipeline tasks will be supported.
+
+[example/python/pipelines](./example/python/pipelines),In these sample task codes, we also provide model api examples to implement the same tasks.
+
+
+## Supported Models
+
+We currenly support the GPT-2, Bert、Roberta、albert、clip、vit、distilbert.
+
+## Usage
 
 ## APIs
 1. model APIs:We provide ready-made APIs for GPT2 and Bert models.
@@ -170,6 +184,19 @@ Please make sure the dynamic-batch is open if you want a higher throughput.
     | EETGPT2Feedforward | MLP |  |
     | EETGPT2Embedding | nn.Embedding |  |
     | EETLayerNorm | nn.LayerNorm |  |
+
+ In order to better fit transformers, we have expanded the support model api based on transformers,For example, for the bert model, we have added the following api to support different tasks.
+ 
+    | EET | transformers| Remarks | 
+    |---------------|-----------------|----| 
+    | EETBertForPreTraining | BertForPreTraining | No |
+    | EETBertLMHeadModel | BertLMHeadModel | No |
+    | EETBertForMaskedLM | BertForMaskedLM | No |
+    | EETBertForNextSentencePrediction | BertForNextSentencePrediction | No |
+    | EETBertForSequenceClassification | BertForSequenceClassification | No |
+    | EETBertForMultipleChoice | BertForMultipleChoice | No |
+    | EETBertForTokenClassification | BertForTokenClassification | No |
+    | EETBertForQuestionAnswering | BertForQuestionAnswering | No |
 
 2. operators APIs:We provide all the operators required for Transformer models. You can combine different kernels to build different model structures
     | operators APIs | Remarks | 
@@ -208,42 +235,11 @@ Note : Total time are measured with 50% of the context
   | GPT-3 6.7B | 6.7B     | 32     | 4096         |  23.18ms                | 12.25s                |
   | GPT-3 13B | 13B     | 40     | 5120         | 43.42ms                 | 22.58s                |
   
-We tested the performance of EET on two GPU hardware platforms. We chose pytorch, NVIDIA Faster Transformers, and lightseq implementations for comparison.
 
-### We show GPT2 inference performance here.
+### Inference performance
 
-* RTX 2080ti (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
+Detailed performance data of GPT and Bert model inference can be viewed at [link](https://github.com/NetEase-FuXi/EET/blob/main/doc/benchmark.md)
 
-<div  align="left"> <img src="./doc/image/2080_gpt.svg" width = "700" height = "299" alt="gpt2_context_2080ti"/></div>
-
-* RTX 2080ti (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
-<div  align="left"> <img src="./doc/image/gpt1.svg" width = "700" height = "318" alt="hidden_unit_2080ti"/></div>
-
-* A100 (batch_size=4, hidden_units=1024, sequence_length=1024, precision=fp16)
-
-<div  align="left"> <img src="./doc/image/a100_gpt.svg" width = "700" height = "299" alt="gpt2_context_A100"/></div>
-
-* A100 (batch_size=4, context_ratio=50%, sequence_length=1024, precision=fp16)
-
-<div  align="left"> <img src="./doc/image/gpt2.svg" width = "700" height = "318" alt="hidden_unit_A100"/></div>
-
-Medium size model(hidden_units=1024,max_seq_len=768),compare with lightseq:
-<div  align="left"> <img src="./doc/image/lightseq1.svg" width = "700" height = "318" alt="1024model_lightseq"/></div>
-
-Small size model(hidden_units=768,max_seq_len=128),compare with lightseq:
-<div  align="left"> <img src="./doc/image/lightseq2.svg" width = "700" height = "318" alt="768model_lightseq"/></div>
-
-
-
-### We show BERT inference performance here.
-
-* RTX 2080ti
-
-<div  align="left"> <img src="./doc/image/bert_2080.svg" width = "700" height = "315" alt="bert_speedup_2080ti"/></div>
-
-* A100
-
-<div  align="left"> <img src="./doc/image/bert_a100.svg" width = "700" height = "315" alt="bert_speedup_A100"/></div>
 
 ## TODO
 1. int8

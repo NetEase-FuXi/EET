@@ -67,6 +67,7 @@ namespace eet{
             int size_per_head_;
             void* alpha_;
             void* beta_;
+            void* atten_scaler_;
             void* fused_qkv_ptr_;
             void** qkv_input_;
             void** qkv_kernel_;

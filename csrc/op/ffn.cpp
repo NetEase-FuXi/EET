@@ -49,8 +49,8 @@ namespace eet
             switch (desc_.dtype_)
             {
             case torch::kFloat32:
-                fc1_algo_ = CUBLAS_GEMM_DEFAULT;
-                fc2_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc1_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+                fc2_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
                 alpha_ = new float();
                 beta_ = new float();
                 *((float *)alpha_) = 1.0f;

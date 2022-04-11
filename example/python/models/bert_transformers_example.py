@@ -1,4 +1,3 @@
-from pytools import F
 import torch
 import numpy as np
 from eet.transformers.modeling_bert import EETBertModel
@@ -6,7 +5,7 @@ from transformers import BertModel
 import time
 
 using_half = True
-seq_len = 128
+seq_len = 8
 batch = 4
 loop = 100
 
@@ -20,8 +19,9 @@ def main():
     if using_half:
         data_type = torch.float16
     eet_model = EETBertModel.from_pretrained('bert-base-uncased', max_batch=batch, data_type=data_type)
-    ts_model = BertModel.from_pretrained('bert-base-uncased').cuda().half()
-
+    ts_model = BertModel.from_pretrained('bert-base-uncased').cuda()
+    if using_half:
+        ts_model = ts_model.half()
     attention_mask = None
     # padding on the left
     # attention_mask = torch.tensor([[0, 0, 1, 1],
@@ -48,6 +48,7 @@ def main():
 
     t4 = time.perf_counter()
     time_ts = t4 -t3
+
     
     print('Time for Transformers: ', time_ts)
     print('SpeedUp is ', time_ts / time_eet)

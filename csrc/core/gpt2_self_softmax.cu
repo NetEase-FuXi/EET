@@ -5,7 +5,7 @@
 
 template <typename T>
 __global__
-void softmax_kernel_gpt2(T *qk_buf,const int64_t* __restrict padding_index, const int head_num, const int seq_len, const T scalar)
+void softmax_kernel_gpt2(T *qk_buf,const int64_t* __restrict padding_index, const int head_num, const int seq_len)
 {
     int batch_id = blockIdx.x / head_num;
     int qk_offset = blockIdx.x * seq_len * seq_len;
@@ -29,7 +29,7 @@ void softmax_kernel_gpt2(T *qk_buf,const int64_t* __restrict padding_index, cons
     {
       float qk = threadIdx.x <= i ? (float)qk_buf[threadIdx.x + qk_offset] : 0.0f;
       float left_padding_val = (threadIdx.x < left_padding_len)? -1e20f:0.0f;
-      float tmp = (threadIdx.x <= i ) ? (float)(qk * (float)scalar + left_padding_val): -1e20f;
+      float tmp = (threadIdx.x <= i ) ? (float)(qk + left_padding_val): -1e20f;
 
       float max_val = blockReduceMax<float>(tmp);
 
@@ -56,7 +56,7 @@ void softmax_kernel_gpt2(T *qk_buf,const int64_t* __restrict padding_index, cons
 
 template <typename T,int item_per_thread>
 __global__
-void softmax_kernel_gpt2_opt(T *qk_buf,const int64_t* __restrict padding_index, const int head_num, const int seq_len, const T scalar)
+void softmax_kernel_gpt2_opt(T *qk_buf,const int64_t* __restrict padding_index, const int head_num, const int seq_len)
 {
     int batch_id = blockIdx.x / head_num;
     int qk_offset = blockIdx.x * seq_len * seq_len;
@@ -88,7 +88,7 @@ void softmax_kernel_gpt2_opt(T *qk_buf,const int64_t* __restrict padding_index, 
         for (int j = 0; j < item_per_thread; j++){
             qk[j] =(thread_id * item_per_thread + j) <= i ? (float)qk_buf[thread_id * item_per_thread + j + qk_offset] : 0.0f;
             left_padding_val[j] = ((thread_id * item_per_thread + j) < left_padding_len)? -1e20f:0.0f;
-            tmp[j] = ((thread_id * item_per_thread + j) <= i ) ? (float)(qk[j] * (float)scalar + left_padding_val[j]): -1e20f;
+            tmp[j] = ((thread_id * item_per_thread + j) <= i ) ? (float)(qk[j] + left_padding_val[j]): -1e20f;
         }
 
         float max_val = blockReduceMax_opt<float,item_per_thread>(tmp);
@@ -119,7 +119,7 @@ void softmax_kernel_gpt2_opt(T *qk_buf,const int64_t* __restrict padding_index, 
 
 template <class T>
 void softmax_kernel(void *qk_buf_, const int64_t *__restrict padding_index, const int &batch_size,
-                    const int &head_num, const int &seq_len, const float &scalar, const cudaStream_t stream)
+                    const int &head_num, const int &seq_len, const cudaStream_t stream)
 {
   dim3 grid, block;
 
@@ -139,7 +139,7 @@ void softmax_kernel(void *qk_buf_, const int64_t *__restrict padding_index, cons
       block.x = 1024;
     grid.x = batch_size * head_num;
 
-    softmax_kernel_gpt2<T><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len, scalar);
+    softmax_kernel_gpt2<T><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len);
   }
   else
   {
@@ -148,12 +148,12 @@ void softmax_kernel(void *qk_buf_, const int64_t *__restrict padding_index, cons
     {
       // block.x = seq_len/2;
       block.x = ceil(seq_len / (32.0 * 2)) * 32;         // item_per_thread = 1
-      softmax_kernel_gpt2_opt<T,2><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len, scalar);
+      softmax_kernel_gpt2_opt<T,2><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len);
     }
     else if (seq_len <= 4096)
     {
       block.x = ceil(seq_len / (32.0 * 4)) * 32;         // item_per_thread = 1
-      softmax_kernel_gpt2_opt<T,4><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len, scalar);
+      softmax_kernel_gpt2_opt<T,4><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len);
     }
     else
     {
@@ -162,17 +162,17 @@ void softmax_kernel(void *qk_buf_, const int64_t *__restrict padding_index, cons
     // else if (seq_len <= 8192)
     // {
     //   block.x = ceil(seq_len / (32.0 * 8)) * 32;         // item_per_thread = 1
-    //   softmax_kernel_gpt2_opt<T,8><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len, scalar);
+    //   softmax_kernel_gpt2_opt<T,8><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len);
     // }
     // else if (seq_len <= 16384)
     // {
     //   block.x = ceil(seq_len / (32.0 * 16)) * 32;         // item_per_thread = 1
-    //   softmax_kernel_gpt2_opt<T,16><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len, scalar);
+    //   softmax_kernel_gpt2_opt<T,16><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len);
     // }
   }
 }
 
 template void softmax_kernel<float>(void *qk_buf_, const int64_t* padding_index,const int& batch_size, 
-                                      const int& head_num, const int& seq_len, const float& scalar, const cudaStream_t stream);
+                                      const int& head_num, const int& seq_len, const cudaStream_t stream);
 template void softmax_kernel<half>(void *qk_buf_, const int64_t* padding_index, const int& batch_size, 
-                                      const int& head_num, const int& seq_len, const float& scalar, const cudaStream_t stream);
+                                      const int& head_num, const int& seq_len, const cudaStream_t stream);

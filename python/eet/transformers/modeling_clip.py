@@ -36,7 +36,7 @@ class EETCLIPVisionEmbedding():
             kernel_size=self.patch_size, stride=self.patch_size, bias=False
         )
         self.position_embeddings = nn.Embedding(self.num_positions, self.embed_dim)
-        
+        self.data_type = data_type
         self.cls_token = Parameter(embedding_dict['embeddings.class_embedding'].cuda().type(data_type))
         self.patch_embeddings.weight = Parameter(embedding_dict['embeddings.patch_embedding.weight'].cuda().type(data_type))
         self.position_ids = torch.arange(self.num_positions).expand((1, -1)).cuda()
@@ -47,6 +47,7 @@ class EETCLIPVisionEmbedding():
         if position_ids is None:
             position_ids = self.position_ids
         batch_size = pixel_values.shape[0]
+        pixel_values = pixel_values.to(self.data_type)
         embeddings = self.patch_embeddings(pixel_values).flatten(2).transpose(1, 2)
 
         cls_tokens = self.cls_token.expand(batch_size, 1, -1)
@@ -171,6 +172,7 @@ class EETCLIPModel():
         self.visual_projection = visual_proj
         self.text_projection = text_proj
         self.logit_scale = nn.Parameter(scale)
+        self.config = config
 
     def __call__(
         self,
@@ -208,8 +210,8 @@ class EETCLIPModel():
 
     
     @staticmethod
-    def from_pretrained(model_id_or_path: str, max_batch, num_channels, data_type):
-        """from torch."""
+    def from_pretrained(model_id_or_path: str, max_batch,  data_type,num_channels=3):
+        """from_pretrained."""
         torch.set_grad_enabled(False)
         text_model_dict = {}
         text_embedding_dict = {}
