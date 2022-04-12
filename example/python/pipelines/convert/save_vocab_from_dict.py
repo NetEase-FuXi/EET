@@ -1,5 +1,5 @@
-save_file = open("/root/3090_project/git/fairseq/checkpoint/vocab.txt","w") 
-dict_file = open('/root/3090_project/git/fairseq/checkpoint/dict.txt', 'r')
+save_file = open("../../resource/vocab.txt","w") 
+dict_file = open('../../resource/dict.txt', 'r')
 pre_file = open('./Special_Symbols.txt', 'r')
 
 contents=pre_file.readlines()       #读取全部行

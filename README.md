@@ -8,15 +8,12 @@ EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin foc
 
 ## Features
 
->1、Pre-padding decoding. Pre-padding keep the relative position embedding remain unchanged within the context and the generated sequence, reducing the gap between training and inference. Basic on this, we achieve parallel inference for the context and incremental decoding for generated token sequence.   
->2、High performance.  Design highly optimized CUDA kernels, referencing to NVIDIA [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1) with advanced optimization.  
->3、Flexible.  Provide op-level and model-level APIs, allowing users to construct their model or upgrade partial algorithm flexible.  
->4、Easy to use. EET could be integrated into Fairseq and Transformers directly by replacement of sepcified files, without any code change.  
->5、Dynamic batch. EET supports dynamic batch, which changes the order of the batch according to the reorder_state and can end a batch early.    
->6、Extra-large dimension and extra-long sequences. EET supports GPT hidden_units up to 16384 and sequence lengths up to 4096.  
->7、Support multiple models, including gpt2, bert, albert, roberta, vit.
->7、Support pipelines function to improve user experience, support fairseq model and transformers model
->9、The overall performance of the bert model is accelerated by 1.2x to 7.x times, and the overall performance of the gpt model is accelerated by 2.x to 7.x times.
+>1、High performance.  Design highly optimized CUDA kernels, referencing to NVIDIA [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1) with advanced optimization.  
+>2、Flexible.  Provide op-level and model-level APIs, allowing users to construct their model or upgrade partial algorithm flexible.  
+>3、Easy to use. EET could be integrated into Fairseq and Transformers directly by replacement of sepcified files, without any code change.  
+>4、Extra-large dimension and extra-long sequences. EET supports GPT hidden_units up to 16384 and sequence lengths up to 4096.  
+>5、Support pipelines function to improve user experience, support fairseq model and transformers model.  
+>6、Relative to pytorch,The performance of the bert model is accelerated by 1.2x to 7.x times, and the performance of the gpt model is accelerated by 2.x to 7.x times.
 
 EET has been applied to a variety of NetEase online services,such as NiShuiHan, NetEase's cloud music, TianYu, Lofter, etc. In the future, EET will work on urtra-large-scale model inference of trillion parameters.   
 
@@ -27,6 +24,7 @@ EET has been applied to a variety of NetEase online services,such as NiShuiHan, 
     * [From Source](#from-source)
     * [From Docker](#from-docker)
   * [Run](#run)
+    * [operators APIs](#operators-apis)
     * [Model API](#model-api)
     * [pipelines](#pipelines)
 * [Supported Models](#supported-models)
@@ -34,16 +32,8 @@ EET has been applied to a variety of NetEase online services,such as NiShuiHan, 
 * [APIs](#apis)
 * [Performance](#performance)
 * [TODO](#todo)
+* [Cite Us](#cite-us)
 * [Contact us](#contact-us)
-
-| Frameworks | maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
-|--------------------|-------------|------------------|------------|----|-----|--------|---------------|--------------------|-------------------------------|        
-| EET                | 16384       | 16384            |highest     | Y  |  Y  |    Y   |       Y       |          Y         |              Y                |
-| Faster Transformer | Multiples of specific numbers, such as 128, 256, 384, 512     | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              N                |
-| TensorRT           | 1024        | 1024             |high        | Y  |  N  |    N   |       N       |          N         |              N                | 
-| LightSeq           | 1024        | 1024             |high        | Y  |  Y  |    N   |       N       |          N         |              Y                |  
-| TurboTransformer   | 1024        | 1024             |medium      | Y  |  Y  |    N   |       N       |          Y         |              Y                | 
-| ONNX               | non-limited | non-limited      |slow        | Y  |  Y  |    Y   |       N       |          N         |              Y                |  
 
 ##  Decoding mechanism
 
@@ -63,8 +53,6 @@ EET has been applied to a variety of NetEase online services,such as NiShuiHan, 
 * transformers
 
 The above environment is the minimum configuration, and it is best to use a newer version.
-
-
 
 ### Installation
 
@@ -92,20 +80,76 @@ the EET and its required environment are installed in docker.
 
 We offer two types of operation.
 
-#### Model API
+#### operators APIs
 
+We provide all the operators required for Transformer models. You can combine different kernels to build different model structures.
+
+| operators APIs | Remarks | 
+|-------|-------------|
+| masked_multi_head_attention | GPT2 self_attention |
+| cross_multi_head_attention | cross_attention | 
+| multi_head_attention | Bert self_attention | 
+| ffn | FeedForwardNetwork |
+| embedding | transformers & fairseq |
+| layernorm | nn.LayerNorm |
+
+#### Model API
 EET provides python User-friendly APIs([python/eet](./python/eet)), integrated into Fairseq and Transformers with just a few lines of code. It should be noted that for gpt we only support padding on the left.
+    
+<b>EET and fairseq class comparison table</b>
+| EET | fairseq| Remarks | 
+|-------|-------------|-------------| 
+| EETTransformerDecoder | TransformerDecoder |  |
+| EETTransformerDecoderLayer | TransformerDecoderLayer |  |
+| EETTransformerAttention | MultiheadAttention |  |
+| EETTransformerFeedforward | TransformerDecoderLayer | fusion of multiple small operators |
+| EETTransformerEmbedding | Embedding + PositionalEmbedding |  |
+| EETTransformerLayerNorm | nn.LayerNorm |  |
+
+<b>EET and transformers class comparison table</b>
+| EET | transformers| Remarks | 
+|---------------|-----------------|----| 
+| EETBertModel | BertModel |  |
+| EETBertEncoder | BertEncoder |  |
+| EETBertEncoderLayer | BertLayer |  |
+| EETBertAttention | BertAttention |  |
+| EETBertFeedforward | BertIntermediate + BertOutput |  |
+| EETBertEmbedding | BertEmbeddings |  |
+| EETGPT2Model | GPT2Model |  |
+| EETGPT2Decoder | GPT2Model | transformers has no GPT2Decoder |
+| EETGPT2DecoderLayer | Block |  |
+| EETGPT2Attention | Attention | |
+| EETGPT2Feedforward | MLP |  |
+| EETGPT2Embedding | nn.Embedding |  |
+| EETLayerNorm | nn.LayerNorm |  |
+
+In order to better fit transformers, we have expanded the support model api based on transformers,For example, for the bert model, we have added the following api to support different tasks:      
+
+| EET | transformers| Remarks | 
+|---------------|-----------------|----| 
+| EETBertForPreTraining | BertForPreTraining | No |
+| EETBertLMHeadModel | BertLMHeadModel | No |
+| EETBertForMaskedLM | BertForMaskedLM | No |
+| EETBertForNextSentencePrediction | BertForNextSentencePrediction | No |
+| EETBertForSequenceClassification | BertForSequenceClassification | No |
+| EETBertForMultipleChoice | BertForMultipleChoice | No |
+| EETBertForTokenClassification | BertForTokenClassification | No |
+| EETBertForQuestionAnswering | BertForQuestionAnswering | No |
 
 >1、How to inference 
+
 <div  align="left"> <img src="./doc/image/use_bert.png" width = "850" height = "325" alt="useofbert"/></div>
 
 >2、How to customize model  
+
 You can refer to Operators APIs listed below to build your own model structure, just by modifying the files under [python/eet](./python/eet).
 
 >3、How to integrate EET into fairseq  and transformers 
-If you want to insert EET into fairseq or transformers, you can replace it with the class cross-reference table given below, and we provide a very rich model api that can be combined to achieve it by yourself.
+
+If you want to insert EET into fairseq or transformers, you can replace it with the class mapping table given below, and we provide a very rich model api that can be combined to achieve it by yourself.
 
 >4、How to make a server  
+
 We choose  [service-streamer](https://github.com/ShannonAI/service-streamer) to make the model server, building the service based on your python project directly. 
 Please make sure the dynamic-batch is open if you want a higher throughput.
 
@@ -126,21 +170,17 @@ nlp = pipeline("fill-mask",model = model_path,data_type = data_type,max_batch_si
 out = nlp(input)
 ```
 
-support：
+support task：
 
-1、text-classification 
-
-2、token-classification
-
-3、question-answering 
-
-4、fill-mask
-
-5、text-generation
-
-6、image-classification
-
-7、zero_shot_image_classification
+| Task | Since version | 
+|-------|-------------|
+| text-classification | 1.0 |
+| token-classification | 1.0 | 
+| question-answering | 1.0 | 
+| fill-mask | 1.0 |
+| text-generation | 1.0 |
+| image-classification | 1.0 |
+| zero_shot_image_classification | 1.0 |
 
 Later on, as more and more models are supported by EET, more and more pipeline tasks will be supported.
 
@@ -149,64 +189,15 @@ Later on, as more and more models are supported by EET, more and more pipeline t
 
 ## Supported Models
 
-We currenly support the GPT-2, Bert、Roberta、albert、clip、vit、distilbert.
-
-## Usage
-
-## APIs
-1. model APIs:We provide ready-made APIs for GPT2 and Bert models.
-    
-    <b>EET and fairseq class comparison table</b>
-    | EET | fairseq| Remarks | 
-    |-------|-------------|-------------| 
-    | EETTransformerDecoder | TransformerDecoder |  |
-    | EETTransformerDecoderLayer | TransformerDecoderLayer |  |
-    | EETTransformerAttention | MultiheadAttention |  |
-    | EETTransformerFeedforward | TransformerDecoderLayer | fusion of multiple small operators |
-    | EETTransformerEmbedding | Embedding + PositionalEmbedding |  |
-    | EETTransformerLayerNorm | nn.LayerNorm |  |
-
-   
-    
-    <b>EET and transformers class comparison table</b>
-    | EET | transformers| Remarks | 
-    |---------------|-----------------|----| 
-    | EETBertModel | BertModel |  |
-    | EETBertEncoder | BertEncoder |  |
-    | EETBertEncoderLayer | BertLayer |  |
-    | EETBertAttention | BertAttention |  |
-    | EETBertFeedforward | BertIntermediate + BertOutput |  |
-    | EETBertEmbedding | BertEmbeddings |  |
-    | EETGPT2Model | GPT2Model |  |
-    | EETGPT2Decoder | GPT2Model | transformers has no GPT2Decoder |
-    | EETGPT2DecoderLayer | Block |  |
-    | EETGPT2Attention | Attention | |
-    | EETGPT2Feedforward | MLP |  |
-    | EETGPT2Embedding | nn.Embedding |  |
-    | EETLayerNorm | nn.LayerNorm |  |
-
- In order to better fit transformers, we have expanded the support model api based on transformers,For example, for the bert model, we have added the following api to support different tasks.
- 
-    | EET | transformers| Remarks | 
-    |---------------|-----------------|----| 
-    | EETBertForPreTraining | BertForPreTraining | No |
-    | EETBertLMHeadModel | BertLMHeadModel | No |
-    | EETBertForMaskedLM | BertForMaskedLM | No |
-    | EETBertForNextSentencePrediction | BertForNextSentencePrediction | No |
-    | EETBertForSequenceClassification | BertForSequenceClassification | No |
-    | EETBertForMultipleChoice | BertForMultipleChoice | No |
-    | EETBertForTokenClassification | BertForTokenClassification | No |
-    | EETBertForQuestionAnswering | BertForQuestionAnswering | No |
-
-2. operators APIs:We provide all the operators required for Transformer models. You can combine different kernels to build different model structures
-    | operators APIs | Remarks | 
-    |-------|-------------|
-    | masked_multi_head_attention | GPT2 self_attention |
-    | cross_multi_head_attention | cross_attention | 
-    | multi_head_attention | Bert self_attention | 
-    | ffn | FeedForwardNetwork |
-    | embedding | transformers & fairseq |
-    | layernorm | nn.LayerNorm |
+| Model | Since version | 
+|-------|-------------|
+| GPT2 | 0.0.1 beta |
+| Bert | 0.0.1 beta | 
+| Roberta | 1.0 | 
+| Albert | 1.0 |
+| Vit | 1.0 |
+| Clip | 1.0 |
+| Distilbert | 1.0 |
 
 ## Performance
 
@@ -245,6 +236,18 @@ Detailed performance data of GPT and Bert model inference can be viewed at [link
 1. int8
 2. sparse
 
+## Cite Us
+
+If you use EET in your research, please cite the following paper.We also have a share on ZhiYuan LIVE, share link: https://event.baai.ac.cn/activities/325
+
+```
+@article{eet2022,
+  title={Easy and Efficient Transformer : Scalable Inference Solution For large NLP model},
+  author={Gongzheng Li, Yadong Xi, Jingzhen Ding, Duan Wang, Bai Liu, Changjie Fan, Xiaoxi Mao, Zeng Zhao},
+  journal={	arXiv:2104.12470},
+  year={2022}
+}
+```
 
 ## Contact us
 You can post your problem with github issues.

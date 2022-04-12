@@ -8,13 +8,9 @@
 EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型和长序列场景的高性能pytorch推理插件。
 
 ## 功能特性
-* Pre-padding解码：Pre-padding保证了上下文和生成序列之间的相对位置不变，和训练阶段了保持一致，进而不用关心推理时候的位置编码问题。基于此策略，EET实现了对上下文的并行推理和对生成序列的增量解码。
 * 高性能：设计高度优化的CUDA内核，参考[NVIDIA Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1)。 
 * 灵活： 提供算子级和模型级API，允许用户自定义模型或者只更新部分算法逻辑。  
-* 动态batch： EET支持动态batch，根据reorder_state变化batch的顺序，并能提前结束某个batch。 
-* 超大维度和超长序列： EET支持GPT最大16384的hidden_units和最长4096的序列长度。 
-* 易于使用： EET可以直接集成到Fairseq和Transformes中，无需任何代码改动，只需要替换指定文件即可完成从训练到推理的转换。  
-* 支持多种模型：gpt2、bert、roberta、albert、vit、clip等，后续会支持T5等模型。
+* 易于使用： EET可以直接集成到Fairseq和Transformes中，只需改动很少几行代码即可完成从训练到推理的转换。  
 * 新增pipelines功能，提升用户体验，支持fairseq模型和transformers模型。
 * bert模型整体性能加速1.2x到7.x倍，gpt模型整体性能加速2.x到7.x倍。
 
@@ -34,6 +30,7 @@ EET已经应用于多款网易线上服务，如逆水寒，网易云音乐，Lo
 * [使用方式](#使用方式)
 * [性能](#性能)
 * [TODO](#todo)
+* [Cite Us](#cite-us)
 * [联系我们](#联系我们)
 
 | Frameworks |  maximum model size | maximum sequence length |Performance |Bert|GPT-2|Op-level|Fairseq support|Transformers support|dynamic batch & variable inputs|
@@ -129,26 +126,32 @@ out = nlp(input)
 
 具体支持：
 
-1、text-classification 
-
-2、token-classification
-
-3、question-answering 
-
-4、fill-mask
-
-5、text-generation
-
-6、image-classification
-
-7、zero_shot_image_classification
+| Task | Since version | 
+|-------|-------------|
+| text-classification | 1.0 |
+| token-classification | 1.0 | 
+| question-answering | 1.0 | 
+| fill-mask | 1.0 |
+| text-generation | 1.0 |
+| image-classification | 1.0 |
+| zero_shot_image_classification | 1.0 |
 
 后续随着EET支持的模型越来越多，支持的pipeline任务也将越来越多。
 
 使用方式见[example/python/pipelines](./example/python/pipelines),在这些任务示例代码中，我们也提供了model api示例来实现同样的任务。
 
 ## 支持模型
-目前，我们支持GPT-2、Bert、Roberta、albert、clip、vit、distilbert等模型。
+
+| Model | Since version | 
+|-------|-------------|
+| GPT2 | 0.0.1 beta |
+| Bert | 0.0.1 beta | 
+| Roberta | 1.0 | 
+| Albert | 1.0 |
+| Vit | 1.0 |
+| Clip | 1.0 |
+| Distilbert | 1.0 |
+
 
 ## 使用方式
 EET提供了python API接口([python/eet](./python/eet))
@@ -183,6 +186,7 @@ EET提供了python API接口([python/eet](./python/eet))
     | EETLayerNorm | nn.LayerNorm | No |
 
     为了更好的适配transformers，我们根据transformers扩充了支持model api，譬如对于bert模型，我们新增了如下的api，用于支持不同的任务：
+
     | EET | transformers| Remarks | 
     |---------------|-----------------|----| 
     | EETBertForPreTraining | BertForPreTraining | No |
@@ -237,10 +241,23 @@ Note : 在总时间的测试中，假设了上下文的比例为５０％
 
 GPT及Bert模型推理详细性能数据请点击[链接](https://github.com/NetEase-FuXi/EET/blob/main/doc/benchmark.md)查看
 
+
+
 ## TODO
 1. int8
 2. sparse
 
+## Cite Us
 
+如果你在研究中使用EET，请引用以下论文，我们也有在智源LIVE上做分享，分享链接：https://event.baai.ac.cn/activities/325
+
+```
+@article{eet2022,
+  title={Easy and Efficient Transformer : Scalable Inference Solution For large NLP model},
+  author={Gongzheng Li, Yadong Xi, Jingzhen Ding, Duan Wang, Bai Liu, Changjie Fan, Xiaoxi Mao, Zeng Zhao},
+  journal={	arXiv:2104.12470},
+  year={2022}
+}
+```
 ## 联系我们
 您可以将您的问题发布在github issues。 

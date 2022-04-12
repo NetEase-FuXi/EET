@@ -2,7 +2,7 @@
 # Created by djz on 2021/01/21.
 #
 """EET fairseq gpt2 model. """
-
+import os
 import math
 import time
 from turtle import forward
@@ -450,7 +450,10 @@ class EETTransformerDecoder(GenerationMixin_EET):
         torch.set_grad_enabled(False)
         pretrained_dict = torch.load(model_id_or_path+'/checkpoint_best.pt')
         dictionary = Dictionary.load(model_id_or_path + '/dict.txt')
-        gpt2_config = GPT2Config.from_pretrained(model_id_or_path)
+        if os.path.exists(model_id_or_path + '/config.json'):
+            gpt2_config = GPT2Config.from_pretrained(model_id_or_path)
+        else:
+            gpt2_config = None
         full_seq_len = full_seq_len
         batch_size = max_batch
         # data_type = data_type

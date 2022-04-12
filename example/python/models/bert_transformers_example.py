@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from eet.transformers.modeling_bert import EETBertModel
+from eet import EETBertModel
 from transformers import BertModel
 import time
 

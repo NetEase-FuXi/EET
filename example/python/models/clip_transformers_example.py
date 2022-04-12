@@ -35,7 +35,6 @@ def main():
     input_ids = np.random.randint(1000, 9000, seq_len * batch_size, dtype="int64")
     input_ids = torch.from_numpy(input_ids).long().reshape(batch_size, seq_len).cuda()
     pixel_values = torch.from_numpy(np.random.random((batch_size, 3, 224, 224))).to(data_type).cuda()
-    print(input_ids,input_ids.size(),pixel_values,pixel_values.size())
 
     for i in range(loop):
         res_ts = ts_model(input_ids, pixel_values, attention_mask=None)
@@ -61,12 +60,6 @@ def main():
     print('Time for EET : ', time_eet)
     print('Time for Transformers: ', time_ts)
     print('SpeedUp is ', time_ts / time_eet)
-
-    print("ts output: ", res_ts.logits_per_image,res_ts.logits_per_image.size())
-    print("ts output: ", res_ts.logits_per_text)
-    print("ts similarity score: ", res_ts.logits_per_image.softmax(dim=1))
-    print("eet output: ", res_eet)
-    print("eet similarity score: ",res_eet[0].size(), res_eet[0].softmax(dim=1))
 
 if __name__ == "__main__":
     main()

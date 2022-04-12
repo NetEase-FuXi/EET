@@ -23,4 +23,16 @@ out = nlp(["My <mask> is Sarah and I live in London"])
 ```
 用法非常简单。
 
-注意：对于text-generation（文本生成）任务，我们既支持transformers模型也支持fairseq模型，对于transformers预训练模型只需要跟上述一样的方式运行即可，对于fairseq预训练模型，首先需要生成一个config.json和vocab.txt文件，生成方法直接运行example/python/convert下的save_config_from_fairseqmodel.py和save_vocab_from_dict.py即可，并将生成的文件放在和模型文件同样的路径下。在运行pipeline的时候指定模型文件路径即可。
+注意：对于text-generation（文本生成）任务，我们既支持transformers模型也支持fairseq模型，对于transformers预训练模型只需要跟上述一样的方式运行即可。
+
+对于fairseq gpt预训练模型，需要准备一下步骤
+
+* 1、需要生成一个config.json和vocab.txt文件
+
+生成方法直接运行example/python/convert下的save_config_from_fairseqmodel.py和save_vocab_from_dict.py即可，注意修改模型路径。
+
+* 2、将生成的文件放在和模型文件同样的路径下。在运行pipeline的时候指定模型文件即可。
+
+最终模型文件所在目录至少应有以下几个文件，注意各个文件名需要和下图一致：
+
+<div  align="left"> <img src="../../../doc/image/checkpoint.png" width = "216" height = "100" alt="checkpoint"/></div>

@@ -3,7 +3,9 @@ from eet import pipeline
 us_fairseq_model = True
 us_thansformers_model = True
 
+
 if us_fairseq_model:
+    # 参考Readme,首先需要生成vocab.txt和config.json文件
     nlp = pipeline("text-generation",model = '/root/3090_project/git/fairseq/checkpoint', data_type = torch.float16)
     out = nlp(["我 叫 小 天 ，这 是","这 里 是 中 国 ，不 是"])
     print(out)

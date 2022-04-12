@@ -10,7 +10,7 @@ import sys
 context_len = 512
 batch = 4
 max_seq_len = 1024
-
+loop = 1
 class Args(object):
     def __init__(self,
                  decoder_layerdrop,
@@ -60,7 +60,7 @@ class Args(object):
 args = Args(0, True, 1280, 1280, max_seq_len, False, False, False, True, 36, 20, 1280 * 4, None, 0.1, 0.1)
 embedding = nn.Embedding(13672, 1280, padding_idx=1)
 
-dictionary = Dictionary.load('/root/3090_project/git/fairseq/checkpoint/dict.txt')
+dictionary = Dictionary.load('../resource/dict.txt')
 
 def main():
     torch.set_grad_enabled(False)
@@ -76,7 +76,7 @@ def main():
     torch.cuda.synchronize()
     t1 = time.perf_counter()
 
-    for i in range(1):
+    for i in range(loop):
         first_pass = True
         reorder_state = None
         for step in range(context_len - 1, max_seq_len):
@@ -94,7 +94,7 @@ def main():
     torch.cuda.synchronize()
     t3 = time.perf_counter()
 
-    for i in range(1):
+    for i in range(loop):
         incremental_state = {}
         for step in range(0, max_seq_len):
             res_torch, incremental_state = torch_decoder(tokens[:,:step+1], incremental_state=incremental_state)

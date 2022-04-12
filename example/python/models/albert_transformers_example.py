@@ -8,7 +8,7 @@ from transformers import AlbertModel
 import time
 
 using_half = True
-seq_len = 32
+seq_len = 8
 batch = 4
 loop = 100
 

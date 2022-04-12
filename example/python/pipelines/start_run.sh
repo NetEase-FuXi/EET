@@ -1,7 +1,0 @@
-python pipeline_fillmask.py
-python pipeline_imageclassification.py
-python pipeline_qa.py
-python pipeline_textclassfication.py
-python pipeline_textgeneration.py
-pipeline_tockenclassification.py
-pipeline_zero-shot-image-classification.py

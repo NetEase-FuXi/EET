@@ -8,7 +8,7 @@ import requests
 import time
 
 using_half = True
-batch_size = 1
+batch_size = 20
 loop = 100
 
 
@@ -21,6 +21,7 @@ def main():
     # feature_extractor = ViTFeatureExtractor.from_pretrained('google/vit-base-patch16-224-in21k')
     # inputs = feature_extractor(images=image, return_tensors="pt")
 
+    
     # build pretrained model
     data_type = torch.float32
     ts_model = ViTModel.from_pretrained('google/vit-base-patch16-224-in21k').cuda()
@@ -29,7 +30,6 @@ def main():
         data_type = torch.float16
     eet_model = EETViTModel.from_pretrained(
         'google/vit-base-patch16-224-in21k', max_batch=batch_size, data_type=data_type)
-    
     # dummy input
     dummy_input = torch.from_numpy(np.random.random((batch_size, 3, 224, 224))).to(data_type).cuda()
     input_states = dummy_input
