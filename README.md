@@ -21,12 +21,11 @@ EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin foc
 
 ## Features
 
-- 1、High performance.  Design highly optimized CUDA kernels.  
-- 2、Flexible.  Provide op-level、model-level APIs and pipelines for different needs.  
+- 1、High performance.Design highly optimized CUDA kernels.  
+- 2、Flexible.Provide op-level、model-level APIs and pipelines for different needs.  
 - 3、Easy to use.A few lines of code will do the trick.
-- 4、Extra-large dimension and extra-long sequences.Hidden_units up to 16384 and sequence lengths up to 4096.  
+- 4、embed_dim up to 16384 and sequence lengths up to 4096.  
 - 5、Adaptation to mainstream frameworks,include transformers and fairseq.  
-- 6、The performance of the bert model is accelerated by 1.2x to 7.x times, and the performance of the gpt model is accelerated by 2.x to 7.x times.
 
 * [Supported Models](#supported-models)
 * [Quick Start](#quick-start)
