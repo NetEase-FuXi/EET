@@ -27,6 +27,8 @@ EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin foc
 - 4、embed_dim up to 16384 and sequence lengths up to 4096.  
 - 5、Adaptation to mainstream frameworks,include transformers and fairseq.  
 
+----
+
 * [Supported Models](#supported-models)
 * [Quick Start](#quick-start)
   * [Environment](#environment)
