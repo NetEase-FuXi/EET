@@ -27,6 +27,8 @@ EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型
 * 适配主流ai框架，包括fairseq和transformers。
 * bert模型整体性能加速1.2x到7.x倍，gpt模型整体性能加速2.x到7.x倍。
 
+---
+
 * [支持模型](#支持模型)
 * [快速开始](#快速开始)
   * [环境](#环境)
