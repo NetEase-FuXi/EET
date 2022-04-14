@@ -11,7 +11,7 @@ import numpy as np
 from torch import Tensor
 from typing import Any, Dict, List, Optional, Tuple
 from transformers import RobertaModel
-from eet.transformers.modeling_transformer import *
+from eet.transformers.encoder import *
 from eet.transformers.modeling_bert import EETBertEmbedding
 from eet.utils.mapping import convert_name
 from transformers import  (
@@ -84,7 +84,7 @@ class EETRobertaModel():
 
         return sequence_output,pooled_output
     @staticmethod
-    def from_pretrained(model_id_or_path: str, max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type, device_id=0):
         """from_pretrained."""
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -102,12 +102,12 @@ class EETRobertaModel():
                 k = k[k.find('layer.'):]
                 model_dict[k] = v
 
-        # group by 'layer.n'
+        # Group by layer id in layer_model_dict's keys
         from itertools import groupby
         layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
-        device = "cuda:0"
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
         config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers,
@@ -124,7 +124,7 @@ class EETRobertaModel():
         eet_model = EETRobertaModel(cfg, embedding, encoder,torch_model.pooler)
         return eet_model
 
-    def from_torch(torch_model, max_batch, data_type):
+    def from_torch(torch_model, max_batch, data_type, device_id=0):
         """from torch."""
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -141,12 +141,12 @@ class EETRobertaModel():
                 k = k[k.find('layer.'):]
                 model_dict[k] = v
 
-        # group by 'layer.n'
+        # Group by layer id in layer_model_dict's keys
         from itertools import groupby
         layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
-        device = "cuda:0"
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
         config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers,
@@ -160,7 +160,7 @@ class EETRobertaModel():
             torch_model = torch_model.float()
         else:
             torch_model = torch_model.half()
-        eet_model = EETRobertaModel(cfg, embedding, encoder,torch_model.roberta.pooler)
+        eet_model = EETRobertaModel(cfg, embedding, encoder, torch_model.roberta.pooler)
         return eet_model
 
 

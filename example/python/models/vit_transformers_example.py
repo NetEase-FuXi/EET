@@ -55,8 +55,6 @@ def main():
     t2 = time.perf_counter()
     time_eet = t2 - t1
 
-    # print('ts output: ', res_ts.pooler_output)
-    # print('eet output: ', res_eet)
     print('Time for EET: ', time_eet)
     print('Time for Transformers: ', time_ts)
     print('SpeedUp is ', time_ts / time_eet)

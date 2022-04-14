@@ -12,9 +12,9 @@ from torch import Tensor
 from torch import functional as F
 from torch.nn.parameter import Parameter
 from typing import Any, Dict, List, Optional, Tuple
-from transformers import ViTModel,ViTForMaskedImageModeling,ViTForImageClassification
+from transformers import ViTModel, ViTForMaskedImageModeling, ViTForImageClassification
 from transformers.modeling_outputs import MaskedLMOutput, SequenceClassifierOutput
-from eet.transformers.modeling_transformer import *
+from eet.transformers.encoder import *
 from eet.utils.mapping import convert_name
 
 from EET import MetaDesc as meta_desc
@@ -54,25 +54,6 @@ class EETViTEmbedding(nn.Module):
         return embedding
 
 
-class EETViTPooler(nn.Module):
-    def __init__(self, hidden_size, weight, bias, data_type=torch.float32):
-        super().__init__()
-        self.dense = nn.Linear(hidden_size, hidden_size)
-        self.activation = nn.Tanh()
-        self.dense.weight = Parameter(weight.cuda().type(data_type))
-        self.dense.bias = Parameter(bias.cuda().type(data_type))
-    
-    def __call__(self, hidden_states):
-        first_token_tensor = hidden_states[:, 0, :]
-        pooled_output = self.dense(first_token_tensor)
-        pooled_output = self.activation(pooled_output)
-        return pooled_output
-    
-    @staticmethod
-    def from_torch(hidden_size, weight, bias, data_type=torch.float32):
-        pooler = EETViTPooler(hidden_size, weight, bias, data_type)
-        return pooler
-
 class EETViTModel():
     def __init__(self, config, embedding, encoder, layernorm, pooler):
         self.embedding = embedding
@@ -91,10 +72,10 @@ class EETViTModel():
         sequence_output = self.layernorm(encoder_out)
         pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
         
-        return sequence_output,pooled_output
+        return sequence_output, pooled_output
 
     @staticmethod
-    def from_pretrained(model_id_or_path: str, max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type, device_id=0):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -116,11 +97,12 @@ class EETViTModel():
             else:
                 other_dict[k] = v
 
+        # Group by layer id in model_dict's keys
         from itertools import groupby
         layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), 
                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
-        device = "cuda:0"
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
         config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size,
@@ -133,16 +115,10 @@ class EETViTModel():
             torch_model = torch_model.float()
         else:
             torch_model = torch_model.half()
-
-        if torch_model.pooler is None:
-            pooler = None
-        else:
-            pooler = EETViTPooler.from_torch(cfg.hidden_size,  other_dict['pooler.dense.weight'], other_dict['pooler.dense.bias'], data_type)
-
-        eet_model = EETViTModel(config, embedding, encoder, layer_norm, pooler)
+        eet_model = EETViTModel(config, embedding, encoder, layer_norm, torch_model.pooler.to(device))
         return eet_model
 
-    def from_torch(torch_model, max_batch, data_type):
+    def from_torch(torch_model, max_batch, data_type, device_id=0):
         """from torch"""
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -164,11 +140,12 @@ class EETViTModel():
             else:
                 other_dict[k] = v
 
+        # Group by layer id in model_dict's keys
         from itertools import groupby
         layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), 
                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
-        device = "cuda:0"
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
         config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size,
@@ -183,11 +160,7 @@ class EETViTModel():
         else:
             torch_model = torch_model.half()
 
-        if torch_model.vit.pooler is None:
-            pooler = None
-        else:
-            pooler = EETViTPooler.from_torch(cfg.hidden_size,  other_dict['pooler.dense.weight'], other_dict['pooler.dense.bias'], data_type)
-        eet_model = EETViTModel(config, embedding, encoder, layer_norm, pooler)
+        eet_model = EETViTModel(config, embedding, encoder, layer_norm, torch_model.pooler.to(device))
         return eet_model
 
 class EETViTForMaskedImageModeling():

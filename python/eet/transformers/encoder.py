@@ -16,6 +16,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from EET import MetaDesc as meta_desc
 from EET import FeedForwardNetwork as eet_ffn
 from EET import MultiHeadAttention as eet_attention
+from EET import CrossMultiHeadAttention as eet_cross_attention
+from EET import MaskedMultiHeadAttention as eet_masked_attention
 from EET import Embedding as eet_embedding
 from EET import LayerNorm as eet_layernorm
 
@@ -28,21 +30,10 @@ __all__ = [
 class FCLayer():
     def __init__(self, weight, bias=None, data_type=torch.float32):
         self.weight = weight.contiguous().cuda().type(data_type)
-        self.bias = bias.contiguous().cuda().type(data_type) if bias else None
+        self.bias = bias.contiguous().cuda().type(data_type) if bias is not None else None
 
     def __call__(self, input):
         return F.linear(input, weight=self.weight, bias=self.bias)
-
-
-class LayerNorm():
-    def __init__(self, norm_shape, weight, bias, eps=1e-5, data_type=torch.float32):
-        self.weight = weight.contiguous().cuda().type(data_type)
-        self.bias = bias.contiguous().cuda().type(data_type)
-        self.norm_shape = norm_shape
-        self.eps = eps
-
-    def __call__(self, input):
-        return F.layer_norm(input, self.norm_shape, self.weight, self.bias, self.eps)
 
 
 class EETLayerNorm():
@@ -185,7 +176,4 @@ class EETEncoder():
             )
         eet_encoder = EETEncoder(EncoderLayers)
         return eet_encoder
-
-
-
 

@@ -7,6 +7,30 @@ Mappings = {
     "CLIPModel": "transformers_clip_mapping",
 }
 
+transformers_albert_mapping = {
+    "encoder": {"__name__":"encoder",
+        "albert_layer_groups": {"__name__":"group",
+            "$": {"__name__":"$",
+                "albert_layers": {"__name__":"layer", 
+                    "$": {"__name__":"$",
+                        "attention": {"__name__":"self_attn",
+                            "query": {"__name__":"q_proj"},
+                            "key": {"__name__":"k_proj"},
+                            "value": {"__name__":"v_proj"},
+                            "dense": {"__name__":"out_proj"},
+                            "LayerNorm": {"__name__":"layernorm"},
+                        },
+                        "ffn": {"__name__":"ffn.intermediate"},
+                        "ffn_output": {"__name__":"ffn.output"},
+                        "full_layer_layer_norm": {"__name__":"ffn.layernorm"},
+                    },
+                },
+            }
+        },
+        "embedding_hidden_mapping_in": {"__name__": "hidden_mapping_in"},
+    },
+}
+
 transformers_bert_mapping = {
     # "embeddings.word_embeddings": {"__name__":""},
     # "embeddings.position_embeddings": {"__name__":""},
@@ -89,7 +113,6 @@ transformers_clip_mapping = {
             }
         },    
     },
-
 }
 
 def convert_name(org_key, model_name, verbose=False):

@@ -13,7 +13,7 @@ from torch import functional as F
 from torch.nn.parameter import Parameter
 from typing import Any, Dict, List, Optional, Tuple
 from transformers import CLIPModel, ViTModel
-from eet.transformers.modeling_transformer import *
+from eet.transformers.encoder import *
 from eet.utils.mapping import convert_name
 
 from EET import MetaDesc as meta_desc
@@ -85,8 +85,13 @@ class EETCLIPVisionTransformer():
         return vision_output
     
     @staticmethod
-    def from_torch(config, embedding, encoder, pre_layernorm, post_layernorm):
-        vision_model = EETCLIPVisionTransformer(config, embedding, encoder, pre_layernorm, post_layernorm)
+    def from_torch(config, cfg, model_dict, data_type=torch.float32):
+        pre_layernorm = EETLayerNorm.from_torch(config, model_dict['layernorm']['vision_model.pre_layrnorm.weight'], model_dict['layernorm']['vision_model.pre_layrnorm.bias'], data_type)
+        embedding = EETCLIPVisionEmbedding.from_torch(cfg, model_dict['embeddings'], data_type)
+        encoder = EETEncoder.from_torch(config, model_dict, cfg.num_hidden_layers, data_type)
+        post_layernorm = EETLayerNorm.from_torch(config, model_dict['layernorm']['vision_model.post_layernorm.weight'], model_dict['layernorm']['vision_model.post_layernorm.bias'], data_type)
+
+        vision_model = EETCLIPVisionTransformer(cfg, embedding, encoder, pre_layernorm, post_layernorm)
         return vision_model
 
 
@@ -146,7 +151,7 @@ class EETCLIPTextTransformer():
             # transformers 0 - padding;1 - nopadding
             pre_padding_len = torch.sum(1 - attention_mask, 1).long().cuda()
         embedding_out = self.embedding(input_ids, position_ids, token_type_ids)
-        # CLIP's text model uses causal mask, set 'need_sequence_mask' to .
+        # CLIP's text transformer model uses causal mask, set 'need_sequence_mask' to True.
         # https://github.com/openai/CLIP/blob/cfcffb90e69f37bf2ff1e988237a0fbe41f33c04/clip/model.py#L324        
         encoder_out = self.encoder(
             embedding_out,
@@ -160,8 +165,12 @@ class EETCLIPTextTransformer():
         return text_output
     
     @staticmethod
-    def from_torch(config, embedding, encoder, layernorm):
-        text_model = EETCLIPTextTransformer(config, embedding, encoder, layernorm)
+    def from_torch(config, cfg, model_dict, data_type=torch.float32):
+        embedding = EETCLIPTextEmbedding.from_torch(config, model_dict['embeddings'], data_type)
+        encoder = EETEncoder.from_torch(config, model_dict, cfg.num_hidden_layers, data_type)
+        final_layernorm = EETLayerNorm.from_torch(config, model_dict['layernorm']['text_model.final_layer_norm.weight'], model_dict['layernorm']['text_model.final_layer_norm.bias'], data_type)
+
+        text_model = EETCLIPTextTransformer(cfg, embedding, encoder, final_layernorm)
         return text_model
 
 
@@ -208,28 +217,17 @@ class EETCLIPModel():
 
         return (logits_per_image, logits_per_text)
 
-    
     @staticmethod
-    def from_pretrained(model_id_or_path: str, max_batch,  data_type,num_channels=3):
-        """from_pretrained."""
-        torch.set_grad_enabled(False)
-        text_model_dict = {}
+    def create_state_dict(torch_model):
+        model_name = type(torch_model).__name__
+        model_dict = {}
+        text_layer_model_dict = {}
         text_embedding_dict = {}
         text_layernorm_dict = {}
-        vision_model_dict = {}
+        vision_layer_model_dict = {}
         vision_embedding_dict = {}
         vision_layernorm_dict = {}
-        other_dict = {}
-        torch_model = CLIPModel.from_pretrained(model_id_or_path)
-        model_name = type(torch_model).__name__
-        cfg = torch_model.config
-        text_cfg = cfg.text_config
-        vision_cfg = cfg.vision_config
 
-        # torch model config 'num_channels' is required but not set 
-        vision_cfg.num_channels = num_channels
-
-        # Parameter dict adapt for EET
         for k, v in torch_model.state_dict().items():
             # Structure mapping
             k = convert_name(k, model_name)
@@ -239,7 +237,7 @@ class EETCLIPModel():
                     text_embedding_dict[k] = v
                 elif "layer." in k:
                     k = k[k.find('layer.'):]
-                    text_model_dict[k] = v
+                    text_layer_model_dict[k] = v
                 else:
                     text_layernorm_dict[k] = v
             elif "vision_model" in k:
@@ -248,43 +246,58 @@ class EETCLIPModel():
                     vision_embedding_dict[k] = v
                 elif "layer." in k:
                     k = k[k.find('layer.'):]           
-                    vision_model_dict[k] = v
+                    vision_layer_model_dict[k] = v
                 else:
                     vision_layernorm_dict[k] = v
-            elif "logit_scale" in k:
-                logit_scale = v
             else:
-                other_dict[k] = v
-        # group by 'layer.'+str(layer_id)
+                model_dict[k] = v
+
+        # Group by state dict layer id.
         from itertools import groupby
-        vision_layer_model_dict = {k: dict(v) for k, v in groupby(list(vision_model_dict.items()),
-                                                                  lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
-        text_layer_model_dict = {k: dict(v) for k, v in groupby(list(text_model_dict.items()),
-                                                                lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
-        
-        device = "cuda:0"
+        vision_model_dict = {k: dict(v) for k, v in groupby(list(vision_layer_model_dict.items()),
+                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
+        text_model_dict = {k: dict(v) for k, v in groupby(list(text_layer_model_dict.items()),
+                                                          lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
+        vision_model_dict['embeddings'] = vision_embedding_dict
+        vision_model_dict['layernorm'] = vision_layernorm_dict
+        text_model_dict['embeddings'] = text_embedding_dict
+        text_model_dict['layernorm'] = text_layernorm_dict
+        model_dict['vision_model'] = vision_model_dict
+        model_dict['text_model'] = text_model_dict
+
+        return model_dict
+
+    @staticmethod
+    def from_pretrained(model_id_or_path: str, max_batch, data_type, num_channels=3, device_id=0):
+        """from_pretrained."""
+        torch.set_grad_enabled(False)
+        torch_model = CLIPModel.from_pretrained(model_id_or_path)
+        cfg = torch_model.config
+        text_cfg = cfg.text_config
+        vision_cfg = cfg.vision_config
+
+        # torch model config 'num_channels' is required but not set 
+        vision_cfg.num_channels = num_channels
+
+        # create eet model state dict
+        model_dict = EETCLIPModel.create_state_dict(torch_model)
+
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         batch_size = max_batch
         text_config = meta_desc(batch_size, text_cfg.num_attention_heads, text_cfg.hidden_size,
                                 text_cfg.num_hidden_layers, text_cfg.hidden_size, text_cfg.hidden_size, data_type, device, False, text_cfg.hidden_act)
         vision_config = meta_desc(batch_size, vision_cfg.num_attention_heads, vision_cfg.hidden_size,
                                   vision_cfg.num_hidden_layers, vision_cfg.hidden_size, vision_cfg.hidden_size, data_type, device, False, vision_cfg.hidden_act)
 
-        # vision model
-        vision_pre_layernorm = EETLayerNorm.from_torch(vision_config, vision_layernorm_dict['vision_model.pre_layrnorm.weight'], vision_layernorm_dict['vision_model.pre_layrnorm.bias'], data_type)
-        vision_embedding = EETCLIPVisionEmbedding.from_torch(vision_cfg, vision_embedding_dict, data_type)
-        vision_encoder = EETEncoder.from_torch(vision_config, vision_layer_model_dict, vision_cfg.num_hidden_layers, data_type)
-        vision_post_layernorm = EETLayerNorm.from_torch(vision_config, vision_layernorm_dict['vision_model.post_layernorm.weight'], vision_layernorm_dict['vision_model.post_layernorm.bias'], data_type)
-        vision_model = EETCLIPVisionTransformer.from_torch(vision_cfg, vision_embedding, vision_encoder, vision_pre_layernorm, vision_post_layernorm)
-        visual_proj = FCLayer(other_dict['visual_projection.weight'], bias=None, data_type=data_type)
+        # vision model        
+        vision_model = EETCLIPVisionTransformer.from_torch(vision_config, vision_cfg, model_dict['vision_model'], data_type)
+        visual_proj = FCLayer(model_dict['visual_projection.weight'], bias=None, data_type=data_type)
 
         # text model
-        text_embedding = EETCLIPTextEmbedding.from_torch(text_config, text_embedding_dict, data_type)
-        text_encoder = EETEncoder.from_torch(text_config, text_layer_model_dict, text_cfg.num_hidden_layers, data_type)
-        text_final_layernorm = EETLayerNorm.from_torch(text_config, text_layernorm_dict['text_model.final_layer_norm.weight'], text_layernorm_dict['text_model.final_layer_norm.bias'], data_type)
-        text_model = EETCLIPTextTransformer(text_cfg, text_embedding, text_encoder, text_final_layernorm)
-        text_proj = FCLayer(other_dict['text_projection.weight'], bias=None, data_type=data_type)
+        text_model = EETCLIPTextTransformer.from_torch(text_config, text_cfg, model_dict['text_model'], data_type)
+        text_proj = FCLayer(model_dict['text_projection.weight'], bias=None, data_type=data_type)
 
-        eet_clip_model = EETCLIPModel(cfg, text_model, vision_model, visual_proj, text_proj, logit_scale)
+        eet_clip_model = EETCLIPModel(cfg, text_model, vision_model, visual_proj, text_proj, model_dict['logit_scale'])
         return eet_clip_model
 
 

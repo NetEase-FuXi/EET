@@ -31,7 +31,7 @@ from transformers.modeling_outputs import (
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
-from eet.transformers.modeling_transformer import *
+from eet.transformers.encoder import *
 from eet.utils.mapping import convert_name
 
 from EET import MetaDesc as meta_desc
@@ -111,7 +111,7 @@ class EETBertModel():
         return sequence_output,pooled_output
     
     @staticmethod
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str,max_batch, data_type, device_id=0):
         """from_pretrained."""
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -129,12 +129,12 @@ class EETBertModel():
                 k = k[k.find('layer.'):]
                 model_dict[k] = v
 
-        # group by 'layer.n'
+        # Group by layer id in model_dict's keys
         from itertools import groupby
         layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
-        device = "cuda:0"
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
         config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers,
@@ -151,7 +151,7 @@ class EETBertModel():
         eet_model = EETBertModel(cfg, embedding, encoder,torch_model.pooler)
         return eet_model
 
-    def from_torch(torch_model,max_batch, data_type):
+    def from_torch(torch_model,max_batch, data_type, device_id=0):
         """from torch."""
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -173,7 +173,7 @@ class EETBertModel():
         layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
-        device = "cuda:0"
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
         config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers,
