@@ -225,5 +225,5 @@ You can post your problem with github issues.And you can contact us by email.
 
 ligongzheng@corp.netease.com, dingjingzhen@corp.netease.com ,zhaosida@corp.netease.com
 
-And if you are interested in high performance computing, deep learning, you can join us, we welcome you. Just send your resume directly to the above email address.
+And if you are interested in high performance computing, deep learning, welcome to join us. Just send your resume to the above email address.
 
