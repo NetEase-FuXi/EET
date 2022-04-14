@@ -168,8 +168,9 @@ example of fill-mask
 ```python
 from eet import EETRobertaForMaskedLM
 from transformers import RobertaTokenizer
-tokenizer = RobertaTokenizer.from_pretrained(model_path)
-eet_roberta_model = EETRobertaForMaskedLM.from_pretrained(model_path,max_batch = max_batch_size,data_type = data_type)
+input = ["My <mask> is Sarah and I live in London"]
+tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+eet_roberta_model = EETRobertaForMaskedLM.from_pretrained('roberta-base',max_batch = max_batch_size,data_type = data_type)
 # first step: tokenize
 model_inputs = tokenizer(input,return_tensors = 'pt')
 masked_index = torch.nonzero(model_inputs['input_ids'][0] == tokenizer.mask_token_id, as_tuple=False).squeeze(-1)
