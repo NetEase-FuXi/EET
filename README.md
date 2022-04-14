@@ -161,6 +161,25 @@ How to inference
 
 <div  align="left"> <img src="./doc/image/use_bert.png" width = "850" height = "325" alt="useofbert"/></div>
 
+For specific tasks, you can also use the model api directly to implement
+
+example of fill-mask
+
+```python
+from eet import EETRobertaForMaskedLM
+from transformers import RobertaTokenizer
+tokenizer = RobertaTokenizer.from_pretrained(model_path)
+eet_roberta_model = EETRobertaForMaskedLM.from_pretrained(model_path,max_batch = max_batch_size,data_type = data_type)
+# first step: tokenize
+model_inputs = tokenizer(input,return_tensors = 'pt')
+masked_index = torch.nonzero(model_inputs['input_ids'][0] == tokenizer.mask_token_id, as_tuple=False).squeeze(-1)
+# second step: predict
+prediction_scores = eet_roberta_model(model_inputs['input_ids'].cuda(),attention_mask = model_inputs['attention_mask'])
+# third step: argmax
+predicted_index = torch.argmax(prediction_scores.logits[0, masked_index]).item()
+predicted_token = tokenizer.convert_ids_to_tokens(predicted_index)
+```
+
 Please refer to [example/python/models](example/python/models/).
 
 #### pipelines
