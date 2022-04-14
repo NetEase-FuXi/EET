@@ -12,9 +12,11 @@ loop = 100
 def main():
     torch.set_grad_enabled(False)
 
+    # Construct the input, in the actual project the input should be tokens
     input = np.random.randint(1000, 9000, seq_len * batch, dtype="int64")
     input_ids = torch.from_numpy(input).long().reshape(batch, seq_len).cuda()
 
+    # load model,eet needs to pass in the maximum batch and data type 
     data_type = torch.float32
     ts_model = DistilBertModel.from_pretrained('distilbert-base-cased-distilled-squad').cuda()
     if using_half:
@@ -22,6 +24,7 @@ def main():
         data_type = torch.float16
     eet_model = EETDistilBertModel.from_pretrained('distilbert-base-cased-distilled-squad',max_batch = batch,data_type = data_type)
   
+    # inference
     attention_mask = None
     torch.cuda.synchronize()
     t1 = time.perf_counter()

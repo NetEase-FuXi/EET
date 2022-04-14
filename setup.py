@@ -3,7 +3,7 @@ from torch.utils import cpp_extension
 import glob
 import os
 import subprocess
-__version__ = "0.0.1"
+__version__ = "v1.0"
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 cuda_sources = glob.glob(os.path.join(current_dir, 'csrc', 'core', '*.cu'))
@@ -36,6 +36,8 @@ else:
 setup(
     name='EET',
     version=__version__,
+    author="dingjingzhen",
+    author_email="dingjingzhen@corp.netease.com,ligongzheng@corp.netease.com,zhaosida@corp.netease.com",
     package_dir={"": "python"},
     packages=find_packages("python"),
     ext_modules=[

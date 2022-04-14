@@ -11,6 +11,7 @@ max_seq_len = 1024
 loop = 10
 
 def main():
+    # 输入数据构造，实际业务输入应该是tokens
     input = np.random.randint(1000,9000,prompt_seq_len * batch,dtype="int64")
     inputs = np.random.randint(1000,9000,1 * batch,dtype="int64")
     # prompt context
@@ -32,6 +33,11 @@ def main():
     # prediction
     torch.cuda.synchronize()
     t1 = time.perf_counter()
+
+    '''
+    first_pass 用于判断生成任务时是否是第一步，也就是是否是在做提示词的推理。true代表在做提示词的推理，false代表在做生成推理
+    由于eet不会返回past_key_value，前一步的信息全部在内部做了保存，所以没法通过past_key_value做判断，故增加此参数。
+    '''
     for j in range(loop):
         input_ids = input_full_decoder
         first_pass = True

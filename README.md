@@ -4,41 +4,56 @@
 
 <div  align="center"> <img src="./doc/image/EETblueLOGO.png" width = "600" height = "180" alt="EET" align=center /></div>
 </br>
+
+<p align="center">
+    <a href="https://github.com/NetEase-FuXi/EET/blob/main/LICENSE">
+        <img alt="GitHub license" src="./doc/image/license.svg">
+    </a>
+    <a href="https://github.com/NetEase-FuXi/EET/tree/main/example/python">
+        <img alt="GitHub release" src="./doc/image/example.svg">
+    </a>
+    <a href="https://github.com/NetEase-FuXi/EET/releases">
+        <img alt="release" src="./doc/image/release.svg">
+    </a>
+</p>
+
 EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin focus on Transformer-based models with large model sizes and long sequences.
 
 ## Features
 
->1、High performance.  Design highly optimized CUDA kernels, referencing to NVIDIA [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer/v3.1) with advanced optimization.  
->2、Flexible.  Provide op-level and model-level APIs, allowing users to construct their model or upgrade partial algorithm flexible.  
->3、Easy to use. EET could be integrated into Fairseq and Transformers directly by replacement of sepcified files, without any code change.  
->4、Extra-large dimension and extra-long sequences. EET supports GPT hidden_units up to 16384 and sequence lengths up to 4096.  
->5、Support pipelines function to improve user experience, support fairseq model and transformers model.  
->6、Relative to pytorch,The performance of the bert model is accelerated by 1.2x to 7.x times, and the performance of the gpt model is accelerated by 2.x to 7.x times.
+- 1、High performance.  Design highly optimized CUDA kernels.  
+- 2、Flexible.  Provide op-level、model-level APIs and pipelines for different needs.  
+- 3、Easy to use.A few lines of code will do the trick.
+- 4、Extra-large dimension and extra-long sequences.Hidden_units up to 16384 and sequence lengths up to 4096.  
+- 5、Adaptation to mainstream frameworks,include transformers and fairseq.  
+- 6、The performance of the bert model is accelerated by 1.2x to 7.x times, and the performance of the gpt model is accelerated by 2.x to 7.x times.
 
-EET has been applied to a variety of NetEase online services,such as NiShuiHan, NetEase's cloud music, TianYu, Lofter, etc. In the future, EET will work on urtra-large-scale model inference of trillion parameters.   
-
-* [Decoding mechanism](#decoding-mechanism)
+* [Supported Models](#supported-models)
 * [Quick Start](#quick-start)
   * [Environment](#environment)
   * [Installation](#installation)
     * [From Source](#from-source)
     * [From Docker](#from-docker)
   * [Run](#run)
-    * [operators APIs](#operators-apis)
+    * [operators API](#operators-api)
     * [Model API](#model-api)
     * [pipelines](#pipelines)
-* [Supported Models](#supported-models)
-* [Usage](#usage)
-* [APIs](#apis)
 * [Performance](#performance)
-* [TODO](#todo)
 * [Cite Us](#cite-us)
 * [Contact us](#contact-us)
 
-##  Decoding mechanism
 
-<div  align="left"> <img src="./doc/image/pre_decoding.svg" width = "700" height = "350" alt="bert"/></div>
+## Supported Models
 
+| Model | Since version | 
+|-------|-------------|
+| GPT2 | 0.0.1 beta |
+| Bert | 0.0.1 beta | 
+| Roberta | 1.0 | 
+| Albert | 1.0 |
+| Vit | 1.0 |
+| Clip | 1.0 |
+| Distilbert | 1.0 |
 
 ## Quick Start
 
@@ -78,23 +93,28 @@ the EET and its required environment are installed in docker.
 
 ### Run
 
-We offer two types of operation.
+We offer three types of operation.
 
-#### operators APIs
+#### operators API
 
 We provide all the operators required for Transformer models. You can combine different kernels to build different model structures.
+- operators API table
 
-| operators APIs | Remarks | 
-|-------|-------------|
-| masked_multi_head_attention | GPT2 self_attention |
-| cross_multi_head_attention | cross_attention | 
-| multi_head_attention | Bert self_attention | 
-| ffn | FeedForwardNetwork |
-| embedding | transformers & fairseq |
-| layernorm | nn.LayerNorm |
+    | operators API | Remarks | 
+    |-------|-------------|
+    | masked_multi_head_attention | GPT2 self_attention |
+    | cross_multi_head_attention | cross_attention | 
+    | multi_head_attention | Bert self_attention | 
+    | ffn | FeedForwardNetwork |
+    | embedding | transformers & fairseq |
+    | layernorm | nn.LayerNorm |
+
+- how to use
+
+    You can refer to Operators APIs listed above to build your own model structure, just by modifying the files under [python/eet](./python/eet).
 
 #### Model API
-EET provides python User-friendly APIs([python/eet](./python/eet)), integrated into Fairseq and Transformers with just a few lines of code. It should be noted that for gpt we only support padding on the left.
+EET provides python User-friendly API([python/eet](./python/eet)), integrated into Fairseq and Transformers with just a few lines of code. It should be noted that for gpt we only support padding on the left.
     
 <b>EET and fairseq class comparison table</b>
 | EET | fairseq| Remarks | 
@@ -136,22 +156,11 @@ In order to better fit transformers, we have expanded the support model api base
 | EETBertForTokenClassification | BertForTokenClassification | No |
 | EETBertForQuestionAnswering | BertForQuestionAnswering | No |
 
->1、How to inference 
+How to inference 
 
 <div  align="left"> <img src="./doc/image/use_bert.png" width = "850" height = "325" alt="useofbert"/></div>
 
->2、How to customize model  
-
-You can refer to Operators APIs listed below to build your own model structure, just by modifying the files under [python/eet](./python/eet).
-
->3、How to integrate EET into fairseq  and transformers 
-
-If you want to insert EET into fairseq or transformers, you can replace it with the class mapping table given below, and we provide a very rich model api that can be combined to achieve it by yourself.
-
->4、How to make a server  
-
-We choose  [service-streamer](https://github.com/ShannonAI/service-streamer) to make the model server, building the service based on your python project directly. 
-Please make sure the dynamic-batch is open if you want a higher throughput.
+Please refer to [example/python/models](example/python/models/).
 
 #### pipelines
 
@@ -187,67 +196,33 @@ Later on, as more and more models are supported by EET, more and more pipeline t
 [example/python/pipelines](./example/python/pipelines),In these sample task codes, we also provide model api examples to implement the same tasks.
 
 
-## Supported Models
-
-| Model | Since version | 
-|-------|-------------|
-| GPT2 | 0.0.1 beta |
-| Bert | 0.0.1 beta | 
-| Roberta | 1.0 | 
-| Albert | 1.0 |
-| Vit | 1.0 |
-| Clip | 1.0 |
-| Distilbert | 1.0 |
-
 ## Performance
 
-### GPT-3 memory usage and performance
-We measure the inference time and memory occupancy in different scenarios. 
-Note : Total time are measured with 50% of the context
-* A100 (batch_size=4, max_sequence_length=1024, context_length=512, precision=half)
-  | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
-  |-------------|-------|--------|--------------|-----------------------------|---------------------------|
-  | GPT-3 Small| 125M   | 12     | 768          | 2.69ms                         | 1.38s                  |
-  | GPT-3 Medium | 350M | 24     | 1024         | 5.58ms                         | 2.86s                  |  
-  | GPT-3 Large | 760M  | 24     | 1536         | 6.64ms                         | 3.41s                  |
-  | GPT-3 XL   | 1.3B   | 24     | 2048         | 7.3m                           | 3.76s                  |
-  | GPT-3 2.7B | 2.7B   | 32     | 2560         | 46.1ms                         | 23.6s                  |
-  | GPT-3 6.7B | 6.7B   | 32     | 4096         | 17.2ms                         | 8.85s                  |
-  | GPT-3 13B | 13B     | 40     | 5120         | 29.3ms                         | 15.12s                 |
-
-* A100 (batch_size=16, max_sequence_length=1024, context_length=512, precision=half)
-  | Model Name | Params | Layers | Hidden_units | inference time of per-token | total time of 1024 tokens |
-  |-------------|-------|--------|--------------|-----------------------------|---------------------------|
-  | GPT-3 Small| 125M   | 12     | 768          | 2.84ms                         | 1.46s                     |
-  | GPT-3 Medium | 350M | 24     | 1024         | 6ms                         | 3.11s                    |  
-  | GPT-3 Large | 760M  | 24     | 1536         | 7.39ms                         | 3.80s                    |
-  | GPT-3 XL   | 1.3B   | 24     | 2048         | 8.27m                         |  4.26s                   |
-  | GPT-3 2.7B | 2.7B   | 32     | 2560         | 116ms                        |  59.8s                      |
-  | GPT-3 6.7B | 6.7B     | 32     | 4096         |  23.18ms                | 12.25s                |
-  | GPT-3 13B | 13B     | 40     | 5120         | 43.42ms                 | 22.58s                |
-  
-
-### Inference performance
-
 Detailed performance data of GPT and Bert model inference can be viewed at [link](https://github.com/NetEase-FuXi/EET/blob/main/doc/benchmark.md)
+* gpt-A100
 
+<div  align="left"> <img src="./doc/image/a100_prompt.png" width = "700" height = "387" alt="a100_prompt"/></div>
 
-## TODO
-1. int8
-2. sparse
+* bert-2080ti
+<div  align="left"> <img src="./doc/image/bert_ft.png" width = "700" height = "386" alt="bert_ft"/></div>
 
 ## Cite Us
 
 If you use EET in your research, please cite the following paper.We also have a share on ZhiYuan LIVE, share link: https://event.baai.ac.cn/activities/325
 
 ```
-@article{eet2022,
-  title={Easy and Efficient Transformer : Scalable Inference Solution For large NLP model},
-  author={Gongzheng Li, Yadong Xi, Jingzhen Ding, Duan Wang, Bai Liu, Changjie Fan, Xiaoxi Mao, Zeng Zhao},
-  journal={	arXiv:2104.12470},
-  year={2022}
-}
+@misc{https://doi.org/10.48550/arxiv.2104.12470,
+  doi = {10.48550/ARXIV.2104.12470},
+  url = {https://arxiv.org/abs/2104.12470},
+  author = {Li, Gongzheng and Xi, Yadong and Ding, Jingzhen and Wang, Duan and Liu, Bai and Fan, Changjie and Mao, Xiaoxi and Zhao, Zeng},
+  keywords = {Computation and Language (cs.CL), FOS: Computer and information sciences, FOS: Computer and information sciences},
+  title = {Easy and Efficient Transformer : Scalable Inference Solution For large NLP model},
 ```
 
 ## Contact us
-You can post your problem with github issues.
+You can post your problem with github issues.And you can contact us by email.
+
+ligongzheng@corp.netease.com, dingjingzhen@corp.netease.com ,zhaosida@corp.netease.com
+
+And if you are interested in high performance computing, deep learning, you can join us, we welcome you. Just send your resume directly to the above email address.
+

@@ -25,6 +25,7 @@ def main():
         data_type = torch.float16
         ts_model = ts_model.half()
     
+    # 构造输入
     # url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     # image = Image.open("/root/3090_project/git/0406/EET/example/python/pipelines/images/cat.jpg")
     # inputs = processor(text=["a photo of a cat", "a photo of a dog"], images=image, return_tensors="pt", padding=True)
@@ -48,8 +49,11 @@ def main():
     time_ts = t2 - t1
 
     num_channels = pixel_values.shape[1]
+    # load modeleet 需要传入最大batch_size、数据类型以及num_channels，默认num_channels是3
     eet_model = EETCLIPModel.from_pretrained("openai/clip-vit-base-patch32", max_batch=batch_size, num_channels=num_channels, data_type=data_type)
 
+
+    # inference
     t3 = time.perf_counter()
     for i in range(loop):
         res_eet = eet_model(input_ids, pixel_values, attention_mask=None)
