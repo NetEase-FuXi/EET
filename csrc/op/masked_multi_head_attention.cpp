@@ -277,7 +277,7 @@ namespace eet{
             check_cuda_error(cublasGemmStridedBatchedEx(desc_.cublasHandle,
                 CUBLAS_OP_T, CUBLAS_OP_N,
                 cur_seq_len_, cur_seq_len_, size_per_head_,
-                alpha_,
+                atten_scaler_,
                 k_buf.data_ptr(), desc_.computeType_, size_per_head_, cur_seq_len_ * size_per_head_,
                 q_buf.data_ptr(), desc_.computeType_, size_per_head_, cur_seq_len_ * size_per_head_,
                 beta_,
