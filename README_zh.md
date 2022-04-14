@@ -167,6 +167,24 @@ EET提供了非常友好的model级api([python/eet](./python/eet))，适配fairs
 
 <div  align="left"> <img src="./doc/image/use_bert.png" width = "850" height = "325" alt="useofbert"/></div>
 
+你也可以直接使用这些model api实现自己的特定任务，下面以fill-mask任务为例：
+
+```python
+from eet import EETRobertaForMaskedLM
+from transformers import RobertaTokenizer
+input = ["My <mask> is Sarah and I live in London"]
+tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+eet_roberta_model = EETRobertaForMaskedLM.from_pretrained(model_path,max_batch = max_batch_size,data_type = data_type)
+# first step: tokenize
+model_inputs = tokenizer(input,return_tensors = 'pt')
+masked_index = torch.nonzero(model_inputs['input_ids'][0] == tokenizer.mask_token_id, as_tuple=False).squeeze(-1)
+# second step: predict
+prediction_scores = eet_roberta_model(model_inputs['input_ids'].cuda(),attention_mask = model_inputs['attention_mask'])
+# third step: argmax
+predicted_index = torch.argmax(prediction_scores.logits[0, masked_index]).item()
+predicted_token = tokenizer.convert_ids_to_tokens(predicted_index)
+```
+
 请参考 [example/python/models](example/python/models/).
 
 #### pipelines方式
