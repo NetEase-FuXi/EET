@@ -301,8 +301,11 @@ class EETTransformerDecoder(GenerationMixin_EET):
             position_ids.masked_fill_(attention_mask == 0, 1)
             if first_pass == False:
                 position_ids = position_ids[:, -1].unsqueeze(-1)
+            position_ids = position_ids.contiguous()
         else:
             position_ids = None
+        input_ids = input_ids.contiguous()
+        
         return {
             "input_ids": input_ids,
             "past_key_values": past,
