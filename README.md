@@ -27,7 +27,7 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
 - Out-of-the-box for Transformers and Fairseq. Save your pain of trivial configuration and make your model work within a few lines.
 ----
 
-* [Supported Models](#supported-models)
+* [Model Matirx](#model-matrix)
 * [Quick Start](#quick-start)
   * [Environment](#environment)
   * [Installation](#installation)
