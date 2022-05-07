@@ -34,19 +34,17 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
     * [From Source](#from-source)
     * [From Docker](#from-docker)
   * [Run](#run)
-    * [operators API](#operators-api)
-    * [Model API](#model-api)
-    * [pipelines](#pipelines)
+    * [operators APIs](#operators-apis)
+    * [Model APIs](#model-apis)
+    * [Application APIs](#application-apis)
 * [Performance](#performance)
 * [Cite Us](#cite-us)
 * [Contact us](#contact-us)
 
 
-## Supported Matrix
+## Model Matrix
 
-
-
- <div align="center"> <img src="./doc/image/model_matrix.png" width = "1900" height = "300" alt = "model matrix"></div>
+ <div align="center"> <img src="./doc/image/model_matrix.png" alt = "model matrix"></div>
 
 ## Quick Start
 
@@ -67,7 +65,7 @@ The above environment is the minimum configuration, and it is best to use a newe
 Recommend using docker images.
 
 #### From Source
-If you are installing from source, you will need install the necessary [environment](#environment).Then, proceed as follows: 
+If you are installing from source, you will need install the necessary [environment](#environment).Then proceed as follows: 
 
 ```bash
 $ git clone https://github.com/NetEase-FuXi/EET.git
@@ -110,7 +108,7 @@ Operators APIs are the intermediate representation of C++/CUDA and Python. We pr
     The definition of these OPs is in the file [EET/csrc/py11/eet2py.cpp](./csrc/py11/eet2py.cpp) and
     some using examples were show in the files under [python/eet](./python/eet), which tell us how to use those OPs to make up classic models.
 
-#### Model API
+#### Model APIs
 
 As an plugin, EET provides friendly model APIs([python/eet](./python/eet)) to integrated into Fairseq and Transformers. 
 
