@@ -44,8 +44,9 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
 
 ## Supported Matrix
 
+<div style='display: none'>
 <table>
-        <th bgcolor="#a9a9a9"><font color="#00008b">model type</font></th>
+        <th bgcolor="#a9a9a9" style="text-align: center"><font color="#00008b">model type</font></th>
         <th bgcolor="#a9a9a9"><font color="#00008b">Transformers</font></th>
         <th bgcolor="#a9a9a9"><font color="#00008b">Fairseq</font></th>
         <th bgcolor="#a9a9a9"><font color="#00008b">Quantization</font></th>
@@ -57,6 +58,9 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
     </tr>
     <tr>
        <td style="text-align: center"><font color="#1e90ff">Bert</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~5x</font></td><td style="text-align: center"><font color="#deb887">0.0.1 beta</font></td> 
+    </tr>
+ <tr>
+       <td style="text-align: center"><font color="#1e90ff">ALBert</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~5x</font></td><td style="text-align: center"><font color="#deb887">0.0.1 beta</font></td> 
     </tr>
     <tr>
        <td style="text-align: center"><font color="#1e90ff">Roberta</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~5x</font></td><td style="text-align: center"><font color="#deb887">0.0.1 beta</font></td> 
@@ -71,7 +75,9 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
        <td style="text-align: center"><font color="#1e90ff">Distillbert</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~2x</font></td><td style="text-align: center"><font color="#deb887">1.0</font></td> 
     </tr>
 </table>
- 
+</div>
+
+ <div align="center"> <img src="./doc/image/model_matrix.png" width = "1900" height = "300" alt = "model matrix"></div>
 
 ## Quick Start
 
@@ -277,5 +283,4 @@ You can post your problem with github issues.
 You can also contact us by email :
 
 ligongzheng@corp.netease.com, dingjingzhen@corp.netease.com ,zhaosida@corp.netease.com
-
 
