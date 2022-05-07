@@ -17,16 +17,14 @@
     </a>
 </p>
 
-EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin focus on Transformer-based models with large model sizes and long sequences.
+EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus on Transformer-based models to make mega-size model affordable.
 
 ## Features
 
-- 1、High performance.Design highly optimized CUDA kernels.  
-- 2、Flexible.Provide op-level、model-level APIs and pipelines for different needs.  
-- 3、Easy to use.A few lines of code will do the trick.
-- 4、embed_dim up to 16384 and sequence lengths up to 4096.  
-- 5、Adaptation to mainstream frameworks,include transformers and fairseq.  
-
+- Support Mega-size model with single GPU. EET could make an 11B model available online within 24G Ampere GPU.
+- Expertise in inference for multi-modal and NLP tasks (CLIP/GPT-3/Bert/Seq2seq etc.).
+- High performance. Make the transformer-based model faster and faster with the effect of CUDA kernel optimization and quantization/sparsity algorithm. 
+- Out-of-the-box for Transformers and Fairseq. Save your pain of trivial configuration and make your model work within a few lines.
 ----
 
 * [Supported Models](#supported-models)
@@ -44,17 +42,36 @@ EET(Easy and Efficient Transformer) is an efficient Pytorch inference plugin foc
 * [Contact us](#contact-us)
 
 
-## Supported Models
+## Supported Matrix
 
-| Model | Since version | 
-|-------|-------------|
-| GPT2 | 0.0.1 beta |
-| Bert | 0.0.1 beta | 
-| Roberta | 1.0 | 
-| Albert | 1.0 |
-| Vit | 1.0 |
-| Clip | 1.0 |
-| Distilbert | 1.0 |
+<table>
+        <th bgcolor="#a9a9a9"><font color="#00008b">model type</font></th>
+        <th bgcolor="#a9a9a9"><font color="#00008b">Transformers</font></th>
+        <th bgcolor="#a9a9a9"><font color="#00008b">Fairseq</font></th>
+        <th bgcolor="#a9a9a9"><font color="#00008b">Quantization</font></th>
+        <th bgcolor="#a9a9a9"><font color="#00008b">SpeedUp</font></th>
+        <th bgcolor="#a9a9a9"><font color="#00008b">Since version</font></th>
+    </tr>
+    <tr>
+        <td style="text-align: center"><font color="#1e90ff">GPT-3</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">&#x2705;</td><td style="text-align: center">&#x2705;</td><td style="text-align: center"><font color="#dc143c">2~8x</font></td><td style="text-align: center"><font color="#deb887">0.0.1 beta</font></td>
+    </tr>
+    <tr>
+       <td style="text-align: center"><font color="#1e90ff">Bert</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~5x</font></td><td style="text-align: center"><font color="#deb887">0.0.1 beta</font></td> 
+    </tr>
+    <tr>
+       <td style="text-align: center"><font color="#1e90ff">Roberta</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~5x</font></td><td style="text-align: center"><font color="#deb887">0.0.1 beta</font></td> 
+    </tr>
+     <tr>
+       <td style="text-align: center"><font color="#1e90ff">ViT</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~5x</font></td><td style="text-align: center"><font color="#deb887">1.0</font></td> 
+    </tr>
+    <tr>
+       <td style="text-align: center"><font color="#1e90ff">CLIP(Roberta+ViT)</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">14x</font></td><td style="text-align: center"><font color="#deb887">1.0</font></td> 
+    </tr>
+    <tr>
+       <td style="text-align: center"><font color="#1e90ff">Distillbert</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~2x</font></td><td style="text-align: center"><font color="#deb887">1.0</font></td> 
+    </tr>
+</table>
+ 
 
 ## Quick Start
 
@@ -72,7 +89,7 @@ The above environment is the minimum configuration, and it is best to use a newe
 
 ### Installation
 
-Recommend using docker images
+Recommend using docker images.
 
 #### From Source
 If you are installing from source, you will need install the necessary [environment](#environment).Then, proceed as follows: 
@@ -81,7 +98,7 @@ If you are installing from source, you will need install the necessary [environm
 $ git clone https://github.com/NetEase-FuXi/EET.git
 $ pip install .
 ```
-Recommend using nvcr.io/nvidia/pytorch:21.12-py3 and other series of images, you can also use the provided Dockerfile file
+Recommend using nvcr.io/nvidia/pytorch:21.12-py3 and other series of images, you can also use the provided Dockerfile file.
 
 #### From Docker
 
@@ -90,80 +107,93 @@ $ git clone https://github.com/NetEase-FuXi/EET.git
 $ docker build -t eet_docker:0.1 .
 $ nvidia-docker run -it --net=host -v /your/project/directory/:/root/workspace  eet_docker:0.1 bash
 ```
-the EET and its required environment are installed in docker.
+The EET and its required environment have been installed in docker.
 
 ### Run
 
-We offer three types of operation.
+We provide three types of APIs:
+- **Operators APIs**, such as embedding, masked-multi-head-attention, ffn etc. Enable you to define your custom models.
+- **Model APIs**, such as TransformerDecoder, BertEncoder etc. Enable you to integrate EET into your pytorch project.
+- **Application APIs**, such as Transformers Pipeline. Enable you to run your model in a few lines.
 
-#### operators API
+#### Operators APIs
 
-We provide all the operators required for Transformer models. You can combine different kernels to build different model structures.
-- operators API table
+Operators APIs are the intermediate representation of C++/CUDA and Python. We provide almost all the operators required for Transformer models. You can combine different OPs to build other model structures.
+- Operators API table
 
-    | operators API | Remarks | 
-    |-------|-------------|
-    | masked_multi_head_attention | GPT2 self_attention |
-    | cross_multi_head_attention | cross_attention | 
-    | multi_head_attention | Bert self_attention | 
-    | ffn | FeedForwardNetwork |
-    | embedding | transformers & fairseq |
-    | layernorm | nn.LayerNorm |
+    | operators API |                  Remarks                  | 
+    |:-----------------------------------------:|:-------------:|
+    | masked_multi_head_attention |             causal attention              |
+    | cross_multi_head_attention |              cross attention              | 
+    | multi_head_attention |              self attention               | 
+    | ffn |           feed forward network            |
+    | embedding | correspondence to Fairseq and Transfomers |
+    | layernorm |           same as nn.LayerNorm            |
 
-- how to use
+- How to use
 
-    You can refer to Operators APIs listed above to build your own model structure, just by modifying the files under [python/eet](./python/eet).
+    The definition of these OPs is in the file [EET/csrc/py11/eet2py.cpp](./csrc/py11/eet2py.cpp) and
+    some using examples were show in the files under [python/eet](./python/eet), which tell us how to use those OPs to make up classic models.
 
 #### Model API
-EET provides python User-friendly API([python/eet](./python/eet)), integrated into Fairseq and Transformers with just a few lines of code. It should be noted that for gpt we only support padding on the left.
+
+As an plugin, EET provides friendly model APIs([python/eet](./python/eet)) to integrated into Fairseq and Transformers. 
+
+All you need to do is find the corresponding class according to the tables below (usually with a prefix of 'EET') and initialize an object with the from_torch and from_pretrained function. 
+
+Note: We now only support **pre-padding** for GPT-3.
     
-<b>EET and fairseq class comparison table</b>
-| EET | fairseq| Remarks | 
-|-------|-------------|-------------| 
-| EETTransformerDecoder | TransformerDecoder |  |
-| EETTransformerDecoderLayer | TransformerDecoderLayer |  |
-| EETTransformerAttention | MultiheadAttention |  |
-| EETTransformerFeedforward | TransformerDecoderLayer | fusion of multiple small operators |
-| EETTransformerEmbedding | Embedding + PositionalEmbedding |  |
-| EETTransformerLayerNorm | nn.LayerNorm |  |
+<b>EET and fairseq class comparison table :</b>
 
-<b>EET and transformers class comparison table</b>
-| EET | transformers| Remarks | 
-|---------------|-----------------|----| 
-| EETBertModel | BertModel |  |
-| EETBertEncoder | BertEncoder |  |
-| EETBertEncoderLayer | BertLayer |  |
-| EETBertAttention | BertAttention |  |
-| EETBertFeedforward | BertIntermediate + BertOutput |  |
-| EETBertEmbedding | BertEmbeddings |  |
-| EETGPT2Model | GPT2Model |  |
-| EETGPT2Decoder | GPT2Model | transformers has no GPT2Decoder |
-| EETGPT2DecoderLayer | Block |  |
-| EETGPT2Attention | Attention | |
-| EETGPT2Feedforward | MLP |  |
-| EETGPT2Embedding | nn.Embedding |  |
-| EETLayerNorm | nn.LayerNorm |  |
+|             EET             |             fairseq              |               Remarks               | 
+|:---------------------------:|:--------------------------------:|:-----------------------------------:| 
+|    EETTransformerDecoder    |        TransformerDecoder        |                                     |
+| EETTransformerDecoderLayer  |     TransformerDecoderLayer      |                                     |
+|   EETTransformerAttention   |        MultiheadAttention        |                                     |
+|  EETTransformerFeedforward  |     TransformerDecoderLayer      | fusion of multiple small operators  |
+|   EETTransformerEmbedding   | Embedding + PositionalEmbedding  |                                     |
+|   EETTransformerLayerNorm   |           nn.LayerNorm           |                                     |
 
-In order to better fit transformers, we have expanded the support model api based on transformers,For example, for the bert model, we have added the following api to support different tasks:      
 
-| EET | transformers| Remarks | 
-|---------------|-----------------|----| 
-| EETBertForPreTraining | BertForPreTraining | No |
-| EETBertLMHeadModel | BertLMHeadModel | No |
-| EETBertForMaskedLM | BertForMaskedLM | No |
-| EETBertForNextSentencePrediction | BertForNextSentencePrediction | No |
-| EETBertForSequenceClassification | BertForSequenceClassification | No |
-| EETBertForMultipleChoice | BertForMultipleChoice | No |
-| EETBertForTokenClassification | BertForTokenClassification | No |
-| EETBertForQuestionAnswering | BertForQuestionAnswering | No |
+<b>EET and Transformers class comparison table : </b>
 
-How to inference 
+|         EET          |          transformers          |             Remarks             | 
+|:--------------------:|:------------------------------:|:-------------------------------:| 
+|     EETBertModel     |           BertModel            |                                 |
+|    EETBertEncoder    |          BertEncoder           |                                 |
+| EETBertEncoderLayer  |           BertLayer            |                                 |
+|   EETBertAttention   |         BertAttention          |                                 |
+|  EETBertFeedforward  | BertIntermediate + BertOutput  |                                 |
+|   EETBertEmbedding   |         BertEmbeddings         |                                 |
+|     EETGPT2Model     |           GPT2Model            |                                 |
+|    EETGPT2Decoder    |           GPT2Model            | Transformers has no GPT2Decoder |
+| EETGPT2DecoderLayer  |             Block              |                                 |
+|   EETGPT2Attention   |           Attention            |                                 |
+|  EETGPT2Feedforward  |              MLP               |                                 |
+|   EETGPT2Embedding   |          nn.Embedding          |                                 |
+|     EETLayerNorm     |          nn.LayerNorm          |                                 |
+
+  In addition to the basic model types above, we have extended some task-specific APIs to support different tasks. The table below is part of our task-specific model APIs :
+
+|                EET                |          transformers          | Remarks | 
+|:---------------------------------:|:------------------------------:|:----:| 
+|       EETBertForPreTraining       |       BertForPreTraining       |      |
+|        EETBertLMHeadModel         |        BertLMHeadModel         |      |
+|        EETBertForMaskedLM         |        BertForMaskedLM         |      |
+| EETBertForNextSentencePrediction  | BertForNextSentencePrediction  |      |
+| EETBertForSequenceClassification  | BertForSequenceClassification  |      |
+|     EETBertForMultipleChoice      |     BertForMultipleChoice      |      |
+|   EETBertForTokenClassification   |   BertForTokenClassification   |      |
+|    EETBertForQuestionAnswering    |    BertForQuestionAnswering    |      |
+
+- How to use
+
+This is a code snip to show how to use model APIs :
 
 <div  align="left"> <img src="./doc/image/use_bert.png" width = "850" height = "325" alt="useofbert"/></div>
 
-For specific tasks, you can also use the model api directly to implement
-
-example of fill-mask
+You can build your application with the model APIs directly with the task-specific APIs.
+There is an example of a fill-mask:
 
 ```python
 from eet import EETRobertaForMaskedLM
@@ -181,13 +211,13 @@ predicted_index = torch.argmax(prediction_scores.logits[0, masked_index]).item()
 predicted_token = tokenizer.convert_ids_to_tokens(predicted_index)
 ```
 
-Please refer to [example/python/models](example/python/models/).
+For more examples, please refer to [example/python/models](example/python/models/).
 
-#### pipelines
+#### Application APIs
 
-EET provides a ready-made pipelines approach to provide pipeline usage options for different tasks based on the different model structures supported by EET.
+EET provides a ready-made pipelines approach to simplify your application building for different tasks without using the model APIs above.
 
-The usage is very simple:
+Here is an example :
 
 ```python
 import torch
@@ -200,7 +230,7 @@ nlp = pipeline("fill-mask",model = model_path,data_type = data_type,max_batch_si
 out = nlp(input)
 ```
 
-support task：
+Now we support these tasks：
 
 | Task | Since version | 
 |-------|-------------|
@@ -212,24 +242,22 @@ support task：
 | image-classification | 1.0 |
 | zero_shot_image_classification | 1.0 |
 
-Later on, as more and more models are supported by EET, more and more pipeline tasks will be supported.
-
-[example/python/pipelines](./example/python/pipelines),In these sample task codes, we also provide model api examples to implement the same tasks.
+For more examples, please refer to [example/python/pipelines](./example/python/pipelines).
 
 
 ## Performance
 
-Detailed performance data of GPT and Bert model inference can be viewed at [link](https://github.com/NetEase-FuXi/EET/blob/main/doc/benchmark.md)
-* gpt-A100
+Detailed performance data of GPT-3 and Bert model inference can be viewed at [link](https://github.com/NetEase-FuXi/EET/blob/main/doc/benchmark.md).
+* GPT-3 on A100
 
 <div  align="left"> <img src="./doc/image/a100_prompt.png" width = "700" height = "387" alt="a100_prompt"/></div>
 
-* bert-2080ti
+* Bert on 2080ti
 <div  align="left"> <img src="./doc/image/bert_ft.png" width = "700" height = "386" alt="bert_ft"/></div>
 
 ## Cite Us
 
-If you use EET in your research, please cite the following paper.We also have a share on ZhiYuan LIVE, share link: https://event.baai.ac.cn/activities/325
+If you use EET in your research, please cite the following paper.
 
 ```
 @misc{https://doi.org/10.48550/arxiv.2104.12470,
@@ -240,10 +268,14 @@ If you use EET in your research, please cite the following paper.We also have a 
   title = {Easy and Efficient Transformer : Scalable Inference Solution For large NLP model},
 ```
 
+## Video
+We have a share on ZhiYuan LIVE, link: https://event.baai.ac.cn/activities/325.
+
 ## Contact us
-You can post your problem with github issues.And you can contact us by email.
+You can post your problem with github issues. 
+
+You can also contact us by email :
 
 ligongzheng@corp.netease.com, dingjingzhen@corp.netease.com ,zhaosida@corp.netease.com
 
-And if you are interested in high performance computing, deep learning, welcome to join us. Just send your resume to the above email address.
 
