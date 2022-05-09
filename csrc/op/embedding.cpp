@@ -12,7 +12,8 @@ namespace eet
                             const torch::Tensor &position_weights, 
                             const torch::Tensor &token_type_weights,
                             const torch::Tensor& layernorm_weights, 
-                            const torch::Tensor& layernorm_bias) : 
+                            const torch::Tensor& layernorm_bias,
+                            const std::string& emb_cache_name) : 
         step_(0),
         desc_(desc),
         embedding_weights_(embedding_weights.data_ptr()),
@@ -21,10 +22,11 @@ namespace eet
         layernorm_weights_(layernorm_weights.data_ptr()),
         layernorm_bias_(layernorm_bias.data_ptr()),
         cur_batch_size_(0),
-        cur_seq_len_(0)
+        cur_seq_len_(0),
+        emb_cache_name_(emb_cache_name)
         {
             // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
-            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_cache");
+            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, emb_cache_name_);
         }
 
         // embed tokens and positions
@@ -45,7 +47,7 @@ namespace eet
                 step_ = 0;
             }
             // printf("step:%d\n",step_);
-            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_cache");
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, emb_cache_name_);
 
             RUN_KERNEL(embedding_lookup_kernel, desc_.dtype_,embedding_weights_, input_ids,output.data_ptr(),
                         embedding_num, desc_.hidden_units_, desc_.stream,/*acc=*/false,/*ratio=*/1,no_scale_embedding);
@@ -76,7 +78,7 @@ namespace eet
         {
             cur_batch_size_ = input_tensor.sizes()[0];
             cur_seq_len_ = input_tensor.sizes()[1];
-            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_cache");
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, emb_cache_name_);
 
             if(if_layernorm)
             {

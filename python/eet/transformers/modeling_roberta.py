@@ -36,6 +36,7 @@ from EET import FeedForwardNetwork as eet_ffn
 from EET import MultiHeadAttention as eet_attention
 from EET import Embedding as eet_embedding
 
+
 class EETRobertaModel():
     def __init__(self, config, embedding, encoder, pooler=None):
         self.embedding = embedding

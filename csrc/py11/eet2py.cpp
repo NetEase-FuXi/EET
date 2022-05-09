@@ -46,11 +46,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         .def(py::init<eet::MetaDesc,
             const torch::Tensor&,const torch::Tensor&,
             const torch::Tensor&,const torch::Tensor&,
-            const torch::Tensor&,const torch::Tensor&>())
+            const torch::Tensor&,const torch::Tensor&,
+            const std::string&>())
         .def("forward", &eet::op::FeedForwardNetwork::forward, "FeedForwardNetwork forward");
 
     py::class_<eet::op::Embedding>(m, "Embedding")
-        .def(py::init<eet::MetaDesc, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&>())
+        .def(py::init<eet::MetaDesc, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const std::string&>())
         .def("forward_fairseq", &eet::op::Embedding::forward_fairseq, "Embedding forward_fairseq")
         .def("forward_transformers", &eet::op::Embedding::forward_transformers, "Embedding forward_transformers");
 

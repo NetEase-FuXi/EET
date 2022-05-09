@@ -31,6 +31,9 @@ namespace eet{
             layernorm_bias_(layernorm_bias.data_ptr())
         {
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+            if (q_bias_ == nullptr) {
+                std::cout << "q_bias is nullptr****" << std::endl;
+            }
 
             k_cache_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
             v_cache_ = torch::zeros_like(k_cache_);
@@ -367,9 +370,11 @@ namespace eet{
             }
             else
             {
-                // only add bias
-                RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_,
-                           m , n, desc_.stream);
+                if (output_bias_ != nullptr) {
+                    // only add bias
+                    RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_,
+                               m, n, desc_.stream);
+                }
             }
             #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();

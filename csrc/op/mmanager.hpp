@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 #define MAX_BUFFER_SIZE 100
-#define MAX_CACHE_SIZE 5 //cache_is dedicated to storing output, there are several modules, so the number is relatively small
+#define MAX_CACHE_SIZE 8 //cache_is dedicated to storing output, there are several modules, so the number is relatively small
 namespace eet{
     //buffer for workers
     class Buffer{

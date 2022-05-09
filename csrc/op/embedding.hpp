@@ -12,12 +12,13 @@ namespace eet
         class Embedding : public OpBase
         {
         public:
-            Embedding(MetaDesc desc, 
-                    const torch::Tensor& embedding_weights, 
-                    const torch::Tensor& position_weights, 
-                    const torch::Tensor& token_type_weights,                    
-                    const torch::Tensor& layernorm_weights, 
-                    const torch::Tensor& layernorm_bias);
+            Embedding(MetaDesc desc,
+                      const torch::Tensor &embedding_weights,
+                      const torch::Tensor &position_weights,
+                      const torch::Tensor &token_type_weights,
+                      const torch::Tensor &layernorm_weights,
+                      const torch::Tensor &layernorm_bias,
+                      const std::string &emb_cache_name = "emb_cache");
 
             torch::Tensor forward_transformers(const torch::Tensor& input_tensor,const torch::Tensor &position_ids,const torch::Tensor &token_type_ids, bool if_layernorm);
             torch::Tensor forward_fairseq(const torch::Tensor& input_tensor,const torch::Tensor &positions_mask,bool no_scale_embedding, int padding_idx,bool first_pass);
@@ -37,6 +38,7 @@ namespace eet
             void *layernorm_bias_;
             int cur_batch_size_;
             int cur_seq_len_;
+            std::string emb_cache_name_;
         };
     } // namespace op
 } // namespace eet

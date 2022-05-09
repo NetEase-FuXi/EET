@@ -6,6 +6,7 @@
 #include "core/attention_dispatch.cuh"
 #include "core/bert_softmax.cuh"
 #include "core/pre_process.cuh"
+#include <iostream>
 
 // for gpt
 namespace eet{
@@ -283,25 +284,27 @@ namespace eet{
                 if(!pre_layernorm)
                 {   
                     // add_bias + add_redusial + layer_norm
-                    RUN_KERNEL(add_bias_input_layernorm_kernel,desc_.dtype_,
-                                        res.data_ptr(),input.data_ptr(), 
-                                        output_bias_,layernorm_weights_,
-                                        layernorm_bias_,m , n, desc_.stream);
+                    RUN_KERNEL(add_bias_input_layernorm_kernel, desc_.dtype_,
+                               res.data_ptr(), input.data_ptr(),
+                               output_bias_, layernorm_weights_,
+                               layernorm_bias_, m, n, desc_.stream);
                 }
                 else
                 {
                     // add_bias + add_residual
-                    RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(),output_bias_,
-                           m , n, desc_.stream);
+                    RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(), output_bias_,
+                               m, n, desc_.stream);
                 }
             }
             else
             {
                 // only add bias
-                RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_,
-                           m , n, desc_.stream);
+                if (output_bias_ != nullptr)
+                {
+                    RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_, m, n, desc_.stream);
+                }
             }
-            #ifdef _DEBUG_MODE_
+#ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
             #endif

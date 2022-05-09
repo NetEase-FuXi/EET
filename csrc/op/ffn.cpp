@@ -14,14 +14,16 @@ namespace eet
                             const torch::Tensor& Output_weights,
                             const torch::Tensor& Output_bias,
                             const torch::Tensor& layernorm_weights,
-                            const torch::Tensor& layernorm_bias) : 
+                            const torch::Tensor& layernorm_bias,
+                            const std::string& ffn_cache_name) : 
         desc_(desc),
         intermediate_weights_(Intermediate_weights.data_ptr()),
         intermediate_bias_(Intermediate_bias.data_ptr()),
         output_weights_(Output_weights.data_ptr()),
         output_bias_(Output_bias.data_ptr()),
         layernorm_weights_(layernorm_weights.data_ptr()),
-        layernorm_bias_(layernorm_bias.data_ptr())
+        layernorm_bias_(layernorm_bias.data_ptr()),
+        ffn_cache_name_(ffn_cache_name)
         {   
             // Currently only supports gelu and relu
             if (desc_.activation_fn_ == "quick_gelu")
@@ -44,7 +46,7 @@ namespace eet
             }
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
             // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
-            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_ffn_cache");
+            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
 
             switch (desc_.dtype_)
             {
@@ -100,7 +102,7 @@ namespace eet
             }
 
             add_bias_act(ffn_inner);
-            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"emb_ffn_cache");
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
 
             fc2_mul(ffn_inner, output);
 
@@ -209,7 +211,9 @@ namespace eet
             else
             {
                 // only add bias
-                RUN_KERNEL(add_bias_kernel, desc_.dtype_, output.data_ptr(), output_bias_,m , n, desc_.stream);
+                if (output_bias_ != nullptr) {
+                    RUN_KERNEL(add_bias_kernel, desc_.dtype_, output.data_ptr(), output_bias_,m , n, desc_.stream);
+                }
             }
         }
     } // namespace op

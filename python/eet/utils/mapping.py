@@ -5,6 +5,8 @@ Mappings = {
     "AlbertModel": "transformers_albert_mapping",
     "GPTModel": "transformers_gpt_mapping",
     "CLIPModel": "transformers_clip_mapping",
+    "BartModel": "transformers_bart_mapping",
+    "T5Model": "transformers_t5_mapping",
 }
 
 transformers_albert_mapping = {
@@ -32,10 +34,6 @@ transformers_albert_mapping = {
 }
 
 transformers_bert_mapping = {
-    # "embeddings.word_embeddings": {"__name__":""},
-    # "embeddings.position_embeddings": {"__name__":""},
-    # "embeddings.token_type_embeddings": {"__name__":""},
-    # "embeddings.LayerNorm": {"__name__":""},
     "encoder": {"__name__":"encoder",
         "layer": {"__name__":"layer",
             "$": {"__name__":"$",
@@ -113,6 +111,99 @@ transformers_clip_mapping = {
             }
         },    
     },
+}
+
+transformers_bart_mapping = {
+    "encoder": {"__name__":"encoder",
+        "layernorm_embedding": {"__name__":"embeddings.layernorm"},
+        "embed_tokens": {"__name__":"embeddings.word_embeddings"},
+        "embed_positions": {"__name__":"embeddings.position_embeddings"},
+        "layers": {"__name__":"layer",
+            "$": {"__name__":"$",
+                "self_attn": {"__name__":"self_attn",
+                    "q_proj": {"__name__":"q_proj"},
+                    "k_proj": {"__name__":"k_proj"},
+                    "v_proj": {"__name__":"v_proj"},
+                    "out_proj": {"__name__":"out_proj"},
+                },
+                "self_attn_layer_norm": {"__name__":"self_attn.layernorm"},
+                "fc1": {"__name__":"ffn.intermediate"},
+                "fc2": {"__name__":"ffn.output"},
+                "final_layer_norm": {"__name__":"ffn.layernorm"},       
+            }
+        }
+    },
+
+    "decoder": {"__name__":"decoder",
+        "layernorm_embedding": {"__name__":"embeddings.layernorm"},
+        "embed_tokens": {"__name__":"embeddings.word_embeddings"},
+        "embed_positions": {"__name__":"embeddings.position_embeddings"},
+        "layers": {"__name__":"layer",
+            "$": {"__name__":"$",
+                "self_attn": {"__name__":"self_attn",
+                    "q_proj": {"__name__":"q_proj"},
+                    "k_proj": {"__name__":"k_proj"},
+                    "v_proj": {"__name__":"v_proj"},
+                    "out_proj": {"__name__":"out_proj"},
+                },
+                "encoder_attn": {"__name__":"encoder_attn",
+                    "q_proj": {"__name__":"q_proj"},
+                    "k_proj": {"__name__":"k_proj"},
+                    "v_proj": {"__name__":"v_proj"},
+                    "out_proj": {"__name__":"out_proj"},
+                },
+                "self_attn_layer_norm": {"__name__":"self_attn.layernorm"},
+                "encoder_attn_layer_norm": {"__name__":"encoder_attn.layernorm"},
+                "fc1": {"__name__":"ffn.intermediate"},
+                "fc2": {"__name__":"ffn.output"},
+                "final_layer_norm": {"__name__":"ffn.layernorm"},            
+            }
+        }
+    },    
+}
+
+transformers_t5_mapping = {
+    "shared": {"__name__":"shared"},
+    "encoder": {"__name__":"encoder",
+        "block": {"__name__":"layer",
+            "$": {"__name__":"$",
+                "layer.0.SelfAttention": {"__name__":"self_attn",
+                    "q": {"__name__":"q_proj"},
+                    "k": {"__name__":"k_proj"},
+                    "v": {"__name__":"v_proj"},
+                    "o": {"__name__":"out_proj"},
+                },
+                "layer.0.layer_norm": {"__name__":"self_attn.layernorm"},
+                "layer.1.DenseReluDense.wi": {"__name__":"ffn.intermediate"},
+                "layer.1.DenseReluDense.wo": {"__name__":"ffn.output"},
+                "layer.1.layer_norm": {"__name__":"ffn.layernorm"},       
+            }
+        }
+    },
+
+    "decoder": {"__name__":"decoder",
+        "block": {"__name__":"layer",
+            "$": {"__name__":"$",
+                "layer.0.SelfAttention": {"__name__":"self_attn",
+                    "q": {"__name__":"q_proj"},
+                    "k": {"__name__":"k_proj"},
+                    "v": {"__name__":"v_proj"},
+                    "o": {"__name__":"out_proj"},
+                },
+                "layer.1.EncDecAttention": {"__name__":"encoder_attn",
+                    "q": {"__name__":"q_proj"},
+                    "k": {"__name__":"k_proj"},
+                    "v": {"__name__":"v_proj"},
+                    "o": {"__name__":"out_proj"},
+                },
+                "layer.0.layer_norm": {"__name__":"self_attn.layernorm"},
+                "layer.1.layer_norm": {"__name__":"encoder_attn.layernorm"},
+                "layer.2.DenseReluDense.wi": {"__name__":"ffn.intermediate"},
+                "layer.2.DenseReluDense.wo": {"__name__":"ffn.output"},
+                "layer.2.layer_norm": {"__name__":"ffn.layernorm"},            
+            }
+        }
+    },    
 }
 
 def convert_name(org_key, model_name, verbose=False):

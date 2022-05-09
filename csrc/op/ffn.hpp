@@ -16,7 +16,8 @@ namespace eet{
                             const torch::Tensor& Output_weights,
                             const torch::Tensor& Output_bias,
                             const torch::Tensor& layernorm_weights,
-                            const torch::Tensor& layernorm_bias);
+                            const torch::Tensor& layernorm_bias,
+                            const std::string &ffn_cache_name = "out_cache");
 
             torch::Tensor forward(torch::Tensor& input, 
                                     bool pre_layernorm,
@@ -54,6 +55,7 @@ namespace eet{
             void* output_bias_;
             void* layernorm_weights_;
             void* layernorm_bias_;
+            std::string ffn_cache_name_;
         };
     }
 }
