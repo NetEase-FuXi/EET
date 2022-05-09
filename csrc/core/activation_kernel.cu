@@ -16,7 +16,10 @@ void add_bias_gelu(T* out, const T* bias, int m, int n)
   int bias_idx = blockIdx.y * blockDim.x + threadIdx.x;
 
   if (idx < m * n){
-    T in = out[idx] + bias[bias_idx];
+    T in = out[idx];
+    if (bias != nullptr) {
+      in += bias[bias_idx];
+    }
     T cdf = A + A * tanh(in * (C * in * in + B));
     out[idx] = in * cdf;
   }
@@ -36,8 +39,11 @@ void add_bias_gelu<half>(half* out, const half* bias, int m, int n)
   int idx = n * blockIdx.x + blockIdx.y * blockDim.x + threadIdx.x;
   int bias_idx = blockIdx.y * blockDim.x + threadIdx.x;
 
-  if (idx < m * n ){
-    half2 in = out_ptr[idx] + bias_ptr[bias_idx];
+  if (idx < m * n){
+    half2 in = out_ptr[idx];
+    if (bias_ptr != nullptr) {
+      in += bias_ptr[bias_idx];
+    }
     half2 tmp = in * (C2 * in * in + B2);
     float x = tanh(__half2float(tmp.x));
     float y = tanh(__half2float(tmp.y));
@@ -54,7 +60,10 @@ void add_bias_quick_gelu(T* out, const T* bias, int m, int n)
   int bias_idx = blockIdx.y * blockDim.x + threadIdx.x;
 
   if (idx < m * n) {
-    T in = out[idx] + bias[bias_idx];
+    T in = out[idx];
+    if (bias != nullptr) {
+      in += bias[bias_idx];
+    }
     T cdf = 1.0f / (1.0f + __expf(-(D * in)));
     out[idx] = in * cdf;
   }
@@ -74,7 +83,10 @@ void add_bias_quick_gelu(half* out, const half* bias, int m, int n)
   int bias_idx = blockIdx.y * blockDim.x + threadIdx.x;
 
   if (idx < m * n) {
-    half2 in = out_ptr[idx] + bias_ptr[bias_idx];
+    half2 in = out_ptr[idx];
+    if (bias_ptr != nullptr) {
+      in += bias_ptr[bias_idx];
+    }
     half2 tmp = __hmul2(D2, in);
     float x = __expf(__half2float(-tmp.x));
     float y = __expf(__half2float(-tmp.y));
@@ -91,7 +103,10 @@ void add_bias_relu(T* out, const T* bias, int m, int n)
     int bias_idx = blockIdx.y * blockDim.x + threadIdx.x;
 
     if (idx < m * n){
-        T val = out[idx] + bias[bias_idx];
+        T val = out[idx];
+        if (bias != nullptr) {
+          val += bias[bias_idx];
+        }
         out[idx] = (T)(val > 0.0f ? val : 0.0f);
     }
 }
@@ -106,7 +121,10 @@ void add_bias_relu(half* out, const half* bias, int m, int n)
     half2 *out_ptr = (half2 *)out;
     half2 *bias_ptr = (half2 *)bias;
     if (bias_idx < n && idx < m * n){
-        half2 val = __hadd2(out_ptr[idx], bias_ptr[bias_idx]);
+        half2 val = out_ptr[idx];
+        if (bias_ptr != nullptr) {
+          val = __hadd2(val, bias_ptr[bias_idx]);
+        }
         val.x = val.x > (half)0.0f ? val.x : (half)0.0f;
         val.y = val.y > (half)0.0f ? val.y : (half)0.0f;
         out_ptr[idx] = val;

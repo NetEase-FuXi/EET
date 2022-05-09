@@ -19,6 +19,14 @@ void add_bias_input(T* output, const T* input, const T* bias, const int m, const
   output[id] = output[id] + input[id] + __ldg(&bias[bias_id]);
 }
 
+template <typename T>
+__global__ 
+void add_input(T* output, const T* input, const int m, const int n)
+{
+  int id = n * blockIdx.x + blockIdx.y * blockDim.x + threadIdx.x;
+  output[id] = output[id] + input[id];
+}
+
 template<typename T>
 void add_bias_kernel(void* output, const void* bias, const int m, const int n, const cudaStream_t stream)
 {
@@ -57,7 +65,11 @@ void add_bias_input_kernel(void* output, const void* input, const void* bias,con
   }
   dim3 grid(m, fold_coeff);
   dim3 block(n / fold_coeff);
-  add_bias_input<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)bias, m, n);
+  if (bias != nullptr) {
+    add_bias_input<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)bias, m, n);
+  } else {
+    add_input<<<grid, block, 0, stream>>>((T*)output, (T*)input, m, n);
+  }
 }
 
 

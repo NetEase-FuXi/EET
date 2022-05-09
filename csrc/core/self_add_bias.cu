@@ -197,6 +197,50 @@ void fused_add_QKV_bias(T* QKV, const T* bias_Q, const T* bias_K, const T* bias_
     }
 }
 
+template <typename T>
+__global__ void fused_QKV_transpose(T *QKV, T *q_buf_, T *k_buf_, T *v_buf_, const int batch_size, const int seq_len, const int head_num, const int size_per_head)
+{
+    T *data_ptr;
+    T *buf_ptr;
+
+    int m = batch_size * seq_len;
+    int n = head_num * size_per_head;
+    int batch_id = (blockIdx.x % m) / seq_len;
+    int word_start_id = (blockIdx.x) % seq_len;
+
+    int qkv_id = blockIdx.x / m;
+    int row_offset = (blockIdx.x % m) * n;
+    int bid_offset = 2 * n * seq_len;
+    if (qkv_id == 0)
+    {
+        data_ptr = QKV + row_offset + batch_id * bid_offset + 2 * word_start_id * n;
+        buf_ptr = q_buf_;
+    }
+    else if(qkv_id == 1)
+    {
+        data_ptr = QKV + row_offset + batch_id * bid_offset + 2 * word_start_id * n + n;
+        buf_ptr = k_buf_;
+    }
+    else
+    {
+        data_ptr = QKV + row_offset + batch_id * bid_offset + 2 * word_start_id * n + 2 * n;
+        buf_ptr = v_buf_;
+    }
+
+    int head_id = (threadIdx.x + blockIdx.y * blockDim.x) / size_per_head;
+    int id_in_head = threadIdx.x % size_per_head;
+
+    for(int i = word_start_id; i < word_start_id + 1; ++i)
+    {
+        T tmp = data_ptr[threadIdx.x + blockDim.x * blockIdx.y];
+        int target_id = batch_id * (seq_len * head_num * size_per_head) + head_id * seq_len * size_per_head +
+                        i * size_per_head + id_in_head;
+
+        buf_ptr[target_id] = tmp;
+        data_ptr += n;
+    }
+}
+
 __global__
 void fused_add_QKV_bias( half* QKV, const half* bias_Q, const half* bias_K, const half* bias_V,
                   half* q_buf_, half* k_buf_, half* v_buf_,
@@ -230,6 +274,30 @@ void fused_add_QKV_bias( half* QKV, const half* bias_Q, const half* bias_K, cons
     dst_ptr[target_id] = __hadd2(src_ptr[v_tid],  __ldg(&bias_ptr[bias_id]));
 }
 
+__global__ 
+void fused_QKV_transpose(half *QKV, half *q_buf_, half *k_buf_, half *v_buf_, const int batch_size, const int seq_len, const int head_num, const int size_per_head)
+{
+    int tid = blockIdx.x * (size_per_head * head_num) + threadIdx.x + blockDim.x * blockIdx.y;
+    int batch_id = tid / (head_num * seq_len * size_per_head);
+    int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
+    int head_id = (tid % (head_num * size_per_head)) / size_per_head;
+    int id = tid % size_per_head;
+    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+
+    int q_tid = tid + 2 * batch_id * size_per_head * head_num * seq_len + 2 * seq_id * size_per_head * head_num;
+    int k_tid = tid + 2 * batch_id * size_per_head * head_num * seq_len + size_per_head * head_num + 2 * seq_id * size_per_head * head_num;
+    int v_tid = tid + 2 * batch_id * size_per_head * head_num * seq_len + 2 * size_per_head * head_num + 2 * seq_id * size_per_head * head_num;
+
+    half2 *src_ptr = (half2 *)QKV;
+    half2 *dst_ptr = (half2 *)q_buf_;
+    dst_ptr[target_id] = __ldg(&src_ptr[q_tid]);
+
+    dst_ptr = (half2 *)k_buf_;
+    dst_ptr[target_id] = __ldg(&src_ptr[k_tid]);
+
+    dst_ptr = (half2 *)v_buf_;
+    dst_ptr[target_id] = __ldg(&src_ptr[v_tid]);
+}
 
 template<typename T>
 void fused_add_QKV_bias_kernel( void* QKV, const void* bias_Q,  const void* bias_K,  const void* bias_V, void* q_buf_, void* k_buf_, void* v_buf_,
@@ -237,6 +305,7 @@ void fused_add_QKV_bias_kernel( void* QKV, const void* bias_Q,  const void* bias
         int m = batch_size * seq_len;
         int k = head_num * size_per_head;
         int qkv_types = 3;
+        bool is_add_bias = bias_Q != nullptr;
 
         //assert(m * qkv_types <= 65536 && "batch_size * seq_len must <= 65536");
         int fold_coeff = 1;
@@ -258,9 +327,13 @@ void fused_add_QKV_bias_kernel( void* QKV, const void* bias_Q,  const void* bias
             grid.x = m * qkv_types;
             grid.y = fold_coeff;
             block.x = k / fold_coeff;
-            fused_add_QKV_bias<<<grid, block, 0, stream>>>((float*)QKV, (float*)bias_Q, (float*)bias_K, (float*)bias_V, (float*)q_buf_, (float*)k_buf_, 
-                (float*)v_buf_, batch_size, seq_len, head_num, size_per_head);
-        }else{
+            if (is_add_bias) {
+                fused_add_QKV_bias<<<grid, block, 0, stream>>>((float *)QKV, (float *)bias_Q, (float *)bias_K, (float *)bias_V, (float *)q_buf_, (float *)k_buf_,
+                                                               (float *)v_buf_, batch_size, seq_len, head_num, size_per_head);
+            } else {
+                fused_QKV_transpose<<<grid, block, 0, stream>>>((float *)QKV, (float *)q_buf_, (float *)k_buf_, (float *)v_buf_, batch_size, seq_len, head_num, size_per_head);
+            }
+        } else {
             if (k <= 2048){
                 fold_coeff = 2;
             }else if( k <= 4096){
@@ -275,8 +348,12 @@ void fused_add_QKV_bias_kernel( void* QKV, const void* bias_Q,  const void* bias
             grid.x = m;
             grid.y = fold_coeff;
             block.x = k / (2 * fold_coeff);
-            fused_add_QKV_bias<<<grid, block, 0, stream>>>((half*)QKV, (half*)bias_Q, (half*)bias_K, (half*)bias_V, (half*)q_buf_, (half*)k_buf_, 
-                (half*)v_buf_, batch_size, seq_len, head_num, size_per_head / 2);
+            if (is_add_bias) {
+                fused_add_QKV_bias<<<grid, block, 0, stream>>>((half *)QKV, (half *)bias_Q, (half *)bias_K, (half *)bias_V, (half *)q_buf_, (half *)k_buf_,
+                                                               (half *)v_buf_, batch_size, seq_len, head_num, size_per_head / 2);
+            } else {
+                fused_QKV_transpose<<<grid, block, 0, stream>>>((half *)QKV, (half *)q_buf_, (half *)k_buf_, (half *)v_buf_, batch_size, seq_len, head_num, size_per_head / 2);
+            }
     }
 
 }
