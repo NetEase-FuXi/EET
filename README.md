@@ -93,15 +93,14 @@ We provide three types of APIs:
 
 Operators APIs are the intermediate representation of C++/CUDA and Python. We provide almost all the operators required for Transformer models. You can combine different OPs to build other model structures.
 - Operators API table
-
-    | operators API |                  Remarks                  | 
-    |:-----------------------------------------:|:-------------:|
-    | masked_multi_head_attention |             causal attention              |
-    | cross_multi_head_attention |              cross attention              | 
-    | multi_head_attention |              self attention               | 
-    | ffn |           feed forward network            |
-    | embedding | correspondence to Fairseq and Transfomers |
-    | layernorm |           same as nn.LayerNorm            |
+    |          operators          |       python API       |                  Remarks                  |
+    | :-------------------------: | :--------------------: | :---------------------------------------: |
+    |    multi_head_attention     |    EETSelfAttention    |              self attention               |
+    | masked_multi_head_attention | EETSelfMaskedAttention |             causal attention              |
+    | cross_multi_head_attention  |   EETCrossAttention    |              cross attention              |
+    |             ffn             |     EETFeedforward     |           feed forward network            |
+    |          embedding          |    EETBertEmbedding    | correspondence to Fairseq and Transfomers |
+    |          layernorm          |      EETLayerNorm      |           same as nn.LayerNorm            |
 
 - How to use
 
@@ -133,10 +132,6 @@ Note: We now only support **pre-padding** for GPT-3.
 |         EET          |          transformers          |             Remarks             | 
 |:--------------------:|:------------------------------:|:-------------------------------:| 
 |     EETBertModel     |           BertModel            |                                 |
-|    EETBertEncoder    |          BertEncoder           |                                 |
-| EETBertEncoderLayer  |           BertLayer            |                                 |
-|   EETBertAttention   |         BertAttention          |                                 |
-|  EETBertFeedforward  | BertIntermediate + BertOutput  |                                 |
 |   EETBertEmbedding   |         BertEmbeddings         |                                 |
 |     EETGPT2Model     |           GPT2Model            |                                 |
 |    EETGPT2Decoder    |           GPT2Model            | Transformers has no GPT2Decoder |

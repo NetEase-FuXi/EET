@@ -49,3 +49,6 @@ Note : Total time are measured with 50% of the context
 ## We show BERT inference performance here.
 
 <div  align="left"> <img src="./image/bert_ft.png" width = "700" height = "386" alt="bert_ft"/></div>
+
+* GTX 1080ti compare with transformers:
+<div  align="left"> <img src="./image/1080ti_bert.png" width = "700" height = "386" alt="bert_ft"/></div>
