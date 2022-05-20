@@ -56,6 +56,41 @@ __global__ void softmax_kernel_bert(T *qk_buf, const int64_t *padding_len, const
 }
 
 template <typename T>
+__global__ void softmax_kernel_bert_opt(T *qk_buf, const int64_t *padding_len, const int head_num, const int seq_len)
+{
+  int batch_id = blockIdx.x / (seq_len * head_num);
+  int qk_offset = blockIdx.x * seq_len;
+  
+  int right_padding_len = 0;
+  if (padding_len != nullptr)
+  {
+    right_padding_len = padding_len[batch_id];
+  }
+
+  __shared__ float s_sum, s_max;
+
+  float qk = threadIdx.x < seq_len ? (float)qk_buf[threadIdx.x + qk_offset] : 0.0f;
+
+  float tmp = threadIdx.x < seq_len - right_padding_len ? (float)(qk) : -1e20f;
+  float max_val = blockReduceMax<float>(tmp);
+  if (threadIdx.x == 0)
+    s_max = max_val;
+  __syncthreads();
+
+  float qk_tmp = threadIdx.x < seq_len ? __expf((float)(tmp - s_max)) : 0.0f;
+  float sum_val = blockReduceSum<float>(qk_tmp);
+
+  if (threadIdx.x == 0)
+  {
+    s_sum = sum_val + 1e-6f;
+  }
+  __syncthreads();
+
+  if (threadIdx.x < seq_len)
+    qk_buf[threadIdx.x + qk_offset] = (T)(qk_tmp / s_sum);
+}
+
+template <typename T>
 __global__ void softmax_kernel_v2(T *qk_buf, const int64_t *padding_len, const int head_num, const int seq_len)
 {
   int batch_id = blockIdx.x / head_num;
@@ -124,11 +159,17 @@ void bert_softmax_kernel(void *qk_buf, const int64_t *padding_len, const int &ba
   else
     block.x = 1024;
 
-  grid.x = batch_size * head_num;
   if (need_sequence_mask) {
+    grid.x = batch_size * head_num;
     softmax_kernel_v2<T><<<grid, block, 0, stream>>>((T*)qk_buf, padding_len, head_num, seq_len);
   } else {
-    softmax_kernel_bert<T><<<grid, block, 0, stream>>>((T *)qk_buf, padding_len, head_num, seq_len);
+    if (batch_size * head_num <= 120) {
+      grid.x = batch_size * head_num * seq_len;
+      softmax_kernel_bert_opt<T><<<grid, block, 0, stream>>>((T *)qk_buf, padding_len, head_num, seq_len);
+    } else {
+      grid.x = batch_size * head_num;
+      softmax_kernel_bert<T><<<grid, block, 0, stream>>>((T *)qk_buf, padding_len, head_num, seq_len);
+    }
   }
 }
 
