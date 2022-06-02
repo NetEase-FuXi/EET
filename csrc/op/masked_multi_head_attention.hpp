@@ -34,7 +34,7 @@ namespace eet{
                                     const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_redusial,
-                                    const torch::Tensor &relative_attention_bias);
+                                    const torch::Tensor &relative_attention_bias = torch::empty(0));
 
             // incremental decode
             torch::Tensor forward_inc(torch::Tensor& input, 
@@ -42,7 +42,7 @@ namespace eet{
                                     const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
                                     bool add_redusial,
-                                    const torch::Tensor &relative_attention_bias);
+                                    const torch::Tensor &relative_attention_bias = torch::empty(0));
 
             ~MaskedMultiHeadAttention(){
                 // check_cuda_error(cudaFree(&fused_qkv_ptr_));
