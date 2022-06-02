@@ -25,7 +25,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
                                 const torch::Tensor&,const torch::Tensor&,
                                 const torch::Tensor&,const torch::Tensor&,
                                 const torch::Tensor&,const torch::Tensor&>())
-        .def("forward", &eet::op::MaskedMultiHeadAttention::forward, "MaskedMultiHeadAttention forward", py::arg("input"), py::arg("pre_padding_len"), py::arg("reorder_state"), py::arg("pre_layernorm"), py::arg("add_redusial"), py::arg("first_pass"), py::arg("relative_attention_bias")=torch::empty(0));
+        .def("forward", &eet::op::MaskedMultiHeadAttention::forward, "MaskedMultiHeadAttention forward", py::arg("input"), py::arg("pre_padding_len"), py::arg("reorder_state"), py::arg("pre_layernorm"), py::arg("add_residual"), py::arg("first_pass"), py::arg("relative_attention_bias")=torch::empty(0));
     
     py::class_<eet::op::CrossMultiHeadAttention>(m, "CrossMultiHeadAttention")
         .def(py::init<eet::MetaDesc,const torch::Tensor& ,const torch::Tensor&,
@@ -40,7 +40,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
                             const torch::Tensor&,const torch::Tensor&,
                             const torch::Tensor&,const torch::Tensor&,
                             const torch::Tensor&,const torch::Tensor&>())
-    .def("forward", &eet::op::MultiHeadAttention::forward, "MultiHeadAttention forward", py::arg("input"), py::arg("padding_mask"), py::arg("pre_layernorm"), py::arg("add_redusial"), py::arg("need_sequence_mask")=false, py::arg("relative_attention_bias")=torch::empty(0));
+    .def("forward", &eet::op::MultiHeadAttention::forward, "MultiHeadAttention forward", py::arg("input"), py::arg("padding_mask"), py::arg("pre_layernorm"), py::arg("add_residual"), py::arg("need_sequence_mask")=false, py::arg("relative_attention_bias")=torch::empty(0));
 
     py::class_<eet::op::FeedForwardNetwork>(m, "FeedForwardNetwork")
         .def(py::init<eet::MetaDesc,

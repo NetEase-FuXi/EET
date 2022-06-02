@@ -78,14 +78,14 @@ namespace eet::co{
                               torch::Tensor& input,
                               const torch::Tensor& pre_padding_length,
                               bool pre_layernorm,
-                              bool add_redusial,
+                              bool add_residual,
                               bool first_pass){
             if(!strategy_gened_){
                 std::cerr << "warning : Please invoke gen_strategy of AllocationStrategy before use the forward function" << std::endl;
             }
             check_tensor_size();
             send_async(cur_layer);
-            torch::Tensor res = attn->forward(input, pre_padding_length, pre_layernorm, add_redusial, first_pass);
+            torch::Tensor res = attn->forward(input, pre_padding_length, pre_layernorm, add_residual, first_pass);
             return res;
         }
 
@@ -93,11 +93,11 @@ namespace eet::co{
                               const int& cur_layer,
                               torch::Tensor& input,
                               bool pre_layernorm,
-                              bool add_redusial){
+                              bool add_residual){
             if(!strategy_gened_){
                 std::cerr << "warning : Please invoke gen_strategy of AllocationStrategy before use the forward function" << std::endl;
             }
-            torch::Tensor res = ffn->forward(input, pre_layernorm, add_redusial);
+            torch::Tensor res = ffn->forward(input, pre_layernorm, add_residual);
             return res;
         }
 

@@ -25,7 +25,7 @@ namespace eet{
                                     const torch::Tensor& pre_padding_len,
                                     const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
-                                    bool add_redusial,
+                                    bool add_residual,
                                     bool first_pass,
                                     const torch::Tensor &relative_attention_bias);
 
@@ -33,7 +33,7 @@ namespace eet{
             torch::Tensor forward_full(torch::Tensor& input, 
                                     const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
-                                    bool add_redusial,
+                                    bool add_residual,
                                     const torch::Tensor &relative_attention_bias = torch::empty(0));
 
             // incremental decode
@@ -41,7 +41,7 @@ namespace eet{
                                     const torch::Tensor& pre_padding_len,
                                     const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
-                                    bool add_redusial,
+                                    bool add_residual,
                                     const torch::Tensor &relative_attention_bias = torch::empty(0));
 
             ~MaskedMultiHeadAttention(){
@@ -75,7 +75,7 @@ namespace eet{
                         Buffer& res,
                         torch::Tensor& input, 
                         bool pre_layernorm,
-                        bool add_redusial);
+                        bool add_residual);
 
             void masked_attention(const Buffer& qkv_buffer,
                                 Buffer& context_buf,

@@ -11,7 +11,7 @@ import numpy as np
 from torch import Tensor
 from typing import Any, Dict, List, Optional, Tuple
 from transformers import RobertaModel
-from eet.transformers.encoder import *
+from eet.transformers.encoder_decoder import *
 from eet.transformers.modeling_bert import EETBertEmbedding
 from eet.utils.mapping import convert_name
 from transformers import  (

@@ -23,7 +23,7 @@ namespace eet{
             torch::Tensor forward(torch::Tensor &input,
                                   const torch::Tensor &padding_mask,
                                   bool pre_layernorm,
-                                  bool add_redusial,
+                                  bool add_residual,
                                   bool need_sequence_mask,
                                   const torch::Tensor &relative_attention_bias);
 
@@ -57,7 +57,7 @@ namespace eet{
                         Buffer& res,
                         torch::Tensor& input, 
                         bool pre_layernorm,
-                        bool add_redusial);
+                        bool add_residual);
 
             MetaDesc desc_;
             // torch::Tensor output_;

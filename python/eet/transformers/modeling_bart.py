@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from typing import Any, Dict, List, Optional, Tuple
 from transformers import BartModel
-from eet.transformers.encoder import *
+from eet.transformers.encoder_decoder import *
 from eet.utils.mapping import convert_name
 
 from EET import MetaDesc as meta_desc

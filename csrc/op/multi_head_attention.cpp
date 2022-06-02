@@ -84,7 +84,7 @@ namespace eet{
                                     torch::Tensor& input,
                                     const torch::Tensor& pre_padding_len,
                                     bool pre_layernorm,
-                                    bool add_redusial,
+                                    bool add_residual,
                                     bool need_sequence_mask,
                                     const torch::Tensor &relative_attention_bias){
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MultiHeadAttention's dtype");
@@ -157,7 +157,7 @@ namespace eet{
             //project
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn");
 
-            project(dst,output,input ,pre_layernorm,add_redusial);
+            project(dst,output,input ,pre_layernorm,add_residual);
             dst.free();
             // output_ = output_[input.sizes()];
 
@@ -281,7 +281,7 @@ namespace eet{
             #endif
         }
 
-        void MultiHeadAttention::project(const Buffer& dst, Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_redusial){
+        void MultiHeadAttention::project(const Buffer& dst, Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_residual){
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = desc_.head_num_ * size_per_head_;
             int n = k;
@@ -295,11 +295,11 @@ namespace eet{
                                             res.data_ptr(), desc_.computeType_, n,
                                             desc_.computeType_,
                                             qkv_weights_algo_));
-            if(add_redusial)
+            if(add_residual)
             {   
                 if(!pre_layernorm)
                 {   
-                    // add_bias + add_redusial + layer_norm
+                    // add_bias + add_residual + layer_norm
                     RUN_KERNEL(add_bias_input_layernorm_kernel, desc_.dtype_,
                                res.data_ptr(), input.data_ptr(),
                                output_bias_, layernorm_weights_,

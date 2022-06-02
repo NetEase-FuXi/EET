@@ -26,7 +26,7 @@ namespace eet{
                                     torch::Tensor& memory,
                                     const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
-                                    bool add_redusial,
+                                    bool add_residual,
                                     const torch::Tensor& length_per_sample,
                                     bool first_pass);
 
@@ -36,13 +36,13 @@ namespace eet{
                                     torch::Tensor& memory,
                                     const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
-                                    bool add_redusial);
+                                    bool add_residual);
             
             // incremental decode
             torch::Tensor forward_inc(torch::Tensor& input,
                                     torch::Tensor& memory,
                                     bool pre_layernorm,
-                                    bool add_redusial,
+                                    bool add_residual,
                                     const torch::Tensor& length_per_sample);
 
             ~CrossMultiHeadAttention(){
@@ -79,7 +79,7 @@ namespace eet{
                     Buffer& res,
                     torch::Tensor& input, 
                     bool pre_layernorm,
-                    bool add_redusial);
+                    bool add_residual);
 
             void attention_dispatch(const Buffer& q_buffer,
                                 const torch::Tensor& length_per_sample,

@@ -83,16 +83,16 @@ namespace eet{
                                     const torch::Tensor& pre_padding_len,
                                     const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
-                                    bool add_redusial,
+                                    bool add_residual,
                                     bool first_pass,
                                     const torch::Tensor &relative_attention_bias){
             if(first_pass)
             {
-                return forward_full(input, pre_padding_len, pre_layernorm, add_redusial, relative_attention_bias);
+                return forward_full(input, pre_padding_len, pre_layernorm, add_residual, relative_attention_bias);
             }
             else
             {
-                return forward_inc(input, pre_padding_len, reorder_state, pre_layernorm, add_redusial, relative_attention_bias);
+                return forward_inc(input, pre_padding_len, reorder_state, pre_layernorm, add_residual, relative_attention_bias);
             }
         }
 
@@ -100,7 +100,7 @@ namespace eet{
         torch::Tensor MaskedMultiHeadAttention::forward_full(torch::Tensor &input,
                                                              const torch::Tensor &pre_padding_length,
                                                              bool pre_layernorm,
-                                                             bool add_redusial,
+                                                             bool add_residual,
                                                              const torch::Tensor &relative_attention_bias)
         {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttention's dtype");
@@ -180,7 +180,7 @@ namespace eet{
             // project
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn_cache");
 
-            project(dst,output,input ,pre_layernorm,add_redusial);
+            project(dst,output,input ,pre_layernorm,add_residual);
 
             dst.free();
             step_ = cur_seq_len_;
@@ -194,7 +194,7 @@ namespace eet{
                                                             const torch::Tensor &pre_padding_len,
                                                             const torch::Tensor &reorder_state,
                                                             bool pre_layernorm,
-                                                            bool add_redusial,
+                                                            bool add_residual,
                                                             const torch::Tensor &relative_attention_bias)
         {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttention's dtype");
@@ -231,7 +231,7 @@ namespace eet{
             masked_attention(qkv_buffer,context_buf,padding_len,reorder_index);
 			qkv_buffer.free();
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn_cache");
-            project(context_buf, output, input,pre_layernorm,add_redusial);
+            project(context_buf, output, input,pre_layernorm,add_residual);
             context_buf.free();
             auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
             return std::move(res);
@@ -354,7 +354,7 @@ namespace eet{
             #endif
         }
 
-        void MaskedMultiHeadAttention::project(const Buffer& dst, Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_redusial){
+        void MaskedMultiHeadAttention::project(const Buffer& dst, Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_residual){
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = desc_.head_num_ * size_per_head_;
             int n = k;
@@ -368,11 +368,11 @@ namespace eet{
                                             res.data_ptr(), desc_.computeType_, n,
                                             desc_.computeType_,
                                             qkv_weights_algo_));
-            if(add_redusial)
+            if(add_residual)
             {   
                 if(!pre_layernorm)
                 {   
-                    // add_bias + add_redusial + layer_norm
+                    // add_bias + add_residual + layer_norm
                     RUN_KERNEL(add_bias_input_layernorm_kernel,desc_.dtype_,
                                         res.data_ptr(),input.data_ptr(), 
                                         output_bias_,layernorm_weights_,
@@ -380,7 +380,7 @@ namespace eet{
                 }
                 else
                 {
-                    // add_bias + add_redusial
+                    // add_bias + add_residual
                     RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(),output_bias_,
                            m , n, desc_.stream);
                 }

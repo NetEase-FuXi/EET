@@ -97,8 +97,8 @@ class EETTransformerFeedforward():
     def __call__(self,
                 input_id,
                 pre_layernorm = True,
-                add_redusial = True):
-        return self.ffn.forward(input_id,pre_layernorm,add_redusial)
+                add_residual = True):
+        return self.ffn.forward(input_id,pre_layernorm,add_residual)
         
     
     @staticmethod
@@ -157,18 +157,18 @@ class EETTransformerAttention():
                 encoder_out = None,
                 encoder_padding_mask = None,
                 pre_layernorm = True,
-                add_redusial = True,
+                add_residual = True,
                 first_pass = False):
 
         if self.is_encoder:
-            return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial)
+            return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_residual)
         else:
             if encoder_out is None:
                 # self_atten
-                return self.attention.forward(input_id,pre_padding_len,reorder_state,pre_layernorm,add_redusial,first_pass)
+                return self.attention.forward(input_id,pre_padding_len,reorder_state,pre_layernorm,add_residual,first_pass)
             else:
                 # cross_atten
-                return self.attention.forward(input_id,encoder_out,pre_padding_len,pre_layernorm,add_redusial,encoder_padding_mask,first_pass)
+                return self.attention.forward(input_id,encoder_out,pre_padding_len,pre_layernorm,add_residual,encoder_padding_mask,first_pass)
 
     @staticmethod
     def from_torch(meta_des,model_dict, no_encoder_attn=True,data_type = torch.float32,is_encoder = False):
@@ -185,7 +185,7 @@ class EETTransformerDecoderLayer():
         self.pre_layernorm = args.decoder_normalize_before
 
 
-        self.add_redusial = True
+        self.add_residual = True
 
     def __call__(self,
                 x,
@@ -200,29 +200,29 @@ class EETTransformerDecoderLayer():
                         pre_padding_len = pre_padding_len,
                         reorder_state = reorder_state,
                         pre_layernorm = self.pre_layernorm,
-                        add_redusial = self.add_redusial,
+                        add_residual = self.add_residual,
                         first_pass = first_pass)
             cross_attn_out = self.cross_attention(input_id = self_attn_out,
                         pre_padding_len = pre_padding_len,
                         encoder_out = encoder_out,
                         encoder_padding_mask = encoder_padding_mask,
                         pre_layernorm = self.pre_layernorm,
-                        add_redusial = self.add_redusial,
+                        add_residual = self.add_residual,
                         first_pass = first_pass)
             out = self.feedforward(cross_attn_out,
                         pre_layernorm = self.pre_layernorm,
-                        add_redusial = self.add_redusial)
+                        add_residual = self.add_residual)
         else:
             ''' self_attn -> ffn'''
             self_attn_out = self.attetion(input_id = x,
                         pre_padding_len = pre_padding_len,
                         reorder_state = reorder_state,
                         pre_layernorm = self.pre_layernorm,
-                        add_redusial = self.add_redusial,
+                        add_residual = self.add_residual,
                         first_pass = first_pass)
             out = self.feedforward(self_attn_out,
                         pre_layernorm = self.pre_layernorm,
-                        add_redusial = self.add_redusial)
+                        add_residual = self.add_residual)
         return out
 
     @staticmethod

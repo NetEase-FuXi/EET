@@ -21,7 +21,7 @@ namespace eet{
 
             torch::Tensor forward(torch::Tensor& input, 
                                     bool pre_layernorm,
-                                    bool add_redusial);
+                                    bool add_residual);
 
             ~FeedForwardNetwork(){
             };
@@ -35,7 +35,7 @@ namespace eet{
 
             void fc2_mul(const Buffer& ffn_inner, Buffer& output);
 
-            void add_input_bias_layernorm(Buffer& output,torch::Tensor& input_tensor,bool pre_layernorm, bool add_redusial);
+            void add_input_bias_layernorm(Buffer& output,torch::Tensor& input_tensor,bool pre_layernorm, bool add_residual);
 
             MetaDesc desc_;
             // torch::Tensor output_;

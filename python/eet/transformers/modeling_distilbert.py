@@ -28,7 +28,7 @@ from transformers.modeling_outputs import (
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
-from eet.transformers.encoder import *
+from eet.transformers.encoder_decoder import *
 
 from EET import MetaDesc as meta_desc
 from EET import FeedForwardNetwork as eet_ffn
@@ -75,8 +75,8 @@ class EETDistilBertFeedforward():
     def __call__(self,
                 input_id,
                 pre_layernorm = True,
-                add_redusial = True):
-        return self.ffn.forward(input_id,pre_layernorm,add_redusial)
+                add_residual = True):
+        return self.ffn.forward(input_id,pre_layernorm,add_residual)
     
     @staticmethod
     def from_torch(config,model_dict,layer_id,data_type = torch.float32):
@@ -103,9 +103,9 @@ class EETDistilBertAttention():
                 input_id,
                 pre_padding_len,
                 pre_layernorm = False,
-                add_redusial = True,
+                add_residual = True,
                 need_sequence_mask=False,):
-        return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_redusial,need_sequence_mask)
+        return self.attention.forward(input_id,pre_padding_len,pre_layernorm,add_residual,need_sequence_mask)
 
     @staticmethod
     def from_torch(config,model_dict,layer_id,data_type = torch.float32):
@@ -127,10 +127,10 @@ class EETDistilBertEncoderLayer():
         self_attn_out = self.attetion(input_id = x,
                     pre_padding_len = pre_padding_len,
                     pre_layernorm = normalize_before,
-                    add_redusial = True)
+                    add_residual = True)
         out = self.feedforward(self_attn_out,
                     pre_layernorm = normalize_before,
-                    add_redusial = True)
+                    add_residual = True)
 
         return out
 

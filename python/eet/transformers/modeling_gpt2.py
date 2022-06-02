@@ -113,8 +113,8 @@ class EETGPT2Feedforward():
     def __call__(self,
                 input_id,
                 pre_layernorm = True,
-                add_redusial = True):
-        return self.ffn.forward(input_id,pre_layernorm,add_redusial)
+                add_residual = True):
+        return self.ffn.forward(input_id,pre_layernorm,add_residual)
     
     @staticmethod
     def from_torch(meta_des,model_dict,layer_id,data_type = torch.float32):
@@ -156,13 +156,13 @@ class EETGPT2Attention():
                 encoder_out = None,
                 encoder_padding_mask  = None,
                 pre_layernorm = False,
-                add_redusial = True,
+                add_residual = True,
                 first_pass = False):
                 
         if self.cross_attn:
-            return self.attention.forward(input_id,encoder_out,pre_padding_len,pre_layernorm,add_redusial,encoder_padding_mask,first_pass)
+            return self.attention.forward(input_id,encoder_out,pre_padding_len,pre_layernorm,add_residual,encoder_padding_mask,first_pass)
         else:
-            return self.attention.forward(input_id,pre_padding_len,reorder_state,pre_layernorm,add_redusial, first_pass)
+            return self.attention.forward(input_id,pre_padding_len,reorder_state,pre_layernorm,add_residual, first_pass)
 
     @staticmethod
     def from_torch(meta_des,model_dict,layer_id,data_type = torch.float32):
@@ -175,7 +175,7 @@ class EETGPT2DecoderLayer():
         self.cross_attention = cross_attention
         self.feedforward = feedforward
         self.normalize_before = True
-        self.add_redusial = True
+        self.add_residual = True
         self.add_cross_attention = config.add_cross_attention
     def __call__(self,
                 x,
@@ -193,7 +193,7 @@ class EETGPT2DecoderLayer():
                         pre_padding_len = pre_padding_len,
                         reorder_state = reorder_state,
                         pre_layernorm = self.normalize_before,
-                        add_redusial = self.add_redusial,
+                        add_residual = self.add_residual,
                         first_pass = first_pass)
 
             cross_attn_out = self.cross_attention(input_id = self_attn_out,
@@ -201,23 +201,23 @@ class EETGPT2DecoderLayer():
                         encoder_out = encoder_out,
                         encoder_padding_mask = encoder_attention_mask,
                         pre_layernorm = self.normalize_before,
-                        add_redusial = self.add_redusial,
+                        add_residual = self.add_residual,
                         first_pass = first_pass)
 
             out = self.feedforward(cross_attn_out,
                         pre_layernorm = self.normalize_before,
-                        add_redusial = self.add_redusial)
+                        add_residual = self.add_residual)
         else:
             self_attn_out = self.attetion(input_id = x,
                         pre_padding_len = pre_padding_len,
                         reorder_state = reorder_state,
                         pre_layernorm = self.normalize_before,
-                        add_redusial = self.add_redusial,
+                        add_residual = self.add_residual,
                         first_pass = first_pass)
 
             out = self.feedforward(self_attn_out,
                         pre_layernorm = self.normalize_before,
-                        add_redusial = self.add_redusial)          
+                        add_residual = self.add_residual)          
 
         return out
 

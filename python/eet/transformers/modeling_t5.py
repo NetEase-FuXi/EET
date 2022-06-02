@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from typing import Any, Dict, List, Optional, Tuple
 from transformers import T5Model
-from eet.transformers.encoder import *
+from eet.transformers.encoder_decoder import *
 from eet.utils.mapping import convert_name
 
 from EET import MetaDesc as meta_desc
@@ -127,7 +127,7 @@ class EETT5Decoder():
                 head_mask=None,
                 reorder_state=reorder_state,
                 normalize_before=normalize_before,
-                add_redusial=True,
+                add_residual=True,
             )
 
         return hidden_states

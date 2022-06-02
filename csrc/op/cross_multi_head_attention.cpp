@@ -68,16 +68,16 @@ namespace eet{
                                     torch::Tensor& memory,
                                     const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
-                                    bool add_redusial,
+                                    bool add_residual,
                                     const torch::Tensor& length_per_sample,
                                     bool first_pass){
             if(first_pass)
             {
-                return forward_full(input,memory,pre_padding_length,pre_layernorm,add_redusial);
+                return forward_full(input,memory,pre_padding_length,pre_layernorm,add_residual);
             }
             else
             {
-                return forward_inc(input,memory,pre_layernorm,add_redusial,length_per_sample);
+                return forward_inc(input,memory,pre_layernorm,add_residual,length_per_sample);
             }
         }
 
@@ -86,7 +86,7 @@ namespace eet{
                             torch::Tensor& memory,
                             const torch::Tensor& pre_padding_length,
                             bool pre_layernorm,
-                            bool add_redusial){
+                            bool add_residual){
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as CrossMultiHeadAttention's dtype");
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
@@ -163,7 +163,7 @@ namespace eet{
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"cross_attn");
 
             //project
-            project(dst,output,input ,pre_layernorm,add_redusial);
+            project(dst,output,input ,pre_layernorm,add_residual);
             // project(dst, output_);
             dst.free();
             step_ = cur_seq_len_;
@@ -176,7 +176,7 @@ namespace eet{
         torch::Tensor CrossMultiHeadAttention::forward_inc(torch::Tensor &input,
                                                            torch::Tensor &memory,
                                                            bool pre_layernorm,
-                                                           bool add_redusial,
+                                                           bool add_residual,
                                                            const torch::Tensor &length_per_sample) {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as CrossMultiHeadAttention's dtype");
             step_ += 1;
@@ -222,7 +222,7 @@ namespace eet{
             v_buffer.free();
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"cross_attn");
 
-            project(context_buf, output, input,pre_layernorm,add_redusial);
+            project(context_buf, output, input,pre_layernorm,add_residual);
 
             // project(context_buf, output_);
             context_buf.free();
@@ -387,7 +387,7 @@ namespace eet{
 #endif
         }
 
-        void CrossMultiHeadAttention::project(const Buffer& dst,Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_redusial){
+        void CrossMultiHeadAttention::project(const Buffer& dst,Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_residual){
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = desc_.head_num_ * size_per_head_;
             int n = k;
@@ -401,11 +401,11 @@ namespace eet{
                                             res.data_ptr(), desc_.computeType_, n,
                                             desc_.computeType_,
                                             qkv_weights_algo_));
-            if(add_redusial)
+            if(add_residual)
             {   
                 if(!pre_layernorm)
                 {   
-                    // add_bias + add_redusial + layer_norm
+                    // add_bias + add_residual + layer_norm
                     RUN_KERNEL(add_bias_input_layernorm_kernel,desc_.dtype_,
                                         res.data_ptr(),input.data_ptr(), 
                                         output_bias_,layernorm_weights_,
@@ -413,7 +413,7 @@ namespace eet{
                 }
                 else
                 {
-                    // add_bias + add_redusial
+                    // add_bias + add_residual
                     RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(),output_bias_,
                            m , n, desc_.stream);
                 }

@@ -74,7 +74,7 @@ namespace eet
 
         torch::Tensor FeedForwardNetwork::forward(torch::Tensor &input,
                                                     bool pre_layernorm,
-                                                    bool add_redusial)
+                                                    bool add_residual)
         {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as FeedForwardNetwork's dtype");
             cur_batch_size_ = input.sizes()[0];
@@ -108,7 +108,7 @@ namespace eet
 
             ffn_inner.free();
 
-            add_input_bias_layernorm(output,input,pre_layernorm, add_redusial);
+            add_input_bias_layernorm(output,input,pre_layernorm, add_residual);
 
             auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
             return std::move(res);
@@ -191,17 +191,17 @@ namespace eet
 #endif
         }
 
-        void FeedForwardNetwork::add_input_bias_layernorm(Buffer& output,torch::Tensor& input,bool pre_layernorm, bool add_redusial)
+        void FeedForwardNetwork::add_input_bias_layernorm(Buffer& output,torch::Tensor& input,bool pre_layernorm, bool add_residual)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_ ;
             int k = 4 * n;
 
-            if(add_redusial)
+            if(add_residual)
             {   
                 if(!pre_layernorm)
                 {   
-                    // add_bias + add_redusial + layer_norm
+                    // add_bias + add_residual + layer_norm
                     RUN_KERNEL(add_bias_input_layernorm_kernel,desc_.dtype_,
                                         output.data_ptr(),input.data_ptr(), 
                                         output_bias_,layernorm_weights_,
@@ -209,7 +209,7 @@ namespace eet
                 }
                 else
                 {
-                    // add_bias + add_redusial
+                    // add_bias + add_residual
                     RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, output.data_ptr(), input.data_ptr(),output_bias_, m , n, desc_.stream);
                 }
             }
