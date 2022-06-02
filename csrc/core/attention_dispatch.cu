@@ -11,6 +11,19 @@ const int WARP_SIZE = 32;
 const bool ATTENION_OPT = true;
 const int ATTENTION_BLOCK_SIZE = 256;
 
+template <int HALF_ELEMENTS_PER_WARP_LOAD>
+using Copy_half_t =
+    typename std::conditional<HALF_ELEMENTS_PER_WARP_LOAD == 32, half,
+        typename std::conditional<HALF_ELEMENTS_PER_WARP_LOAD == 64, int,
+            typename std::conditional<HALF_ELEMENTS_PER_WARP_LOAD == 128, int2, int4
+            >::type
+        >::type
+    >::type;
+
+template <typename T, int ELEMENTS_PER_WARP_LOAD>
+using Copy_t = Copy_half_t<sizeof(T) / sizeof(half) * ELEMENTS_PER_WARP_LOAD>;
+
+
 // attention_dispatch code modified from Nvidia's DeepLearningExamples
 // https://github.com/NVIDIA/DeepLearningExamples/blob/master/FasterTransformer/v3.1/fastertransformer/cuda/open_decoder.cu#L194-L824
 
@@ -328,19 +341,17 @@ void cross_attention_kernel_opt(
   const int* length_per_sample, T* __restrict context_buf, 
   int batch_size, int head_num, const int step, const int seq_len, const float scalar)
 {  
-  // typedef Copy_t<T, size_per_head> copy_t;
+  typedef Copy_t<T, size_per_head> copy_t;
   const int elems_per_thread = size_per_head / WARP_SIZE;
+  union Access_t
+  {
+    copy_t v;
+    T x[elems_per_thread]; // supported size 1,2,4
+  };
   typedef struct Float_n_t
   {
     float x[elems_per_thread]; // supported size 1,2,4
   } float_n_t;
-
-  union Access_t
-  {
-    float_n_t v;
-    T x[elems_per_thread]; // supported size 1,2,4
-  };
-
 
   __shared__ float_n_t sq[block_sz];
   __shared__ float logits[1024];
@@ -360,7 +371,6 @@ void cross_attention_kernel_opt(
   const int head_id = blockIdx.x % head_num;
 
   int length = __ldg(&length_per_sample[bid]);
-
   const int lane_id = tid % WARP_SIZE;
 
   int qkv_id = bid * head_num * size_per_head + head_id * size_per_head;
@@ -380,8 +390,8 @@ void cross_attention_kernel_opt(
   Access_t bias_r, key_val_r, query_buf_r;
 
   // each warp will have its own copy of sq
-  query_buf_r.v = *((float_n_t *)query_buf + lane_id);
-  bias_r.v = *((float_n_t *)Q_bias + lane_id);
+  query_buf_r.v = *((copy_t *)query_buf + lane_id);
+  bias_r.v = *((copy_t *)Q_bias + lane_id);
   float qb_r[elems_per_thread];
   for (int i = 0; i < elems_per_thread; ++i)
   {
@@ -391,10 +401,10 @@ void cross_attention_kernel_opt(
   //offset for each step
   int offset =  head_num * size_per_head;
 
-  bias_r.v = *((float_n_t *) K_bias + lane_id);
+  bias_r.v = *((copy_t *) K_bias + lane_id);
   for(int ite = warp_id; ite < length; ite += warp_num)
   {
-    key_val_r.v = *((float_n_t *)&key_cache[ite * offset] + lane_id);
+    key_val_r.v = *((copy_t *)&key_cache[ite * offset] + lane_id);
 
     //For the first step, we should add bias to key memory cache.
     //The KV memory cache only need to be updated at the first step.
@@ -404,7 +414,7 @@ void cross_attention_kernel_opt(
       {
         key_val_r.x[i] = (float)key_val_r.x[i] + (float)bias_r.x[i];
       }
-      *((float_n_t *)&key_cache[ite * offset] + lane_id) = key_val_r.v;
+      *((copy_t *)&key_cache[ite * offset] + lane_id) = key_val_r.v;
     }
     float val = 0.f;
     for (int i = 0; i < elems_per_thread; i++)
@@ -450,10 +460,10 @@ void cross_attention_kernel_opt(
 
   // This optimization introduces discrepancy because of different order in FP32 summation
   float sum_r[elems_per_thread] = {0.f};
-  bias_r.v = *((float_n_t *) V_bias + lane_id);
+  bias_r.v = *((copy_t *) V_bias + lane_id);
   for(int ite = warp_id; ite < length; ite += warp_num)
   {
-    key_val_r.v = *((float_n_t *)&value_cache[ite * offset] + lane_id);
+    key_val_r.v = *((copy_t *)&value_cache[ite * offset] + lane_id);
 
     //For the first step, we should add bias to key memory cache.
     if(step == 1)
@@ -462,7 +472,7 @@ void cross_attention_kernel_opt(
       {
         key_val_r.x[i] = (float)key_val_r.x[i] + (float)bias_r.x[i];
       }
-      *((float_n_t *)&value_cache[ite * offset] + lane_id) = key_val_r.v;
+      *((copy_t *)&value_cache[ite * offset] + lane_id) = key_val_r.v;
     }
     for (int i = 0; i < elems_per_thread; ++i)
     {
@@ -493,9 +503,10 @@ void cross_attention_kernel_opt(
   }
   if (threadIdx.x  < WARP_SIZE)
   {
-    *((float_n_t *)context_buf + lane_id) = key_val_r.v;
+    *((copy_t *)context_buf + lane_id) = key_val_r.v;
   }
 }
+
 
 template<typename T>
 __global__
@@ -593,8 +604,9 @@ void cross_attention_kernel(
 template <typename T>
 void cross_attention_dispatch(void* query_buf, const void* Q_bias, 
   void* key_cache, const void* K_bias, void* value_cache, const void* V_bias, const int* length,
-  void* context_buf, int& batch_size, int& head_num, int& size_per_head, int& step, int seq_len, cudaStream_t stream)
+  void* context_buf, int& batch_size, int& head_num, int& size_per_head, int& step, int &seq_len, cudaStream_t stream)
   {
+    // printf("test cross attn fix********\n");
     const int block_sz = ATTENTION_BLOCK_SIZE;
     float scalar = 1.f / sqrtf(size_per_head * 1.0f);
 
@@ -765,11 +777,11 @@ template void masked_attention_dispatch<half>(void* key_buf, void* value_buf,
 
 template void cross_attention_dispatch<float>(void *query_buf, const void *Q_bias,
                                               void *key_cache, const void *K_bias, void *value_cache, const void *V_bias, const int *length,
-                                              void *context_buf, int &batch_size, int &head_num, int &size_per_head, int &step, int seq_len, cudaStream_t stream);
+                                              void *context_buf, int &batch_size, int &head_num, int &size_per_head, int &step, int &seq_len, cudaStream_t stream);
 
 template void cross_attention_dispatch<half>(void *query_buf, const void *Q_bias,
                                               void *key_cache, const void *K_bias, void *value_cache, const void *V_bias, const int *length,
-                                              void *context_buf, int &batch_size, int &head_num, int &size_per_head, int &step, int seq_len, cudaStream_t stream);
+                                              void *context_buf, int &batch_size, int &head_num, int &size_per_head, int &step, int &seq_len, cudaStream_t stream);
 
 
 

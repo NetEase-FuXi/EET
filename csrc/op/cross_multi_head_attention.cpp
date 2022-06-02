@@ -5,7 +5,7 @@
 #include "core/cross_add_bias.cuh"
 #include "core/attention_dispatch.cuh"
 #include "core/gpt2_cross_softmax.cuh"
-// #include <iostream>
+#include <iostream>
 namespace eet{
     namespace op{
         CrossMultiHeadAttention::CrossMultiHeadAttention(MetaDesc desc,

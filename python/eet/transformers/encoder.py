@@ -181,6 +181,7 @@ class EETCrossAttention():
         add_redusial=True,
         first_pass=False
     ):
+        # print('eet encoder out shape: ', encoder_out.shape)
         return self.attetion.forward(input_id, encoder_out, pre_padding_len, pre_layernorm, add_redusial, encoder_padding_mask, first_pass)
 
     @staticmethod
@@ -344,6 +345,8 @@ class EETDecoderLayer():
                 add_redusial=add_redusial,
                 first_pass=first_pass
             )
+            # print('eet self attn out: ', self_attn_out)
+            # print('eet encoder_out: ', encoder_out)
             cross_attn_out = self.cross_attention(
                 input_id=self_attn_out,
                 pre_padding_len=pre_padding_len,
@@ -353,7 +356,7 @@ class EETDecoderLayer():
                 add_redusial=add_redusial,
                 first_pass=first_pass
             )
-
+            # print('eet cross attn out: ', cross_attn_out)
             out = self.feedforward(
                 cross_attn_out,
                 pre_layernorm=normalize_before,

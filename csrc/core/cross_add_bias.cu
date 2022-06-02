@@ -252,6 +252,95 @@ void KV_transpose_opt<half>(half* K, half* V, half* k_buf_, half* v_buf_, const 
     dst_ptr[target_id] = src_ptr[tid];
 }
 
+
+template<typename T>
+__global__
+void add_QKV_bias_opt_cross(T* input, const T* bias_buf, T* output,
+                  const int batch_size, const int seq_len, const int head_num, const int size_per_head, const int word_per_block)
+{
+
+    T* data_ptr;
+    T* buf_ptr;
+    const T* bias_ptr;
+
+    int m = batch_size * seq_len;
+    int n = head_num * size_per_head;
+
+    int qkv_id = blockIdx.x * word_per_block /  m ;
+    int row_offset = (blockIdx.x * word_per_block % m)  * n;
+
+    // if(qkv_id == 0)
+    // {
+    data_ptr = input + row_offset;
+    buf_ptr = output;
+    bias_ptr = bias_buf;
+    // }
+    // else if(qkv_id == 1)
+    // {
+    //     data_ptr = K + row_offset;
+    //     buf_ptr = k_buf_;
+    //     bias_ptr = bias_K;
+    // }
+    // else
+    // {
+    //     data_ptr = V + row_offset;
+    //     buf_ptr = v_buf_;
+    //     bias_ptr = bias_V;
+    // }
+
+    int batch_id = (blockIdx.x * word_per_block % m) / seq_len;
+    int head_id = (threadIdx.x + blockIdx.y * blockDim.x) / size_per_head;
+    int id_in_head = threadIdx.x % size_per_head;
+    int word_start_id = (blockIdx.x * word_per_block) % seq_len;
+
+    T bias = __ldg(&bias_ptr[threadIdx.x + blockDim.x * blockIdx.y]);
+
+    for(int i = word_start_id; i < word_start_id + word_per_block; ++i)
+    {
+        T tmp = data_ptr[threadIdx.x + blockDim.x * blockIdx.y] + bias;
+
+        int target_id = batch_id * (seq_len * head_num * size_per_head) + head_id * seq_len * size_per_head +
+                        i * size_per_head + id_in_head;
+
+        buf_ptr[target_id] = tmp;
+        data_ptr += n;
+    }
+}
+
+
+
+
+template<>
+__global__
+void add_QKV_bias_opt_cross<half>(half* input, const half* bias_buf, half* output,
+                  const int batch_size, const int seq_len, const int head_num, const int size_per_head, const int word_per_block)
+{
+    int tid = blockIdx.x * (size_per_head * head_num) + threadIdx.x + blockDim.x * blockIdx.y;
+    int batch_id = tid / (head_num * seq_len * size_per_head);
+    int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
+    int head_id = (tid % (head_num * size_per_head)) / size_per_head;
+    int id = tid % size_per_head;
+    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+
+    int bias_id = threadIdx.x + blockDim.x * blockIdx.y;
+
+    half2* src_ptr = (half2*)input;
+    half2* dst_ptr = (half2*)output;
+    const half2* bias_ptr = (const half2*)bias_buf;
+    dst_ptr[target_id] = __hadd2(src_ptr[tid],  __ldg(&bias_ptr[bias_id]));
+
+    // src_ptr = (half2*)K;
+    // dst_ptr = (half2*)k_buf_;
+    // bias_ptr = (const half2*)bias_K;
+    // dst_ptr[target_id] = __hadd2(src_ptr[tid],  __ldg(&bias_ptr[bias_id]));
+
+    // src_ptr = (half2*)V;
+    // dst_ptr = (half2*)v_buf_;
+    // bias_ptr = (const half2*)bias_V;
+    // dst_ptr[target_id] = __hadd2(src_ptr[tid],  __ldg(&bias_ptr[bias_id]));
+}
+
+
 template<typename T>
 void add_QKV_bias_cross_opt_kernel(void* Q, const void* bias_Q, void* K, const void* bias_K, void* V, const void* bias_V, void* q_buf_, void* k_buf_, void* v_buf_,
                   const int& batch_size, const int& seq_len, const int& mem_seq_len,const int& head_num, const int& size_per_head, const cudaStream_t stream){
@@ -297,6 +386,7 @@ void add_QKV_bias_cross_opt_kernel(void* Q, const void* bias_Q, void* K, const v
                 KV_transpose_opt<<<grid, block, 0, stream>>>((T*)K, (T*)V, (T*)k_buf_, (T*)v_buf_, batch_size, mem_seq_len, head_num, size_per_head);                 
             }
         } else {
+            const int word_per_block = 1;
             if (k <= 2048){
                 fold_coeff = 2;
             }else if( k <= 4096){
@@ -312,18 +402,28 @@ void add_QKV_bias_cross_opt_kernel(void* Q, const void* bias_Q, void* K, const v
             grid.y = fold_coeff;
             block.x = k / (2 * fold_coeff);
             if (is_add_bias) {
-                add_Q_bias_opt<<<grid, block, 0, stream>>>((T*)Q, (T*)bias_Q, (T*)q_buf_, batch_size, seq_len, head_num, size_per_head / 2);
+                // add_Q_bias_opt<<<grid, block, 0, stream>>>((T*)Q, (T*)bias_Q, (T*)q_buf_, batch_size, seq_len, head_num, size_per_head / 2);
+                add_QKV_bias_opt_cross<T><<<grid, block, 0, stream>>>((T*)Q, (T*)bias_Q, (T*)q_buf_, batch_size, seq_len, head_num, size_per_head / 2, word_per_block);
+
             } else {
                 Q_transpose_opt<<<grid, block, 0, stream>>>((T*)Q, (T*)q_buf_, batch_size, seq_len, head_num, size_per_head / 2);
             }
             
             // memory
-            qkv_types = 2;
-            m = batch_size * mem_seq_len;
-            grid.x = m * qkv_types;
+            // qkv_types = 2;
+            // m = batch_size * mem_seq_len;
+            // grid.x = m * qkv_types;
 
             if (is_add_bias) {
-                add_KV_bias_opt<<<grid, block, 0, stream>>>((T*)K, (T*)bias_K, (T*)V, (T*)bias_V, (T*)k_buf_, (T*)v_buf_, batch_size, mem_seq_len, head_num, size_per_head / 2);
+                m = batch_size * mem_seq_len;
+                dim3 grid_cross(m, fold_coeff);
+                dim3 block_cross( k / (2 * fold_coeff));
+
+                add_QKV_bias_opt_cross<T><<<grid_cross, block_cross, 0, stream>>>((T*)K, (T*)bias_K, (T*)k_buf_, batch_size, mem_seq_len, head_num, size_per_head / 2, word_per_block);
+                add_QKV_bias_opt_cross<T><<<grid_cross, block_cross, 0, stream>>>((T*)V, (T*)bias_V, (T*)v_buf_, batch_size, mem_seq_len, head_num, size_per_head / 2, word_per_block);
+        
+
+                // add_KV_bias_opt<<<grid, block, 0, stream>>>((T*)K, (T*)bias_K, (T*)V, (T*)bias_V, (T*)k_buf_, (T*)v_buf_, batch_size, mem_seq_len, head_num, size_per_head / 2);
             } else {
                 KV_transpose_opt<<<grid, block, 0, stream>>>((T*)K, (T*)V, (T*)k_buf_, (T*)v_buf_, batch_size, mem_seq_len, head_num, size_per_head / 2);
             }
