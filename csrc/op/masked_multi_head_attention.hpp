@@ -26,20 +26,23 @@ namespace eet{
                                     const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
                                     bool add_redusial,
-                                    bool first_pass);
+                                    bool first_pass,
+                                    const torch::Tensor &relative_attention_bias);
 
             // full decode
             torch::Tensor forward_full(torch::Tensor& input, 
                                     const torch::Tensor& pre_padding_length,
                                     bool pre_layernorm,
-                                    bool add_redusial);
+                                    bool add_redusial,
+                                    const torch::Tensor &relative_attention_bias);
 
             // incremental decode
             torch::Tensor forward_inc(torch::Tensor& input, 
                                     const torch::Tensor& pre_padding_len,
                                     const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
-                                    bool add_redusial);
+                                    bool add_redusial,
+                                    const torch::Tensor &relative_attention_bias);
 
             ~MaskedMultiHeadAttention(){
                 // check_cuda_error(cudaFree(&fused_qkv_ptr_));
@@ -86,6 +89,7 @@ namespace eet{
             torch::Tensor k_cache_, v_cache_;
             cublasGemmAlgo_t qkv_weights_algo_, q_k_algo_, attn_v_algo_;
 
+            bool with_bias_;
             int cur_batch_size_;
             int first_batch_size_;
             int cur_seq_len_;

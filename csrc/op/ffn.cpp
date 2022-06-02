@@ -119,7 +119,12 @@ namespace eet
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;
-            RUN_KERNEL(layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_tensor.data_ptr(), m, n, desc_.stream);
+            if (layernorm_bias_ != nullptr) {
+                RUN_KERNEL(layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_tensor.data_ptr(), m, n, desc_.stream);
+            } else {
+                RUN_KERNEL(T5layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_tensor.data_ptr(), m, n, desc_.stream);
+            }
+            
 #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());

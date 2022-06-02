@@ -31,10 +31,8 @@ namespace eet{
             layernorm_bias_(layernorm_bias.data_ptr())
         {
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
-            if (q_bias_ == nullptr) {
-                std::cout << "q_bias is nullptr****" << std::endl;
-            }
 
+            with_bias_ = q_bias_ != nullptr ? true : false;
             k_cache_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
             v_cache_ = torch::zeros_like(k_cache_);
             check_cuda_error(cudaMalloc(&fused_qkv_ptr_,sizeof(void**) * FUSED_QKV_PTR_SIZE));
@@ -54,7 +52,11 @@ namespace eet{
                 atten_scaler_ = new float();
                 *((float *)alpha_) = 1.0f;
                 *((float *)beta_) = 0.0f;
-                *((float *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                if (with_bias_) {
+                    *((float *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                } else {
+                    *((float *)atten_scaler_) = 1.0f;
+                }                
                 break;
             case torch::kFloat16:
                 qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
@@ -65,7 +67,11 @@ namespace eet{
                 atten_scaler_ = new half();
                 *((half *)alpha_) = 1.0f;
                 *((half *)beta_) = 0.0f;
-                *((half *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                if (with_bias_) {
+                    *((half *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                } else {
+                    *((half *)atten_scaler_) = 1.0f;
+                }
                 break;
             //TODO
             case torch::kInt8:
@@ -78,22 +84,24 @@ namespace eet{
                                     const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
                                     bool add_redusial,
-                                    bool first_pass){
+                                    bool first_pass,
+                                    const torch::Tensor &relative_attention_bias){
             if(first_pass)
             {
-                return forward_full(input,pre_padding_len,pre_layernorm,add_redusial);
+                return forward_full(input, pre_padding_len, pre_layernorm, add_redusial, relative_attention_bias);
             }
             else
             {
-                return forward_inc(input,pre_padding_len,reorder_state,pre_layernorm,add_redusial);
+                return forward_inc(input, pre_padding_len, reorder_state, pre_layernorm, add_redusial, relative_attention_bias);
             }
         }
 
         // full decoder
-        torch::Tensor MaskedMultiHeadAttention::forward_full(torch::Tensor& input,
-                                    const torch::Tensor& pre_padding_length,
-                                    bool pre_layernorm,
-                                    bool add_redusial)
+        torch::Tensor MaskedMultiHeadAttention::forward_full(torch::Tensor &input,
+                                                             const torch::Tensor &pre_padding_length,
+                                                             bool pre_layernorm,
+                                                             bool add_redusial,
+                                                             const torch::Tensor &relative_attention_bias)
         {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttention's dtype");
             step_ = 1;
@@ -112,17 +120,17 @@ namespace eet{
                         desc_.hidden_units_, desc_.dtype_, desc_.options_, "layernorm_query_full");
                 layer_norm(input,layernormed_query);
 
-                //qkv * weights
+                // qkv * weights
                 qkv_weights_mul(layernormed_query.data_ptr(), qkv_buffer);
 
                 layernormed_query.free();
             }
             else{
-                //qkv * weights
+                // qkv * weights
                 qkv_weights_mul(input.data_ptr(), qkv_buffer);
             }  
 
-            //qkv add bias                
+            // qkv add bias                
             Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_, "q_buf_full");
             Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
@@ -134,18 +142,21 @@ namespace eet{
             qkv_buffer.free();
 
 
-            //q * k
+            // q * k
             Buffer& qk_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.head_num_ *
                                         desc_.max_full_seq_len_ * desc_.max_full_seq_len_, desc_.dtype_, desc_.options_, "qk_buf_full");
             q_k_mul(q_buf, k_buf, qk_buf);
 
             q_buf.free();
 
-            //softmax
+            // relative attention bias
+            void* relative_attention_bias_ = relative_attention_bias.data_ptr();
+
+            // softmax
             const int64_t *padding_len = pre_padding_length.data_ptr<int64_t>();
             qk_softmax(qk_buf,padding_len);
 
-            //attn * v
+            // attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_, "transpose_dst_full");
 
@@ -159,14 +170,14 @@ namespace eet{
             k_buf.free();
             v_buf.free();
 
-            //transpose
+            // transpose
             Buffer& dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_, "dst_full");
 
             transpose(transpose_dst, dst);
             transpose_dst.free();
 
-            //project
+            // project
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn_cache");
 
             project(dst,output,input ,pre_layernorm,add_redusial);
@@ -177,13 +188,15 @@ namespace eet{
             auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
             return std::move(res);
         }
-        
+
         // incremental decoder
-        torch::Tensor MaskedMultiHeadAttention::forward_inc(torch::Tensor& input,
-                                    const torch::Tensor& pre_padding_len,
-                                    const torch::Tensor& reorder_state,
-                                    bool pre_layernorm,
-                                    bool add_redusial){
+        torch::Tensor MaskedMultiHeadAttention::forward_inc(torch::Tensor &input,
+                                                            const torch::Tensor &pre_padding_len,
+                                                            const torch::Tensor &reorder_state,
+                                                            bool pre_layernorm,
+                                                            bool add_redusial,
+                                                            const torch::Tensor &relative_attention_bias)
+        {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttention's dtype");
             step_ += 1;
             assert(step_ <= desc_.max_seq_len_ && "Exceed the maximum step length");
@@ -199,19 +212,19 @@ namespace eet{
                         desc_.hidden_units_, desc_.dtype_, desc_.options_, "layernorm_query_inc");
                 layer_norm(input,layernormed_query);
 
-                //qkv * weights
+                // qkv * weights
                 qkv_weights_mul(layernormed_query.data_ptr(),qkv_buffer);
                 layernormed_query.free();
             }
             else{
-                //qkv * weights
+                // qkv * weights
                 qkv_weights_mul(input.data_ptr(),qkv_buffer);
             }
 
             Buffer& context_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_, "context_inc");
 
-            //masked_attention_dispatch
+            // masked_attention_dispatch
             const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
             const int64_t *reorder_index = reorder_state.data_ptr<int64_t>();
 
@@ -230,7 +243,11 @@ namespace eet{
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;
 
-            RUN_KERNEL(layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            if (with_bias_) {
+                RUN_KERNEL(layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            } else {
+                RUN_KERNEL(T5layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            }
 #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
@@ -370,7 +387,7 @@ namespace eet{
             }
             else
             {
-                if (output_bias_ != nullptr) {
+                if (with_bias_) {
                     // only add bias
                     RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_,
                                m, n, desc_.stream);

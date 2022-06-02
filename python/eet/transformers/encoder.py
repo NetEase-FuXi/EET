@@ -133,8 +133,9 @@ class EETSelfAttention():
         pre_layernorm=False,
         add_redusial=True,
         need_sequence_mask=False,
+        relative_attention_bias=torch.empty(0),
     ):
-        return self.attention.forward(hidden_states, pre_padding_len, pre_layernorm, add_redusial, need_sequence_mask)
+        return self.attention.forward(hidden_states, pre_padding_len, pre_layernorm, add_redusial, need_sequence_mask, relative_attention_bias)
 
     @staticmethod
     def from_torch(config, model_dict, layer_id, data_type=torch.float32, bias=True, is_standard=True):
@@ -168,21 +169,21 @@ class EETCrossAttention():
             self.out_weights = model_dict['layer.' + str(layer_id) + '.encoder_attn.out_proj.weight'].contiguous().cuda().type(data_type)
             self.out_bias = model_dict['layer.' + str(layer_id) + '.encoder_attn.out_proj.bias'].cuda().type(data_type) if bias else torch.empty(0)
 
-        self.attetion = eet_cross_attention(config, self.q_weights, self.k_weights, self.v_weights, self.q_bias,
+        self.attention = eet_cross_attention(config, self.q_weights, self.k_weights, self.v_weights, self.q_bias,
                                             self.k_bias, self.v_bias, self.out_weights, self.out_bias, self.layernorm_weights, self.layernorm_bias)
 
     def __call__(
         self,
-        input_id,
+        hidden_states,
         pre_padding_len,
         encoder_out=None,
-        encoder_padding_mask=None,
+        per_sample_length=None,
         pre_layernorm=False,
         add_redusial=True,
         first_pass=False
     ):
-        # print('eet encoder out shape: ', encoder_out.shape)
-        return self.attetion.forward(input_id, encoder_out, pre_padding_len, pre_layernorm, add_redusial, encoder_padding_mask, first_pass)
+        # TODO encoder_padding_mask fix bug 改名为encoder output length
+        return self.attention.forward(hidden_states, encoder_out, pre_padding_len, pre_layernorm, add_redusial, per_sample_length, first_pass)
 
     @staticmethod
     def from_torch(config, model_dict, layer_id, data_type=torch.float32, bias=True, is_standard=True):
@@ -215,19 +216,20 @@ class EETSelfMaskedAttention():
             self.out_weights = model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.weight'].contiguous().cuda().type(data_type)
             self.out_bias = model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.bias'].cuda().type(data_type) if bias else torch.empty(0)
 
-        self.attetion = eet_masked_attention(config, self.qkv_weight, self.q_bias, self.k_bias,
+        self.attention = eet_masked_attention(config, self.qkv_weight, self.q_bias, self.k_bias,
                                              self.v_bias, self.out_weights, self.out_bias, self.layernorm_weights, self.layernorm_bias)
 
     def __call__(
         self,
-        input_id,
+        hidden_states,
         pre_padding_len,
         reorder_state=None,
         pre_layernorm=False,
         add_redusial=True,
-        first_pass=False
+        first_pass=False,
+        relative_attention_bias=torch.empty(0),
     ):
-        return self.attetion.forward(input_id, pre_padding_len, reorder_state, pre_layernorm, add_redusial, first_pass)
+        return self.attention.forward(hidden_states, pre_padding_len, reorder_state, pre_layernorm, add_redusial, first_pass, relative_attention_bias)
 
     @staticmethod
     def from_torch(config, model_dict, layer_id, data_type=torch.float32, bias=True, is_standard=True):
@@ -318,7 +320,7 @@ class EETEncoder():
 
 class EETDecoderLayer():
     def __init__(self, config, attention, feedforward, cross_attention=None):
-        self.attetion = attention
+        self.attention = attention
         self.cross_attention = cross_attention
         self.feedforward = feedforward
     
@@ -328,7 +330,7 @@ class EETDecoderLayer():
         encoder_out=None,
         first_pass=True,
         pre_padding_len=None,
-        encoder_attention_mask=None,
+        per_sample_length=None,
         head_mask=None,
         reorder_state=None,
         normalize_before=True,
@@ -337,26 +339,23 @@ class EETDecoderLayer():
 
         if encoder_out is not None and self.cross_attention is not None:
             ''' self_attn -> cross_attn -> ffn'''
-            self_attn_out = self.attetion(
-                input_id=x,
+            self_attn_out = self.attention(
+                hidden_states=x,
                 pre_padding_len=pre_padding_len,
                 reorder_state=reorder_state,
                 pre_layernorm=normalize_before,
                 add_redusial=add_redusial,
                 first_pass=first_pass
             )
-            # print('eet self attn out: ', self_attn_out)
-            # print('eet encoder_out: ', encoder_out)
             cross_attn_out = self.cross_attention(
-                input_id=self_attn_out,
+                hidden_states=self_attn_out,
                 pre_padding_len=pre_padding_len,
                 encoder_out=encoder_out,
-                encoder_padding_mask=encoder_attention_mask,
+                per_sample_length=per_sample_length,
                 pre_layernorm=normalize_before,
                 add_redusial=add_redusial,
                 first_pass=first_pass
             )
-            # print('eet cross attn out: ', cross_attn_out)
             out = self.feedforward(
                 cross_attn_out,
                 pre_layernorm=normalize_before,
@@ -364,8 +363,8 @@ class EETDecoderLayer():
             )
         else:
             ''' self_attn -> ffn''' 
-            self_attn_out = self.attetion(
-                input_id=x,
+            self_attn_out = self.attention(
+                hidden_states=x,
                 pre_padding_len=pre_padding_len,
                 reorder_state=reorder_state,
                 pre_layernorm=normalize_before,
@@ -405,7 +404,7 @@ class EETDecoder():
         encoder_out=None,
         first_pass=True,
         pre_padding_len=None,
-        encoder_attention_mask=None,
+        per_sample_length=None,
         head_mask=None,
         reorder_state=None,
         normalize_before=False,
@@ -416,7 +415,7 @@ class EETDecoder():
                 encoder_out=encoder_out,
                 first_pass=first_pass,
                 pre_padding_len=pre_padding_len,
-                encoder_attention_mask=encoder_attention_mask,
+                per_sample_length=per_sample_length,
                 head_mask=head_mask,
                 reorder_state=reorder_state,
                 normalize_before=normalize_before,

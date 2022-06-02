@@ -24,7 +24,8 @@ namespace eet{
                                   const torch::Tensor &padding_mask,
                                   bool pre_layernorm,
                                   bool add_redusial,
-                                  bool need_sequence_mask = false);
+                                  bool need_sequence_mask,
+                                  const torch::Tensor &relative_attention_bias);
 
             ~MultiHeadAttention(){
                 // check_cuda_error(cudaFree(&fused_qkv_ptr_));
@@ -44,8 +45,8 @@ namespace eet{
 
             void q_k_mul(const Buffer& q_buf, const Buffer& k_buf, 
                             Buffer& qk_buf);
-
-            void qk_softmax(Buffer &qk_buf, const int64_t *padding_len, bool need_sequence_mask = false);
+            
+            void qk_softmax(Buffer &qk_buf, const int64_t *padding_len, bool need_sequence_mask);
 
             void attn_v_mul(const Buffer& qk_buf, const Buffer& v_buf,
                             Buffer& transpose_dst);
@@ -62,6 +63,7 @@ namespace eet{
             // torch::Tensor output_;
             cublasGemmAlgo_t qkv_weights_algo_, q_k_algo_, attn_v_algo_;
 
+            bool with_bias_;
             int cur_batch_size_;
             int cur_seq_len_;
             int size_per_head_;

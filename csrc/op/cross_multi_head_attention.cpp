@@ -32,6 +32,7 @@ namespace eet{
             layernorm_weights_(layernorm_weights.data_ptr()),
             layernorm_bias_(layernorm_bias.data_ptr())
         {
+            with_bias_ = q_bias_ != nullptr ? true : false;
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
             // output_ = torch::zeros({desc_.batch_size_ , desc_.max_full_seq_len_ ,desc_.hidden_units_}, desc_.options_);
             key_mem_cache_ =torch::zeros({desc_.batch_size_ , desc_.max_seq_len_ ,desc_.hidden_units_}, desc_.options_);
@@ -172,12 +173,12 @@ namespace eet{
         }
         
         // incremental decoder
-        torch::Tensor CrossMultiHeadAttention::forward_inc(torch::Tensor& input,
-                            torch::Tensor& memory,
-                            bool pre_layernorm,
-                            bool add_redusial,
-                            const torch::Tensor& length_per_sample){
-                        assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as CrossMultiHeadAttention's dtype");
+        torch::Tensor CrossMultiHeadAttention::forward_inc(torch::Tensor &input,
+                                                           torch::Tensor &memory,
+                                                           bool pre_layernorm,
+                                                           bool add_redusial,
+                                                           const torch::Tensor &length_per_sample) {
+            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as CrossMultiHeadAttention's dtype");
             step_ += 1;
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
@@ -192,6 +193,7 @@ namespace eet{
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
 
             
+            // std::cout << "length_per_sample: " << length_per_sample << std::endl;
             if(pre_layernorm)
             {
                 // pre_layerNorm
@@ -233,8 +235,12 @@ namespace eet{
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;
-
-            RUN_KERNEL(layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            if (with_bias_) {
+                RUN_KERNEL(layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            } else {
+                RUN_KERNEL(T5layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            }
+            
 #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
@@ -339,9 +345,11 @@ namespace eet{
         }
 
         void CrossMultiHeadAttention::qk_softmax(Buffer& qk_buf, const torch::Tensor& padding_index){
-            float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
+            float scalar = 1.0f;
+            if (with_bias_)
+                scalar = 1 / sqrtf(size_per_head_ * 1.0f);
             RUN_KERNEL(cross_softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), cur_batch_size_,
-                    desc_.head_num_,cur_seq_len_, mem_seq_len_,scalar, desc_.stream);
+                    desc_.head_num_,cur_seq_len_, mem_seq_len_, scalar, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
     check_cuda_error(cudaGetLastError());
@@ -412,9 +420,11 @@ namespace eet{
             }
             else
             {   
-                // only add bias
-                RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_,
-                           m , n, desc_.stream);
+                if (with_bias_) {
+                    // only add bias
+                    RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_,
+                               m, n, desc_.stream);
+                }
             }
             #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();

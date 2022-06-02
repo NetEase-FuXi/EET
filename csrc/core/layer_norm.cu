@@ -3,6 +3,7 @@
 #include <cuda_fp16.h>
 #include <iostream>
 #include <assert.h>
+#include <stdio.h>  
 
 // layernorm code modified from Nvidia's DeepLearningExamples
 // https://github.com/NVIDIA/DeepLearningExamples/blob/master/FasterTransformer/v3.1/fastertransformer/cuda/open_decoder.cu#L1369-L81429
@@ -33,27 +34,6 @@ void add_bias_input_layernorm(T* out, const T* input, const T* bias, const T* ga
 
   out[blockIdx.x * n + tid] = 
 	    (T)(((local_out - s_mean) * rsqrtf(s_variance)) * (float)(__ldg(&gamma[tid])) + (float)(__ldg(&beta[tid])));
-}
-
-template <typename T>
-__global__ 
-void add_input_T5layernorm(T* out, const T* input, const T* gamma, int m, int n)
-{
-  int tid = threadIdx.x;
-
-  __shared__ float s_variance;
-  float variance = 0.0f;
-
-  float local_out = 0.0f;
-  local_out += (float)(out[blockIdx.x * n + tid] + input[blockIdx.x * n + tid]);
-
-  variance = blockReduceSum<float>(local_out * local_out);
-  if(threadIdx.x == 0)
-    s_variance = variance / n + 1e-6f;
-  __syncthreads();
-
-  out[blockIdx.x * n + tid] = 
-	    (T)((local_out * rsqrtf(s_variance)) * (float)(__ldg(&gamma[tid])));
 }
 
 template <>
@@ -97,6 +77,27 @@ void add_bias_input_layernorm(half* out, const half* input, const half* bias, co
   local_out_fp2.x = (local_out_fp2.x - s_mean) * s_variance * gamma_val.x + beta_val.x;
   local_out_fp2.y = (local_out_fp2.y - s_mean) * s_variance * gamma_val.y + beta_val.y;
   out_ptr[id] = __float22half2_rn(local_out_fp2);
+}
+
+template <typename T>
+__global__ 
+void add_input_T5layernorm(T* out, const T* input, const T* gamma, int m, int n)
+{
+  int tid = threadIdx.x;
+
+  __shared__ float s_variance;
+  float variance = 0.0f;
+
+  float local_out = 0.0f;
+  local_out += (float)(out[blockIdx.x * n + tid] + input[blockIdx.x * n + tid]);
+
+  variance = blockReduceSum<float>(local_out * local_out);
+  if(threadIdx.x == 0)
+    s_variance = variance / n + 1e-6f;
+  __syncthreads();
+
+  out[blockIdx.x * n + tid] = 
+	    (T)((local_out * rsqrtf(s_variance)) * (float)(__ldg(&gamma[tid])));
 }
 
 template <>
@@ -180,47 +181,6 @@ __global__ void add_bias_input_layernorm_v2(T *out, const T *__restrict input, c
   }
 }
 
-template <typename T>
-__global__ void add_input_T5layernorm_v2(T *out, const T *__restrict input, const T *__restrict gamma, int n)
-{
-  const int ite = 4;
-  const int tid = threadIdx.x;
-  const int bid = blockIdx.x;
-
-  __shared__ float s_variance;
-  float variance = 0.0f;
-  float local_out[ite];
-
-#pragma unroll
-  for (int i = 0; i < ite; i++)
-  {
-    int col_id = i * blockDim.x + tid;
-    int id = bid * n + col_id;
-    local_out[i] = (float)(out[id] + __ldg(&input[id]));
-  }
-
-  float var = 0.0f;
-#pragma unroll
-  for (int i = 0; i < ite; i++)
-  {
-    float diff = local_out[i];
-    var += diff * diff;
-  }
-
-  variance = blockReduceSum<float>(var);
-  if (tid == 0)
-    s_variance = rsqrtf(variance / n + 1e-6f);
-  __syncthreads();
-
-#pragma unroll
-  for (int i = 0; i < ite; i++)
-  {
-    int col_id = i * blockDim.x + tid;
-    int id = bid * n + col_id;
-    out[id] = (T)(local_out[i] * s_variance * (float)__ldg(&gamma[col_id]));
-  }
-}
-
 template <>
 __global__ void add_bias_input_layernorm_v2(half *out, const half *__restrict input, const half *__restrict bias,
                                             const half *__restrict gamma, const half *__restrict beta, int n)
@@ -279,6 +239,47 @@ __global__ void add_bias_input_layernorm_v2(half *out, const half *__restrict in
     int col_id = i * blockDim.x + tid;
     int id = bid * n / 2 + col_id;
     out_ptr[id] = local_out_half2[i] * s_var_2 * __ldg(&gamma_ptr[col_id]) + __ldg(&beta_ptr[col_id]);
+  }
+}
+
+template <typename T>
+__global__ void add_input_T5layernorm_v2(T *out, const T *__restrict input, const T *__restrict gamma, int n)
+{
+  const int ite = 4;
+  const int tid = threadIdx.x;
+  const int bid = blockIdx.x;
+
+  __shared__ float s_variance;
+  float variance = 0.0f;
+  float local_out[ite];
+
+#pragma unroll
+  for (int i = 0; i < ite; i++)
+  {
+    int col_id = i * blockDim.x + tid;
+    int id = bid * n + col_id;
+    local_out[i] = (float)(out[id] + __ldg(&input[id]));
+  }
+
+  float var = 0.0f;
+#pragma unroll
+  for (int i = 0; i < ite; i++)
+  {
+    float diff = local_out[i];
+    var += diff * diff;
+  }
+
+  variance = blockReduceSum<float>(var);
+  if (tid == 0)
+    s_variance = rsqrtf(variance / n + 1e-6f);
+  __syncthreads();
+
+#pragma unroll
+  for (int i = 0; i < ite; i++)
+  {
+    int col_id = i * blockDim.x + tid;
+    int id = bid * n + col_id;
+    out[id] = (T)(local_out[i] * s_variance * (float)__ldg(&gamma[col_id]));
   }
 }
 
@@ -381,48 +382,6 @@ __global__ void decoder_norm1_kernel_opt(const float *__restrict input,
 }
 
 template <int item_per_thread>
-__global__ void T5norm1_kernel_opt(const float *__restrict input,
-                                   const float *__restrict gamma,
-                                   float *output,
-                                   int m, int n)
-{
-  int tid = threadIdx.x;
-
-  __shared__ float s_variance;
-  float variance = 0.0f;
-
-  //float local_out = tid < n ? (float)(__ldg(&input[blockIdx.x * n + tid])) : 0.0f;
-  float local_out[item_per_thread];
-  for (int i = 0; i < item_per_thread; i++)
-  {
-    local_out[i] = (tid * item_per_thread + i) < n ? (float)(__ldg(&input[blockIdx.x * n + tid * item_per_thread + i])) : 0.0f;
-  }
-
-  float tmp[item_per_thread];
-  for (int i = 0; i < item_per_thread; i++)
-  {
-    tmp[i] = (tid * item_per_thread + i) < n ? local_out[i] * local_out[i] : 0.0f;
-  }
-
-  //要保证第二次归约能把所有的和算出来,这个item_per_thread需要设置的足够大
-  variance = blockReduceSum_opt<float, item_per_thread>(tmp);
-
-  if (threadIdx.x == 0)
-    s_variance = rsqrtf(variance / n + 1e-6);
-
-  __syncthreads();
-
-  for (int i = 0; i < item_per_thread; i++)
-  {
-    if (tid * item_per_thread + i < n)
-    {
-      output[blockIdx.x * n + tid * item_per_thread + i] =
-          (float)((local_out[i] * s_variance) * (float)(__ldg(&gamma[tid * item_per_thread + i])));
-    }
-  }
-}
-
-template <int item_per_thread>
 __global__ void decoder_norm1_kernel_opt(const half *__restrict input,
                                          const half *__restrict gamma,
                                          const half *__restrict beta,
@@ -482,6 +441,48 @@ __global__ void decoder_norm1_kernel_opt(const half *__restrict input,
       local_out_fp2[i].x = (local_out_fp2[i].x - s_mean) * s_variance * gamma_val.x + beta_val.x;
       local_out_fp2[i].y = (local_out_fp2[i].y - s_mean) * s_variance * gamma_val.y + beta_val.y;
       output_ptr[blockIdx.x * (n >> 1) + tid * item_per_thread + i] = __float22half2_rn(local_out_fp2[i]);
+    }
+  }
+}
+
+template <int item_per_thread>
+__global__ void T5norm1_kernel_opt(const float *__restrict input,
+                                   const float *__restrict gamma,
+                                   float *output,
+                                   int m, int n)
+{
+  int tid = threadIdx.x;
+
+  __shared__ float s_variance;
+  float variance = 0.0f;
+
+  //float local_out = tid < n ? (float)(__ldg(&input[blockIdx.x * n + tid])) : 0.0f;
+  float local_out[item_per_thread];
+  for (int i = 0; i < item_per_thread; i++)
+  {
+    local_out[i] = (tid * item_per_thread + i) < n ? (float)(__ldg(&input[blockIdx.x * n + tid * item_per_thread + i])) : 0.0f;
+  }
+
+  float tmp[item_per_thread];
+  for (int i = 0; i < item_per_thread; i++)
+  {
+    tmp[i] = (tid * item_per_thread + i) < n ? local_out[i] * local_out[i] : 0.0f;
+  }
+
+  //要保证第二次归约能把所有的和算出来,这个item_per_thread需要设置的足够大
+  variance = blockReduceSum_opt<float, item_per_thread>(tmp);
+
+  if (threadIdx.x == 0)
+    s_variance = rsqrtf(variance / n + 1e-6);
+
+  __syncthreads();
+
+  for (int i = 0; i < item_per_thread; i++)
+  {
+    if (tid * item_per_thread + i < n)
+    {
+      output[blockIdx.x * n + tid * item_per_thread + i] =
+          (float)((local_out[i] * s_variance) * (float)(__ldg(&gamma[tid * item_per_thread + i])));
     }
   }
 }

@@ -31,6 +31,7 @@ namespace eet{
             layernorm_weights_(layernorm_weights.data_ptr()),
             layernorm_bias_(layernorm_bias.data_ptr())
         {   
+            with_bias_ = q_bias_ != nullptr ? true : false;
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
             // output_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
             Buffer& attn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn");
@@ -51,7 +52,11 @@ namespace eet{
                 atten_scaler_ = new float();
                 *((float *)alpha_) = 1.0f;
                 *((float *)beta_) = 0.0f;
-                *((float *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                if (with_bias_) {
+                    *((float *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                } else {
+                    *((float *)atten_scaler_) = 1.0f;
+                }
                 break;
             case torch::kFloat16:
                 qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
@@ -62,7 +67,11 @@ namespace eet{
                 atten_scaler_ = new half();
                 *((half *)alpha_) = (half)1.0f;
                 *((half *)beta_) = (half)0.0f;
-                *((half *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                if (with_bias_) {
+                    *((half *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                } else {
+                    *((half *)atten_scaler_) = 1.0f;
+                }    
                 break;
             //TODO
             case torch::kInt8:
@@ -76,7 +85,8 @@ namespace eet{
                                     const torch::Tensor& pre_padding_len,
                                     bool pre_layernorm,
                                     bool add_redusial,
-                                    bool need_sequence_mask){
+                                    bool need_sequence_mask,
+                                    const torch::Tensor &relative_attention_bias){
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MultiHeadAttention's dtype");
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
@@ -119,6 +129,9 @@ namespace eet{
 
             q_buf.free();
 
+            // relative attention bias
+            void* relative_attention_bias_ = relative_attention_bias.data_ptr();
+
             //softmax
             const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
 
@@ -158,8 +171,11 @@ namespace eet{
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;
-
-            RUN_KERNEL(layernorm,desc_.dtype_,input.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            if (with_bias_) {
+                RUN_KERNEL(layernorm,desc_.dtype_,input.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            } else {
+                RUN_KERNEL(T5layernorm,desc_.dtype_,input.data_ptr(),layernorm_weights_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            }
 #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
@@ -299,7 +315,7 @@ namespace eet{
             else
             {
                 // only add bias
-                if (output_bias_ != nullptr)
+                if (with_bias_)
                 {
                     RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_, m, n, desc_.stream);
                 }
