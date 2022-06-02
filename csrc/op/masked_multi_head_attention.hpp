@@ -64,6 +64,8 @@ namespace eet{
             void q_k_mul(const Buffer& q_buf, const Buffer& k_buf, 
                             Buffer& qk_buf);
 
+            void add_relative_attn_bias(Buffer &qk_buf, void* relative_attention_bias);
+
             void qk_softmax(Buffer& qk_buf,const int64_t *padding_len);
 
             void attn_v_mul(const Buffer& qk_buf, const Buffer& v_buf,

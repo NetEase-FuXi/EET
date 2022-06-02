@@ -193,7 +193,6 @@ namespace eet{
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
 
             
-            // std::cout << "length_per_sample: " << length_per_sample << std::endl;
             if(pre_layernorm)
             {
                 // pre_layerNorm

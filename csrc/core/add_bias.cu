@@ -72,8 +72,40 @@ void add_bias_input_kernel(void* output, const void* input, const void* bias,con
   }
 }
 
+template <typename T>
+__global__ void add_relative_attn_bias(T *qk_buf, const T *relative_attention_bias, const int seq_len)
+{
+  int qk_offset = (blockIdx.x + blockIdx.y * gridDim.x) * seq_len;
+  int bias_offset = blockIdx.x * seq_len;
+  if (threadIdx.x < seq_len) 
+    qk_buf[threadIdx.x + qk_offset] += __ldg(&relative_attention_bias[threadIdx.x + bias_offset]);
+}
+
+template <class T>
+void add_relative_attn_bias_kernel(void *qk_buf, const void *relative_attention_bias, const int &batch_size, const int &head_num, 
+                                   const int &seq_len, const cudaStream_t stream)
+{
+  dim3 block;
+  if (seq_len <= 32)
+    block.x = 32;
+  else if (seq_len > 32 && seq_len <= 64)
+    block.x = 64;
+  else if (seq_len > 64 && seq_len <= 128)
+    block.x = 128;
+  else if (seq_len > 128 && seq_len <= 256)
+    block.x = 256;
+  else if (seq_len > 256 && seq_len <= 512)
+    block.x = 512;
+  else
+    block.x = 1024;
+  
+  dim3 grid(head_num * seq_len, batch_size);
+  add_relative_attn_bias<T><<<grid, block, 0, stream>>>((T*)qk_buf, (T*)relative_attention_bias, seq_len);
+}
 
 template void add_bias_kernel<float>(void* out, const void* bias, const int m, const int n ,const cudaStream_t stream);
 template void add_bias_kernel<half>(void* out, const void* bias, const int m, const int n ,const cudaStream_t stream);
 template void add_bias_input_kernel<float>(void* output, const void* input, const void* bias,const int m, const int n, const cudaStream_t stream);
 template void add_bias_input_kernel<half>(void* output, const void* input, const void* bias,const int m, const int n, const cudaStream_t stream);
+template void add_relative_attn_bias_kernel<float>(void *qk_buf, const void *relative_attention_bias, const int &batch_size, const int &head_num, const int &seq_len, const cudaStream_t stream);
+template void add_relative_attn_bias_kernel<half>(void *qk_buf, const void *relative_attention_bias, const int &batch_size, const int &head_num, const int &seq_len, const cudaStream_t stream);

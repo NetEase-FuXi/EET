@@ -86,7 +86,7 @@ class EETGPT2Embedding():
         # not use layernorm
         self.Layernorm_weights = torch.empty(0) 
         self.Layernorm_bias = torch.empty(0)
-        self.embedding = eet_embedding(meta_des,self.embedding_weights,self.position_weights,self.token_type_weights,self.Layernorm_weights,self.Layernorm_bias)
+        self.embedding = eet_embedding(meta_des,self.embedding_weights,self.position_weights,self.token_type_weights,self.Layernorm_weights,self.Layernorm_bias, 'emb_cache')
     def __call__(self,
                 input_ids,
                 position_ids,
@@ -109,7 +109,7 @@ class EETGPT2Feedforward():
         self.output_bias = [x[1] for x in model_dict.items() if 'mlp.c_proj.bias' in x[0]][0].cuda().type(data_type)
         self.layernorm_weights = [x[1] for x in model_dict.items() if 'ln_2.weight' in x[0]][0].cuda().type(data_type)
         self.layernorm_bias = [x[1] for x in model_dict.items() if 'ln_2.bias' in x[0]][0].cuda().type(data_type)
-        self.ffn = eet_ffn(meta_des,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias)
+        self.ffn = eet_ffn(meta_des,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias, 'ffn_out')
     def __call__(self,
                 input_id,
                 pre_layernorm = True,
