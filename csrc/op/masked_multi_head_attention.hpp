@@ -82,7 +82,8 @@ namespace eet{
             void masked_attention(const Buffer& qkv_buffer,
                                 Buffer& context_buf,
                                 const int64_t *padding_len,
-                                const int64_t *reorder_index);
+                                const int64_t *reorder_index,
+                                const void *relative_attention_bias_);
 
             void kv_transpose(torch::Tensor& d_K_buf, torch::Tensor& d_V_buf,Buffer& K_buf,Buffer& V_buf);
             
