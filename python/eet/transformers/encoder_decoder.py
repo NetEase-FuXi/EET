@@ -38,19 +38,6 @@ class FCLayer():
 
 
 class EETLayerNorm():
-    r"""
-    EET implementation of layernorm
-    Applies Layer Normalization over a mini-batch of inputs, same as torch.nn.LayerNorm
-    Args:
-
-
-    Returns:
-
-    Example:
-    ```python
-    >>> from eet.transformers.encoder_decoder import EETLayerNorm
-    >>> 
-    """
     def __init__(self, config, layernorm_weight, layernorm_bias, data_type=torch.float32):
         self.layernorm_weight = layernorm_weight.cuda().type(data_type)
         self.layernorm_bias = layernorm_bias.cuda().type(data_type) if layernorm_bias is not None else torch.empty(0)
@@ -66,10 +53,6 @@ class EETLayerNorm():
 
 
 class EETFeedforward():
-    r"""
-
-    
-    """
     def __init__(self, config, model_dict, layer_id, data_type=torch.float32, bias=True, name="out_cache"):
         self.intermediate_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.intermediate.weight']).contiguous().cuda().type(data_type)
         self.intermediate_bias = model_dict['layer.' + str(layer_id) + '.ffn.intermediate.bias'].cuda().type(data_type) if bias else torch.empty(0)
@@ -95,10 +78,6 @@ class EETFeedforward():
 
 
 class EETSelfAttention():
-    r"""
-        This is an EET implementation of 
-        is_standard: q_proj, k_proj, v_proj = Linear; qkv_proj = Conv1D
-    """
     def __init__(self, config, model_dict, layer_id, data_type=torch.float32, bias=True, is_standard=True):
         self.is_standard = is_standard
         self.layernorm_weights = model_dict['layer.' + str(layer_id) + '.self_attn.layernorm.weight'].cuda().type(data_type)
@@ -238,18 +217,6 @@ class EETSelfMaskedAttention():
 
 
 class EETEncoderLayer():
-    r"""
-        EET Encoder Layer. 
-        Args:
-
-        Inputs:
-
-        Ouptuts:
-
-
-        Examples:
-
-    """
     def __init__(self, config, attention, feedforward):
         self.attention = attention
         self.feedforward = feedforward
@@ -391,7 +358,6 @@ class EETDecoderLayer():
             layer = EETDecoderLayer(config, attention, feedforward)
         
         return layer
-
 
 
 class EETDecoder():

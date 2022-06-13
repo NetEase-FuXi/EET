@@ -50,7 +50,7 @@ class EETDistilBertEmbedding():
         self.token_type_weights = self.position_weights
         self.Layernorm_weights = embedding_dict['embeddings.LayerNorm.weight'].cuda().type(data_type)
         self.Layernorm_bias = embedding_dict['embeddings.LayerNorm.bias'].cuda().type(data_type)
-        self.embedding = eet_embedding(config,self.embedding_weights,self.position_weights,self.token_type_weights,self.Layernorm_weights,self.Layernorm_bias)
+        self.embedding = eet_embedding(config,self.embedding_weights,self.position_weights,self.token_type_weights,self.Layernorm_weights,self.Layernorm_bias, 'emb_cache')
     def __call__(self,
                 input_ids,
                 position_ids,
@@ -71,7 +71,7 @@ class EETDistilBertFeedforward():
         self.layernorm_weights = [x[1] for x in model_dict.items() if 'output_layer_norm.weight' in x[0]][0].cuda().type(data_type)
         self.layernorm_bias = [x[1] for x in model_dict.items() if 'output_layer_norm.bias' in x[0]][0].cuda().type(data_type)
 
-        self.ffn = eet_ffn(config,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias)
+        self.ffn = eet_ffn(config,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias, 'ffn_out_cache')
     def __call__(self,
                 input_id,
                 pre_layernorm = True,

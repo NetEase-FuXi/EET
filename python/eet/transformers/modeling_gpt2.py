@@ -109,7 +109,7 @@ class EETGPT2Feedforward():
         self.output_bias = [x[1] for x in model_dict.items() if 'mlp.c_proj.bias' in x[0]][0].cuda().type(data_type)
         self.layernorm_weights = [x[1] for x in model_dict.items() if 'ln_2.weight' in x[0]][0].cuda().type(data_type)
         self.layernorm_bias = [x[1] for x in model_dict.items() if 'ln_2.bias' in x[0]][0].cuda().type(data_type)
-        self.ffn = eet_ffn(meta_des,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias, 'ffn_out')
+        self.ffn = eet_ffn(meta_des,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias, 'ffn_out_cache')
     def __call__(self,
                 input_id,
                 pre_layernorm = True,

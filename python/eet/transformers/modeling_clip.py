@@ -107,7 +107,7 @@ class EETCLIPTextEmbedding():
         self.Layernorm_weights = torch.empty(0)
         self.Layernorm_bias = torch.empty(0)
         self.embedding = eet_embedding(config, self.embedding_weights, self.position_weights,
-                                       self.token_type_weights, self.Layernorm_weights, self.Layernorm_bias)
+                                       self.token_type_weights, self.Layernorm_weights, self.Layernorm_bias, 'emb_cache')
 
     def __call__(
         self,

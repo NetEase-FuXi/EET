@@ -70,7 +70,7 @@ class EETT5Embedding():
         self.Layernorm_bias = torch.empty(0)
 
         self.embedding = eet_embedding(config, self.embedding_weights, self.position_weights,
-                                       self.token_type_weights, self.Layernorm_weights, self.Layernorm_bias)
+                                       self.token_type_weights, self.Layernorm_weights, self.Layernorm_bias, 'emb_cache')
 
     def __call__(
         self,
@@ -100,8 +100,8 @@ class EETT5Block():
         self.relative_attention_max_distance = cfg.relative_attention_max_distance
 
     def compute_bias(self, query_length, key_length):
-        context_position = torch.arange(query_length, dtype=torch.long)[:, None]
-        memory_position = torch.arange(key_length, dtype=torch.long)[None, :]
+        context_position = torch.arange(query_length, dtype=torch.long)[:, None].cuda()
+        memory_position = torch.arange(key_length, dtype=torch.long)[None, :].cuda()
         relative_position = memory_position - context_position
         relative_position_bucket = _relative_position_bucket(
             relative_position,  # shape (query_length, key_length)
@@ -109,7 +109,7 @@ class EETT5Block():
             num_buckets=self.relative_attention_num_buckets,
             max_distance=self.relative_attention_max_distance,
         )
-        values = self.position_embedding(relative_position_bucket.cuda())
+        values = self.position_embedding(relative_position_bucket)
         values = values.permute([2, 0, 1]).unsqueeze(0)
         return values
 
@@ -123,47 +123,50 @@ class EETT5Block():
         head_mask=None,
         reorder_state=None,
         normalize_before=True,
-        add_redusial=True,
+        add_residual=True,
         self_past_key_values_length=0,
         position_bias=None,
     ):
         batch_size, seq_length = hidden_states.shape[:2]
-        real_seq_length = seq_length + self_past_key_values_length
-        position_bias = torch.empty(0) if position_bias is None else position_bias
-        if self.position_embedding is not None:
+        real_seq_length = seq_length + self_past_key_values_length        
+        if position_bias is None and self.position_embedding is not None:
             position_bias = self.compute_bias(real_seq_length, real_seq_length)
-        if self_past_key_values_length > 0:
-            position_bias = position_bias[:, :, -seq_length:, :]
+            # if past_key_value is not none
+            if self_past_key_values_length > 0:
+                position_bias = position_bias[:, :, -seq_length:, :]
+        if position_bias is None:
+            position_bias = torch.empty(0)
         
         position_bias = position_bias.contiguous()
+        # position_bias = torch.empty(0)
 
-        # print('eet pos bias: ', position_bias.reshape(-1)[:16])
         if encoder_out is not None and self.cross_attention is not None:
             ''' decoder: self_masked_attn -> cross_attn -> ffn'''
+            # print(position_bias.size(), 'eet pos bias: ', position_bias)
             self_attn_out = self.attention(
                 hidden_states=hidden_states,
                 pre_padding_len=pre_padding_len,
                 reorder_state=reorder_state,
                 pre_layernorm=normalize_before,
-                add_redusial=add_redusial,
+                add_residual=add_residual,
                 first_pass=first_pass,
                 relative_attention_bias=position_bias,
             )
-            print('eet decoder self attn out: ', self_attn_out)
+            # print('eet decoder self attn out: ', self_attn_out)
             cross_attn_out = self.cross_attention(
                 hidden_states=self_attn_out,
                 pre_padding_len=pre_padding_len,
                 encoder_out=encoder_out,
                 per_sample_length=per_sample_length,
                 pre_layernorm=normalize_before,
-                add_redusial=add_redusial,
+                add_residual=add_residual,
                 first_pass=first_pass
             )
             # print('eet cross attn out: ', cross_attn_out)
             out = self.feedforward(
                 cross_attn_out,
                 pre_layernorm=normalize_before,
-                add_redusial=add_redusial
+                add_residual=add_residual
             )
             # print('eet decoder out: ', out)
         else:
@@ -172,7 +175,7 @@ class EETT5Block():
                 hidden_states=hidden_states,
                 pre_padding_len=pre_padding_len,
                 pre_layernorm=normalize_before,
-                add_redusial=add_redusial,
+                add_residual=add_residual,
                 relative_attention_bias=position_bias,
             )
             # print(self_attn_out.size(), ' eet self attn out: ', self_attn_out)
@@ -180,7 +183,7 @@ class EETT5Block():
             out = self.feedforward(
                 self_attn_out,
                 pre_layernorm=normalize_before,
-                add_redusial=add_redusial
+                add_residual=add_residual
             )
             # print(out.size(), ' eet encoder out: ', out)
         return (out, position_bias)
@@ -248,6 +251,7 @@ class EETT5Decoder():
         reorder_state=None,
         normalize_before=False,
         position_bias=None,
+        self_past_key_values_length=0,
     ):
         # for layer in self.layers:
         for idx, layer in enumerate(self.layers):
@@ -260,8 +264,9 @@ class EETT5Decoder():
                 head_mask=None,
                 reorder_state=reorder_state,
                 normalize_before=normalize_before,
-                add_redusial=True,
+                add_residual=True,
                 position_bias=position_bias,
+                self_past_key_values_length=self_past_key_values_length,
             )
 
         return hidden_states
@@ -297,32 +302,35 @@ class EETT5Model():
         self,
         input_ids,
         encoder_out=None,
+        encoder_seq_length=torch.empty(0),
         first_pass=True,
         attention_mask=None,
         decoder_input_ids=None,
         decoder_attention_mask=None,
         reorder_state=None,
+        self_past_key_values_length=0,
     ):        
         if attention_mask is None:
             pre_padding_len = self.pre_padding_len
         else:
             # transformers 0 - padding;1 - nopadding
-            pre_padding_len = torch.sum(1 - attention_mask, 1).long().cuda()
+            pre_padding_len = torch.sum(1 - attention_mask, 1).int().cuda()
 
         if decoder_attention_mask is None:
             decoder_pre_padding_len = self.decoder_pre_padding_len
         else:
             # transformers 0 - padding;1 - nopadding
-            decoder_pre_padding_len = torch.sum(1 - decoder_attention_mask, 1).long().cuda()
+            decoder_pre_padding_len = torch.sum(1 - decoder_attention_mask, 1).int().cuda()
 
-        input_shape = input_ids.size()
-        input_ids = input_ids.view(-1, input_shape[-1])
-        inputs_embeds = self.shared(input_ids)
-        # print('eet input embeds: ', inputs_embeds)
+        per_sample_length = encoder_seq_length # encoder_seq_length是encoder output实际的长度（去掉padding len）
         if not first_pass:
+            assert encoder_seq_length is not None
             encoder_out = torch.empty(0)
 
         if encoder_out is None:
+            input_shape = input_ids.size()
+            input_ids = input_ids.view(-1, input_shape[-1])
+            inputs_embeds = self.shared(input_ids)
             encoder_out = self.encoder(
                 hidden_states=inputs_embeds,
                 pre_padding_len=pre_padding_len,
@@ -330,19 +338,16 @@ class EETT5Model():
                 position_bias=None,
             )
             encoder_out = self.encoder_final_layernorm(encoder_out)
+
+        # print("per_sample_length: ", per_sample_length)            
         if reorder_state is not None:
             self.reorder_state = reorder_state.long()       
         # print('eet encoder out: ', encoder_out)
+        if decoder_input_ids is None:
+            raise ValueError(f"You have to specify decoder input ids")
 
         decoder_input_shape = decoder_input_ids.size()
         decoder_inputs_embeds = self.shared(decoder_input_ids)
-
-        # TODO fix encoder input长度
-        per_sample_length = torch.from_numpy(np.array([decoder_input_shape[1]]*decoder_input_shape[0])).long().cuda()
-        if self.decoder_pre_padding_len.shape[0] == decoder_input_shape[0]:
-            per_sample_length = per_sample_length - decoder_pre_padding_len
-
-        print("per_sample_length: ", per_sample_length)
         
         decoder_out = self.decoder(
             hidden_states=decoder_inputs_embeds,
@@ -354,6 +359,7 @@ class EETT5Model():
             reorder_state=self.reorder_state,
             normalize_before=True,
             position_bias=None,
+            self_past_key_values_length=self_past_key_values_length,
         )
         decoder_out = self.decoder_final_layernorm(decoder_out)
 
@@ -372,7 +378,7 @@ class EETT5Model():
         cfg = torch_model.config
 
         for k, v in torch_model.state_dict().items():
-            k = convert_name(k, model_name, verbose=True)
+            k = convert_name(k, model_name, verbose=False)
             if 'encoder.layer.' in k:
                 k = k[k.find('layer.'):]
                 encoder_model_dict[k] = v

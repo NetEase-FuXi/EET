@@ -90,6 +90,7 @@ class EETBartModel():
         self,
         input_ids,
         encoder_out=None,
+        encoder_seq_length=torch.empty(0),
         first_pass=True,
         attention_mask=None,
         decoder_input_ids=None,
@@ -101,33 +102,28 @@ class EETBartModel():
             decoder_input_ids = shift_tokens_right(
                 input_ids, self.cfg.pad_token_id, self.cfg.decoder_start_token_id
             )            
-        input_shape = input_ids.size()
         decoder_input_shape = decoder_input_ids.size()
 
         if attention_mask is None:
             pre_padding_len = self.pre_padding_len
         else:
             # transformers 0 - padding;1 - nopadding
-            pre_padding_len = torch.sum(1 - attention_mask, 1).long().cuda()
+            pre_padding_len = torch.sum(1 - attention_mask, 1).int().cuda()
         
         if decoder_attention_mask is None:
             decoder_pre_padding_len = self.decoder_pre_padding_len
         else:
             # transformers 0 - padding;1 - nopadding
-            decoder_pre_padding_len = torch.sum(1 - decoder_attention_mask, 1).long().cuda()
+            decoder_pre_padding_len = torch.sum(1 - decoder_attention_mask, 1).int().cuda()
 
-        # TODO 传入encoder out tensor的长度per_sample_length是指encoder input的实际长度
-        # per_sample_length = torch.from_numpy(np.array([10, 10, 10, 10])).cuda().int().contiguous()
-        per_sample_length = torch.tensor([10]*4).cuda().int()
-        if pre_padding_len.shape[0] == decoder_input_shape[0]:
-            per_sample_length = per_sample_length - pre_padding_len
-
-        # print("per_sample_length: ", per_sample_length)
+        per_sample_length = encoder_seq_length # encoder_seq_length是encoder output实际的长度（去掉padding len）
         if not first_pass:
+            assert per_sample_length is not None
             encoder_out = torch.empty(0)
 
         if encoder_out is None:
-            # print('encoder out is None')
+            input_shape = input_ids.size()
+            input_ids = input_ids.view(-1, input_shape[-1])
             position_ids = self.position_ids[:, :input_shape[1]] + self.offset
             hidden_states = self.encoder_embedding(input_ids, position_ids, token_type_ids=None)
             encoder_out = self.encoder(
@@ -141,7 +137,7 @@ class EETBartModel():
 
         position_ids = self.position_ids[:, self_past_key_values_length:self_past_key_values_length+decoder_input_shape[1]] + self.offset  
         hidden_states = self.decoder_embedding(decoder_input_ids, position_ids, token_type_ids=None)
-        # print('eet decoder input: ', hidden_states)
+
         decoder_out = self.decoder(
             hidden_states=hidden_states,
             encoder_out=encoder_out,
@@ -152,8 +148,6 @@ class EETBartModel():
             reorder_state=self.reorder_state,
             normalize_before=False,
         )
-        # print('res eet encoder: ', encoder_out)
-        # print('res eet: ', decoder_out)
         return decoder_out
 
 
@@ -169,7 +163,6 @@ class EETBartModel():
         torch_model = BartModel.from_pretrained(model_id_or_path)
         model_name = type(torch_model).__name__
         cfg = torch_model.config
-        print(cfg)
 
         for k, v in torch_model.state_dict().items():
             k = convert_name(k, model_name, verbose=False)

@@ -47,14 +47,15 @@ class BertForPreTrainingOutput(ModelOutput):
     seq_relationship_logits: torch.FloatTensor = None
 
 class EETBertEmbedding():
-    def __init__(self,config,embedding_dict,data_type = torch.float32):
+    def __init__(self, config, embedding_dict, data_type=torch.float32, name='emb_cache'):
         self.if_layernorm = True
         self.embedding_weights = embedding_dict['embeddings.word_embeddings.weight'].cuda().type(data_type)
         self.position_weights = embedding_dict['embeddings.position_embeddings.weight'].cuda().type(data_type)
         self.token_type_weights = embedding_dict['embeddings.token_type_embeddings.weight'].cuda().type(data_type)
         self.Layernorm_weights = embedding_dict['embeddings.LayerNorm.weight'].cuda().type(data_type)
         self.Layernorm_bias = embedding_dict['embeddings.LayerNorm.bias'].cuda().type(data_type)
-        self.embedding = eet_embedding(config,self.embedding_weights,self.position_weights,self.token_type_weights,self.Layernorm_weights,self.Layernorm_bias, 'encoder_out_cache')
+        self.embedding = eet_embedding(config,self.embedding_weights,self.position_weights,self.token_type_weights,self.Layernorm_weights,self.Layernorm_bias, name)
+    
     def __call__(self,
                 input_ids,
                 position_ids,
@@ -62,9 +63,9 @@ class EETBertEmbedding():
         return self.embedding.forward_transformers(input_ids,position_ids,token_type_ids,self.if_layernorm)
     
     @staticmethod
-    def from_torch(config,embedding_dict,data_type = torch.float32):
-        feedforward = EETBertEmbedding(config,embedding_dict,data_type = data_type)
-        return feedforward
+    def from_torch(config, embedding_dict, data_type=torch.float32, name='emb_cache'):
+        embedding = EETBertEmbedding(config, embedding_dict, data_type=data_type, name=name)
+        return embedding
 
 
 class EETBertModel():
