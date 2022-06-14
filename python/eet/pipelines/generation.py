@@ -301,6 +301,7 @@ class GenerationMixin_EET(GenerationMixin):
             remove_invalid_values=remove_invalid_values,
             exponential_decay_length_penalty=exponential_decay_length_penalty,
             logits_processor=logits_processor,
+            renormalize_logits = False
         )
 
         # 8. prepare stopping criteria
