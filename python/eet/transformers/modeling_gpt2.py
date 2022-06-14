@@ -6,7 +6,6 @@
 from distutils.command.config import config
 import math
 import time
-from django import conf
 import torch
 import torch.nn as nn
 from torch import Tensor
