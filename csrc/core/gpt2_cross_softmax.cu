@@ -16,7 +16,7 @@ void cross_softmax_kernel_opt(T *qk_buf_, const int head_num, const int seq_len,
 
     __shared__ float s_sum, s_max;
 
-    for(int i = 0; i < mem_seq_len; ++i)
+    for(int i = 0; i < seq_len; ++i)
     {
         float qk = threadIdx.x < mem_seq_len ? (float)qk_buf_[threadIdx.x + qk_offset] : 0.0f;
 
@@ -51,15 +51,15 @@ void cross_softmax_kernel(void *qk_buf_, const int &batch_size,
 {
   dim3 grid, block;
 
-  if (seq_len <= 32)
+  if (mem_seq_len <= 32)
     block.x = 32;
-  else if (seq_len > 32 && seq_len <= 64)
+  else if (mem_seq_len > 32 && mem_seq_len <= 64)
     block.x = 64;
-  else if (seq_len > 64 && seq_len <= 128)
+  else if (mem_seq_len > 64 && mem_seq_len <= 128)
     block.x = 128;
-  else if (seq_len > 128 && seq_len <= 256)
+  else if (mem_seq_len > 128 && mem_seq_len <= 256)
     block.x = 256;
-  else if (seq_len > 256 && seq_len <= 512)
+  else if (mem_seq_len > 256 && mem_seq_len <= 512)
     block.x = 512;
   else
     block.x = 1024;
