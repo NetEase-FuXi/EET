@@ -131,14 +131,11 @@ namespace eet{
 
             // relative attention bias
             void* relative_attention_bias_ = relative_attention_bias.data_ptr();
-            if (relative_attention_bias_ != nullptr) {
-                add_relative_attn_bias(qk_buf, relative_attention_bias_);
-            }
 
             //softmax
             const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
 
-            qk_softmax(qk_buf, padding_len, need_sequence_mask);
+            qk_softmax(qk_buf, relative_attention_bias_, padding_len, need_sequence_mask);
 
             //attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
@@ -254,9 +251,9 @@ namespace eet{
 #endif
         }
 
-        void MultiHeadAttention::qk_softmax(Buffer &qk_buf, const int64_t *padding_len, bool need_sequence_mask) {
+        void MultiHeadAttention::qk_softmax(Buffer &qk_buf, void* relative_attention_bias, const int64_t *padding_len, bool need_sequence_mask) {
             // float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
-            RUN_KERNEL(bert_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), padding_len, cur_batch_size_,
+            RUN_KERNEL(bert_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), relative_attention_bias, padding_len, cur_batch_size_,
                        desc_.head_num_, cur_seq_len_, need_sequence_mask, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();

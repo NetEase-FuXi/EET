@@ -48,7 +48,7 @@ namespace eet{
             
             void add_relative_attn_bias(Buffer &qk_buf, void* relative_attention_bias);
 
-            void qk_softmax(Buffer &qk_buf, const int64_t *padding_len, bool need_sequence_mask = false);
+            void qk_softmax(Buffer &qk_buf, void* relative_attention_bias, const int64_t *padding_len, bool need_sequence_mask = false);
 
             void attn_v_mul(const Buffer& qk_buf, const Buffer& v_buf,
                             Buffer& transpose_dst);
