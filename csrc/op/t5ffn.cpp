@@ -48,7 +48,9 @@ namespace eet
                 std::cout << "unsupported activation " << std::endl;
                 return;
             }
-            size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+            // size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+            size_per_head_ = 64;
+            d_ff_ = 1920;
             // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
             Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
 
@@ -88,11 +90,9 @@ namespace eet
 
             //ffn_inner
             Buffer &ffn_inner_gelu = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                                                        desc_.hidden_units_ * 4,
-                                                                    desc_.dtype_, desc_.options_, "ffn_inner_gelu", false);
+                                                                        d_ff_, desc_.dtype_, desc_.options_);
             Buffer &ffn_inner_linear = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                                                        desc_.hidden_units_ * 4,
-                                                                    desc_.dtype_, desc_.options_, "ffn_inner_linear", false);
+                                                                        d_ff_, desc_.dtype_, desc_.options_);
 
             // pre_layerNorm
             Buffer& layernorm_tensor = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
@@ -139,7 +139,7 @@ namespace eet
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = desc_.hidden_units_ ;
-            int n = 4 * k;
+            int n = d_ff_;
             
             check_cuda_error(cublasGemmEx(desc_.cublasHandle,
                                 CUBLAS_OP_N, CUBLAS_OP_N,
@@ -161,7 +161,7 @@ namespace eet
         void T5FeedForwardNetwork::add_bias_act(Buffer& ffn_inner)
         {
             int m = cur_batch_size_ * cur_seq_len_;
-            int n = 4 * desc_.hidden_units_ ;
+            int n = d_ff_;
             
             RUN_KERNEL(add_bias_act_kernel,desc_.dtype_,ffn_inner.data_ptr(), intermediate_0_bias_, m, n, act_type_ ,desc_.stream)
             
@@ -174,7 +174,7 @@ namespace eet
         void T5FeedForwardNetwork::gated_gelu(Buffer& inner_gelu, Buffer& inner_linear)
         {
             int m = cur_batch_size_ * cur_seq_len_;
-            int n = 4 * desc_.hidden_units_ ;
+            int n = d_ff_;
             
             RUN_KERNEL(gated_gelu_kernel, desc_.dtype_, inner_gelu.data_ptr(), inner_linear.data_ptr(), m, n, act_type_ ,desc_.stream)
             
@@ -188,7 +188,7 @@ namespace eet
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = desc_.hidden_units_ ;
-            int n = 4 * k;
+            int n = d_ff_;
             
             check_cuda_error(cublasGemmEx(desc_.cublasHandle,
                                 CUBLAS_OP_N, CUBLAS_OP_N,
@@ -211,7 +211,7 @@ namespace eet
         { 
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_ ;
-            int k = 4 * n;
+            int k = d_ff_;
 
             check_cuda_error(cublasGemmEx(desc_.cublasHandle,
                                           CUBLAS_OP_N, CUBLAS_OP_N,
@@ -235,7 +235,7 @@ namespace eet
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_ ;
-            int k = 4 * n;
+            int k = d_ff_;
 
             if(add_residual)
             {   

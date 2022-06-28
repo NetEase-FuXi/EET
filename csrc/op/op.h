@@ -9,6 +9,7 @@
 #include "cross_multi_head_attention.hpp"
 #include "embedding.hpp"
 #include "ffn.hpp"
+#include "t5ffn.hpp"
 #include "layer_norm.hpp"
 #include "masked_multi_head_attention.hpp"
 #include "meta_desc.hpp"

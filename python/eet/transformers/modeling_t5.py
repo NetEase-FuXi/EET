@@ -19,6 +19,7 @@ from eet.utils.mapping import convert_name
 
 from EET import MetaDesc as meta_desc
 from EET import FeedForwardNetwork as eet_ffn
+from EET import T5FeedForwardNetwork as eet_t5ffn
 from EET import MultiHeadAttention as eet_attention
 from EET import CrossMultiHeadAttention as eet_cross_attention
 from EET import MaskedMultiHeadAttention as eet_masked_attention
@@ -87,6 +88,31 @@ class EETT5Embedding():
         embedding = EETT5Embedding(config, embedding_dict, data_type=data_type)
         return embedding
 
+class EETT5Feedforward():
+    def __init__(self, config, model_dict, layer_id, data_type=torch.float32, bias=False, name="out_cache"):
+        self.intermediate_0_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.intermediate_0.weight']).contiguous().cuda().type(data_type)
+        self.intermediate_0_bias = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_0.bias'].cuda().type(data_type) if bias else torch.empty(0)
+        self.intermediate_1_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.intermediate_1.weight']).contiguous().cuda().type(data_type)
+        self.intermediate_1_bias = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_1.bias'].cuda().type(data_type) if bias else torch.empty(0)
+        self.output_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.output.weight']).contiguous().cuda().type(data_type)
+        self.output_bias = model_dict['layer.' + str(layer_id) + '.ffn.output.bias'].cuda().type(data_type) if bias else torch.empty(0)
+        self.layernorm_weights = model_dict['layer.' + str(layer_id) + '.ffn.layernorm.weight'].cuda().type(data_type)
+        self.layernorm_bias = model_dict['layer.' + str(layer_id) + '.ffn.layernorm.bias'].cuda().type(data_type) if bias else torch.empty(0)
+
+        self.ffn = eet_t5ffn(config, self.intermediate_0_weights, self.intermediate_0_bias, self.intermediate_1_weights, self.intermediate_1_bias,self.output_weights, self.output_bias, self.layernorm_weights, self.layernorm_bias, name)
+
+    def __call__(
+        self,
+        hidden_states,
+        pre_layernorm=True,
+        add_residual=True
+    ):
+        return self.ffn.forward(hidden_states, pre_layernorm, add_residual)
+
+    @staticmethod
+    def from_torch(config, model_dict, layer_id, data_type=torch.float32, bias=True, name="out_cache"):
+        feedforward = EETT5Feedforward(config, model_dict, layer_id, data_type=data_type, bias=bias, name=name)
+        return feedforward
 
 class EETT5Block():
     def __init__(self, cfg, attention, feedforward, cross_attention=None, position_embedding=None, data_type=torch.float32):
@@ -193,11 +219,17 @@ class EETT5Block():
         if is_decoder:
             attention = EETSelfMaskedAttention.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, is_standard=True)
             cross_attention = EETCrossAttention.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, is_standard=is_standard)
-            feedforward = EETFeedforward.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, name="decoder_out_cache")
+            if cfg.feed_forward_proj == "gated-gelu":
+                feedforward = EETT5Feedforward.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, name="decoder_out_cache")
+            else:
+                feedforward = EETFeedforward.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, name="decoder_out_cache")
             layer = EETT5Block(cfg, attention, feedforward, cross_attention, position_embedding=position_embedding, data_type=data_type)
         else:
             attention = EETSelfAttention.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, is_standard=True)
-            feedforward = EETFeedforward.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, name="encoder_out_cache")
+            if cfg.feed_forward_proj == "gated-gelu":
+                feedforward = EETT5Feedforward.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, name="encoder_out_cache")
+            else:
+                feedforward = EETFeedforward.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, name="encoder_out_cache")
             layer = EETT5Block(cfg, attention, feedforward, position_embedding=position_embedding, data_type=data_type)
         
         return layer
@@ -395,6 +427,8 @@ class EETT5Model():
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.feed_forward_proj
+        if cfg.feed_forward_proj == "gated-gelu":
+            activation_fn = "gelu_new"
         batch_size = max_batch
         encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.num_layers,
                                    cfg.n_positions, cfg.n_positions, data_type, device, False,

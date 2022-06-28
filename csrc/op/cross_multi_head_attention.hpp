@@ -97,6 +97,7 @@ namespace eet{
             int cur_seq_len_;
             int mem_seq_len_;
             int size_per_head_;
+            int inner_dim_;
             int step_;
             void* alpha_;
             void* beta_;

@@ -54,6 +54,44 @@ void add_bias_gelu<half>(half* out, const half* bias, int m, int n)
 
 template <typename T>
 __global__
+void gated_gelu(T* inner_gelu, T* inner_linear, int m, int n)
+{
+  int idx = n * blockIdx.x + blockIdx.y * blockDim.x + threadIdx.x;
+
+  if (idx < m * n){
+    T in1 = inner_gelu[idx];
+    T in2 = inner_linear[idx];
+    T cdf = A + A * tanh(in1 * (C * in1 * in1 + B));
+    inner_gelu[idx] = in1 * cdf * in2;
+  }
+}
+
+template <>
+__global__
+void gated_gelu<half>(half* inner_gelu, half* inner_linear, int m, int n)
+{
+  const half2 A2 = __floats2half2_rn(A, A);
+  const half2 B2 = __floats2half2_rn(B, B);
+  const half2 C2 = __floats2half2_rn(C, C);
+
+  half2 * inner_gelu_ptr = (half2 *)inner_gelu;
+  half2 * inner_linear_ptr = (half2 *)inner_linear;
+
+  int idx = n * blockIdx.x + blockIdx.y * blockDim.x + threadIdx.x;
+
+  if (idx < m * n){
+    half2 in1 = inner_gelu_ptr[idx];
+    half2 in2 = inner_linear_ptr[idx];
+    half2 tmp = in1 * (C2 * in1 * in1 + B2);
+    float x = tanh(__half2float(tmp.x));
+    float y = tanh(__half2float(tmp.y));
+    half2 cdf = A2 + A2 * make_half2(x, y);
+    inner_gelu_ptr[idx] = in1 * cdf * in2;
+  }
+}
+
+template <typename T>
+__global__
 void add_bias_quick_gelu(T* out, const T* bias, int m, int n) 
 {
   int idx = n * blockIdx.x + blockIdx.y * blockDim.x + threadIdx.x;
@@ -201,5 +239,60 @@ void add_bias_act_kernel(void* ffn_inner, const void* bias, int m, int n ,const 
   }
 }
 
+template<typename T>
+void gated_gelu_kernel(void* inner_gelu, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream)
+{
+  if (sizeof(T) == sizeof(half)){
+
+    int fold_coeff = 1;
+    if (n <= 2048){
+      fold_coeff = 1;
+    }else if( n <= 4096){
+      fold_coeff = 2;
+    }else if(n <= 8192){
+      fold_coeff = 4;
+    }else if(n <= 16384){
+      fold_coeff = 8;
+    }else if(n <= 16384 * 2){
+      fold_coeff = 16;
+    }else if(n <= 16384 * 4){
+      fold_coeff = 32;
+    }
+  
+    dim3 grid(m, fold_coeff);
+    dim3 block(n / fold_coeff);
+  
+
+    block.x /= 2;
+    gated_gelu<T><<<grid, block, 0, stream>>>((T *)inner_gelu, (T *)inner_linear, m, n / 2);
+
+  } else {
+
+    int fold_coeff = 1;
+    if (n <= 1024){
+      fold_coeff = 1;
+    }else if( n <= 2048){
+      fold_coeff = 2;
+    }else if(n <= 4096){
+      fold_coeff = 4;
+    }else if(n <= 8192){
+      fold_coeff = 8;
+    }else if(n <= 16384){
+      fold_coeff = 16;
+    }else if(n <= 16384 * 2){
+      fold_coeff = 32;
+    }else if (n <= 16384 * 4){
+      fold_coeff = 64;
+    }
+  
+    dim3 grid(m, fold_coeff);
+    dim3 block(n / fold_coeff);
+
+    gated_gelu<T><<<grid, block, 0, stream>>>((T *)inner_gelu, (T *)inner_linear, m, n);
+  }
+}
+
 template void add_bias_act_kernel<float>(void* ffn_inner, const void* bias, const int m, const int n, const int act_type, const cudaStream_t stream);
 template void add_bias_act_kernel<half>(void* ffn_inner, const void* bias, const int m, const int n, const int act_type, const cudaStream_t stream);
+template void gated_gelu_kernel<float>(void* inner_gelu, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream);
+template void gated_gelu_kernel<half>(void* inner_gelu, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream);

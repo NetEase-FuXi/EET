@@ -32,7 +32,9 @@ namespace eet{
             layernorm_bias_(layernorm_bias.data_ptr())
         {   
             with_bias_ = q_bias_ != nullptr ? true : false;
-            size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+            size_per_head_ = 64;
+            inner_dim_ = size_per_head_* desc_.head_num_;
+            // size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
             // output_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
             Buffer& attn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn");
 
@@ -93,7 +95,7 @@ namespace eet{
             assert((cur_batch_size_ <= desc_.batch_size_)&& "cur_batch_size_ must be less than or equal to max_batch_size_");
 
             Buffer& qkv_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_ * 3, desc_.dtype_, desc_.options_);
+                                    inner_dim_ * 3, desc_.dtype_, desc_.options_);
             if(pre_layernorm)
             {
                 // pre_layerNorm
@@ -112,11 +114,11 @@ namespace eet{
 
             //qkv add bias                
             Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             qkv_add_bias(qkv_buffer, q_buf, k_buf, v_buf);
             
             qkv_buffer.free();
@@ -139,7 +141,7 @@ namespace eet{
 
             //attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             
             attn_v_mul(qk_buf,v_buf,transpose_dst);
 
@@ -149,7 +151,7 @@ namespace eet{
 
             //transpose
             Buffer& dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
 
             transpose(transpose_dst, dst);
             transpose_dst.free();
@@ -186,7 +188,7 @@ namespace eet{
                                     Buffer& qkv_buffer){
             const int m = cur_batch_size_ * cur_seq_len_;
             const int k = desc_.hidden_units_;
-            const int n = 3 * k;
+            const int n = 3 * inner_dim_;
 
             check_cuda_error(cublasGemmEx(desc_.cublasHandle,
                 CUBLAS_OP_N, CUBLAS_OP_N,
@@ -294,8 +296,8 @@ namespace eet{
 
         void MultiHeadAttention::project(const Buffer& dst, Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_residual){
             const int m = cur_batch_size_ * cur_seq_len_;
-            int k = desc_.head_num_ * size_per_head_;
-            int n = k;
+            int k = inner_dim_;
+            int n = desc_.hidden_units_;
             check_cuda_error(cublasGemmEx(desc_.cublasHandle,
                                             CUBLAS_OP_N, CUBLAS_OP_N,
                                             n, m, k,

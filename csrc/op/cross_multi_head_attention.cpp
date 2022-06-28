@@ -33,7 +33,9 @@ namespace eet{
             layernorm_bias_(layernorm_bias.data_ptr())
         {
             with_bias_ = q_bias_ != nullptr ? true : false;
-            size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+            // size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+            size_per_head_ = 64;
+            inner_dim_ = size_per_head_* desc_.head_num_;
             // output_ = torch::zeros({desc_.batch_size_ , desc_.max_full_seq_len_ ,desc_.hidden_units_}, desc_.options_);
             key_mem_cache_ =torch::zeros({desc_.batch_size_ , desc_.max_seq_len_ ,desc_.hidden_units_}, desc_.options_);
             value_mem_cache_ = torch::zeros_like(key_mem_cache_);
@@ -94,11 +96,11 @@ namespace eet{
             step_ = 1;
             //qkv * weights
             Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             
             if(pre_layernorm)
             {
@@ -140,7 +142,7 @@ namespace eet{
 
             //attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             
             attn_v_mul(qk_buf,v_buf,transpose_dst);
 
@@ -155,7 +157,7 @@ namespace eet{
 
             //transpose
             Buffer& dst = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
 
             transpose(transpose_dst, dst);
             transpose_dst.free();
@@ -255,7 +257,7 @@ namespace eet{
                
                 int m = cur_batch_size_ * cur_seq_len_;
                 const int k = desc_.hidden_units_;
-                const int n = k;
+                const int n = inner_dim_;
                 check_cuda_error(cublasGemmEx(desc_.cublasHandle,
                         CUBLAS_OP_N, CUBLAS_OP_N, 
                         n, m, k, 
@@ -388,8 +390,8 @@ namespace eet{
 
         void CrossMultiHeadAttention::project(const Buffer& dst,Buffer& res,torch::Tensor& input, bool pre_layernorm,bool add_residual){
             const int m = cur_batch_size_ * cur_seq_len_;
-            int k = desc_.head_num_ * size_per_head_;
-            int n = k;
+            int k = inner_dim_;
+            int n = desc_.hidden_units_;
             check_cuda_error(cublasGemmEx(desc_.cublasHandle,
                                             CUBLAS_OP_N, CUBLAS_OP_N,
                                             n, m, k,

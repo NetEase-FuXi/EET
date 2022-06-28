@@ -51,6 +51,7 @@ namespace eet{
             int cur_batch_size_;
             int cur_seq_len_;
             int size_per_head_;
+            int d_ff_;
 
             void* alpha_;
             void* beta_;

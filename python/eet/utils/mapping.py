@@ -176,7 +176,9 @@ transformers_t5_mapping = {
                 "layer.0.layer_norm": {"__name__":"self_attn.layernorm"},
                 "layer.1.DenseReluDense.wi": {"__name__":"ffn.intermediate"},
                 "layer.1.DenseReluDense.wo": {"__name__":"ffn.output"},
-                "layer.1.layer_norm": {"__name__":"ffn.layernorm"},       
+                "layer.1.DenseReluDense.wi_0": {"__name__":"ffn.intermediate_0"},
+                "layer.1.DenseReluDense.wi_1": {"__name__":"ffn.intermediate_1"},
+                "layer.1.layer_norm": {"__name__":"ffn.layernorm"},
             }
         }
     },
@@ -200,7 +202,9 @@ transformers_t5_mapping = {
                 "layer.1.layer_norm": {"__name__":"encoder_attn.layernorm"},
                 "layer.2.DenseReluDense.wi": {"__name__":"ffn.intermediate"},
                 "layer.2.DenseReluDense.wo": {"__name__":"ffn.output"},
-                "layer.2.layer_norm": {"__name__":"ffn.layernorm"},            
+                "layer.2.DenseReluDense.wi_0": {"__name__":"ffn.intermediate_0"},
+                "layer.2.DenseReluDense.wi_1": {"__name__":"ffn.intermediate_1"},                
+                "layer.2.layer_norm": {"__name__":"ffn.layernorm"},
             }
         }
     },    
