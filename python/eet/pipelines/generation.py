@@ -757,21 +757,18 @@ class GenerationMixin_EET(GenerationMixin):
         this_peer_finished = False  # used by synced_gpus only
         # auto-regressive generation
         first_pass = True
+        self_past_key_values_length = 0
         while True:
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, first_pass  = first_pass,**model_kwargs)
 
             # forward pass to get next token
             outputs = self(
-                input_ids = model_inputs['input_ids'],
-                past_key_values = model_inputs['past_key_values'],
-                attention_mask = model_inputs['attention_mask'],
-                token_type_ids = model_inputs['token_type_ids'],
-                position_ids = model_inputs['position_ids'],
-                use_cache = model_inputs['use_cache'],
+                **model_inputs,
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
-                first_pass = first_pass,
+                first_pass=first_pass,
+                self_past_key_values_length=self_past_key_values_length,
             )
             first_pass = False
 
@@ -796,6 +793,7 @@ class GenerationMixin_EET(GenerationMixin):
                 next_tokens = next_tokens * unfinished_sequences + pad_token_id * (1 - unfinished_sequences)
 
             # update generated ids, model inputs, and length for next step
+            self_past_key_values_length += 1
             input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
             model_kwargs = self._update_model_kwargs_for_generation(
                 outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder

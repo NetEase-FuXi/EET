@@ -155,14 +155,14 @@ class EETCrossAttention():
         self,
         hidden_states,
         pre_padding_len,
-        encoder_out=None,
+        encoder_outputs=None,
         per_sample_length=None,
         pre_layernorm=False,
         add_residual=True,
         first_pass=False
     ):
         # TODO encoder_padding_mask fix bug 改名为encoder output length
-        return self.attention.forward(hidden_states, encoder_out, pre_padding_len, pre_layernorm, add_residual, per_sample_length, first_pass)
+        return self.attention.forward(hidden_states, encoder_outputs, pre_padding_len, pre_layernorm, add_residual, per_sample_length, first_pass)
 
     @staticmethod
     def from_torch(config, model_dict, layer_id, data_type=torch.float32, bias=True, is_standard=True):
@@ -294,7 +294,7 @@ class EETDecoderLayer():
     def __call__(
         self,
         x,
-        encoder_out=None,
+        encoder_outputs=None,
         first_pass=True,
         pre_padding_len=None,
         per_sample_length=None,
@@ -304,7 +304,7 @@ class EETDecoderLayer():
         add_residual=True,
     ):
 
-        if encoder_out is not None and self.cross_attention is not None:
+        if encoder_outputs is not None and self.cross_attention is not None:
             ''' self_attn -> cross_attn -> ffn'''
             self_attn_out = self.attention(
                 hidden_states=x,
@@ -317,7 +317,7 @@ class EETDecoderLayer():
             cross_attn_out = self.cross_attention(
                 hidden_states=self_attn_out,
                 pre_padding_len=pre_padding_len,
-                encoder_out=encoder_out,
+                encoder_outputs=encoder_outputs,
                 per_sample_length=per_sample_length,
                 pre_layernorm=normalize_before,
                 add_residual=add_residual,
@@ -367,7 +367,7 @@ class EETDecoder():
     def __call__(
         self,
         hidden_states,
-        encoder_out=None,
+        encoder_outputs=None,
         first_pass=True,
         pre_padding_len=None,
         per_sample_length=None,
@@ -378,7 +378,7 @@ class EETDecoder():
         for layer in self.layers:
             hidden_states = layer(
                 hidden_states,
-                encoder_out=encoder_out,
+                encoder_outputs=encoder_outputs,
                 first_pass=first_pass,
                 pre_padding_len=pre_padding_len,
                 per_sample_length=per_sample_length,

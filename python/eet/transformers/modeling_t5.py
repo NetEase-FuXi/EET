@@ -14,19 +14,25 @@ import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from typing import Any, Dict, List, Optional, Tuple
 from transformers import T5Model
+from transformers import T5Model, T5ForConditionalGeneration
+from transformers.modeling_outputs import (
+    BaseModelOutput,
+    BaseModelOutputWithPastAndCrossAttentions,
+    Seq2SeqLMOutput,
+    Seq2SeqModelOutput,    
+)
 from eet.transformers.encoder_decoder import *
 from eet.utils.mapping import convert_name
 
 from EET import MetaDesc as meta_desc
-from EET import FeedForwardNetwork as eet_ffn
-from EET import T5FeedForwardNetwork as eet_t5ffn
-from EET import MultiHeadAttention as eet_attention
-from EET import CrossMultiHeadAttention as eet_cross_attention
-from EET import MaskedMultiHeadAttention as eet_masked_attention
 from EET import Embedding as eet_embedding
-from EET import LayerNorm as eet_layernorm
+from EET import T5FeedForwardNetwork as eet_t5ffn
+from ..pipelines.generation import GenerationMixin_EET
+import logging
+logger = logging.getLogger(__name__)
 
-__all__ = ['EETT5Embedding', 'EETT5Block', 'EETT5Encoder', 'EETT5Decoder', 'EETT5Model']
+
+__all__ = ['EETT5Embedding', 'EETT5Block', 'EETT5Encoder', 'EETT5Decoder', 'EETT5Model', 'EETT5ForConditionalGeneration']
 
 
 def _relative_position_bucket(relative_position, bidirectional=True, num_buckets=32, max_distance=128):
@@ -142,7 +148,7 @@ class EETT5Block():
     def __call__(
         self,
         hidden_states,
-        encoder_out=None,
+        encoder_outputs=None,
         first_pass=True,
         pre_padding_len=None,
         per_sample_length=None,
@@ -166,9 +172,8 @@ class EETT5Block():
         position_bias = position_bias.contiguous()
         # position_bias = torch.empty(0)
 
-        if encoder_out is not None and self.cross_attention is not None:
+        if encoder_outputs is not None and self.cross_attention is not None:
             ''' decoder: self_masked_attn -> cross_attn -> ffn'''
-            # print(position_bias.size(), 'eet pos bias: ', position_bias)
             self_attn_out = self.attention(
                 hidden_states=hidden_states,
                 pre_padding_len=pre_padding_len,
@@ -178,23 +183,20 @@ class EETT5Block():
                 first_pass=first_pass,
                 relative_attention_bias=position_bias,
             )
-            # print('eet decoder self attn out: ', self_attn_out)
             cross_attn_out = self.cross_attention(
                 hidden_states=self_attn_out,
                 pre_padding_len=pre_padding_len,
-                encoder_out=encoder_out,
+                encoder_outputs=encoder_outputs,
                 per_sample_length=per_sample_length,
                 pre_layernorm=normalize_before,
                 add_residual=add_residual,
                 first_pass=first_pass
             )
-            # print('eet cross attn out: ', cross_attn_out)
             out = self.feedforward(
                 cross_attn_out,
                 pre_layernorm=normalize_before,
                 add_residual=add_residual
             )
-            # print('eet decoder out: ', out)
         else:
             ''' encoder: self_attn -> ffn''' 
             self_attn_out = self.attention(
@@ -204,14 +206,12 @@ class EETT5Block():
                 add_residual=add_residual,
                 relative_attention_bias=position_bias,
             )
-            # print(self_attn_out.size(), ' eet self attn out: ', self_attn_out)
 
             out = self.feedforward(
                 self_attn_out,
                 pre_layernorm=normalize_before,
                 add_residual=add_residual
             )
-            # print(out.size(), ' eet encoder out: ', out)
         return (out, position_bias)
 
     @staticmethod
@@ -235,16 +235,19 @@ class EETT5Block():
         return layer
 
 class EETT5Encoder():
-    def __init__(self, EncoderLayers):
+    def __init__(self, embedding, EncoderLayers, final_layer_norm):
+        self.embed_tokens = embedding
         self.layers = EncoderLayers
+        self.final_layer_norm = final_layer_norm
 
     def __call__(
         self,
-        hidden_states,
+        input_ids,
         pre_padding_len=None,
-        normalize_before=False,
+        normalize_before=True,
         position_bias=None,
     ):
+        hidden_states = self.embed_tokens(input_ids)
         for layer in self.layers:
             (hidden_states, position_bias) = layer(
                 hidden_states,
@@ -252,10 +255,12 @@ class EETT5Encoder():
                 normalize_before=normalize_before,
                 position_bias=position_bias,
             )
+        hidden_states = self.final_layer_norm(hidden_states)
+        
         return hidden_states
 
     @staticmethod
-    def from_torch(config, cfg, position_embedding, layer_model_dict, layer_num, data_type=torch.float32, bias=True):
+    def from_torch(config, cfg, embedding, position_embedding, final_layer_norm, layer_model_dict, layer_num, data_type=torch.float32, bias=True):
         """from torch."""
         EncoderLayers = []
         for i in range(layer_num):
@@ -264,32 +269,34 @@ class EETT5Encoder():
                     EETT5Block.from_torch(config, cfg, layer_model_dict['layer.' + str(i)], i, data_type=data_type, is_decoder=False, bias=False, position_embedding=position_embedding if i == 0 else None, is_standard=True)
                 ]
             )
-        eet_encoder = EETT5Encoder(EncoderLayers)
+        eet_encoder = EETT5Encoder(embedding, EncoderLayers, final_layer_norm)
         return eet_encoder
 
 
 class EETT5Decoder():
-    def __init__(self, DecoderLayers):
+    def __init__(self, embedding, DecoderLayers, final_layer_norm):
+        self.embed_tokens = embedding
         self.layers = DecoderLayers
+        self.final_layer_norm = final_layer_norm
 
     def __call__(
         self,
-        hidden_states,
-        encoder_out=None,
+        input_ids,
+        encoder_outputs=None,
         first_pass=True,
         pre_padding_len=None,
         per_sample_length=None,
         head_mask=None,
         reorder_state=None,
-        normalize_before=False,
+        normalize_before=True,
         position_bias=None,
         self_past_key_values_length=0,
     ):
-        # for layer in self.layers:
-        for idx, layer in enumerate(self.layers):
+        hidden_states = self.embed_tokens(input_ids)
+        for layer in self.layers:
             (hidden_states, position_bias) = layer(
                 hidden_states,
-                encoder_out=encoder_out,
+                encoder_outputs=encoder_outputs,
                 first_pass=first_pass,
                 pre_padding_len=pre_padding_len,
                 per_sample_length=per_sample_length,
@@ -300,11 +307,12 @@ class EETT5Decoder():
                 position_bias=position_bias,
                 self_past_key_values_length=self_past_key_values_length,
             )
+        hidden_states = self.final_layer_norm(hidden_states)
 
         return hidden_states
 
     @staticmethod
-    def from_torch(config, cfg, position_embedding, layer_model_dict, layer_num, data_type=torch.float32, bias=True):
+    def from_torch(config, cfg, embedding, position_embedding, final_layer_norm, layer_model_dict, layer_num, data_type=torch.float32, bias=True):
         """from torch."""
         DecoderLayers = []
         for i in range(layer_num):
@@ -313,18 +321,14 @@ class EETT5Decoder():
                     EETT5Block.from_torch(config, cfg, layer_model_dict['layer.' + str(i)], i, data_type=data_type, is_decoder=True, bias=False, position_embedding=position_embedding if i == 0 else None, is_standard=True)
                 ]
             )
-
-        eet_decoder = EETT5Decoder(DecoderLayers)
+        eet_decoder = EETT5Decoder(embedding, DecoderLayers, final_layer_norm)
         return eet_decoder
 
 
 class EETT5Model():
-    def __init__(self, cfg, shared, encoder, encoder_final_layernorm, decoder, decoder_final_layernorm):
-        self.shared = shared.cuda()
+    def __init__(self, cfg, encoder, decoder):
         self.encoder = encoder
         self.decoder = decoder
-        self.encoder_final_layernorm = encoder_final_layernorm.cuda()
-        self.decoder_final_layernorm = decoder_final_layernorm.cuda()
         self.cfg = cfg
         self.pre_padding_len = torch.empty(0).long()
         self.decoder_pre_padding_len = torch.empty(0).long()
@@ -332,8 +336,8 @@ class EETT5Model():
 
     def __call__(
         self,
-        input_ids,
-        encoder_out=None,
+        input_ids=None,
+        encoder_outputs=None,
         encoder_seq_length=torch.empty(0),
         first_pass=True,
         attention_mask=None,
@@ -341,7 +345,7 @@ class EETT5Model():
         decoder_attention_mask=None,
         reorder_state=None,
         self_past_key_values_length=0,
-    ):        
+    ):
         if attention_mask is None:
             pre_padding_len = self.pre_padding_len
         else:
@@ -357,33 +361,26 @@ class EETT5Model():
         per_sample_length = encoder_seq_length # encoder_seq_length是encoder output实际的长度（去掉padding len）
         if not first_pass:
             assert encoder_seq_length is not None
-            encoder_out = torch.empty(0)
+            encoder_outputs = torch.empty(0)
 
-        if encoder_out is None:
+        if encoder_outputs is None:
             input_shape = input_ids.size()
             input_ids = input_ids.view(-1, input_shape[-1])
-            inputs_embeds = self.shared(input_ids)
-            encoder_out = self.encoder(
-                hidden_states=inputs_embeds,
+            encoder_outputs = self.encoder(
+                input_ids=input_ids,
                 pre_padding_len=pre_padding_len,
                 normalize_before=True,
                 position_bias=None,
             )
-            encoder_out = self.encoder_final_layernorm(encoder_out)
 
-        # print("per_sample_length: ", per_sample_length)            
         if reorder_state is not None:
             self.reorder_state = reorder_state.long()       
-        # print('eet encoder out: ', encoder_out)
         if decoder_input_ids is None:
             raise ValueError(f"You have to specify decoder input ids")
-
-        decoder_input_shape = decoder_input_ids.size()
-        decoder_inputs_embeds = self.shared(decoder_input_ids)
         
         decoder_out = self.decoder(
-            hidden_states=decoder_inputs_embeds,
-            encoder_out=encoder_out,
+            input_ids=decoder_input_ids,
+            encoder_outputs=encoder_outputs,
             first_pass=first_pass,
             pre_padding_len=decoder_pre_padding_len,
             per_sample_length=per_sample_length,
@@ -393,14 +390,12 @@ class EETT5Model():
             position_bias=None,
             self_past_key_values_length=self_past_key_values_length,
         )
-        decoder_out = self.decoder_final_layernorm(decoder_out)
 
         return decoder_out
 
-
     @staticmethod
     def from_pretrained(model_id_or_path: str, max_batch, full_seq_len, data_type=torch.float32, device_id=0):
-        """from torch."""
+        """from pretrained."""
         torch.set_grad_enabled(False)
         encoder_model_dict = {}
         decoder_model_dict = {}
@@ -429,6 +424,8 @@ class EETT5Model():
         activation_fn = cfg.feed_forward_proj
         if cfg.feed_forward_proj == "gated-gelu":
             activation_fn = "gelu_new"
+        if not hasattr(cfg, "n_positions"):
+            cfg.n_positions = 512
         batch_size = max_batch
         encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.num_layers,
                                    cfg.n_positions, cfg.n_positions, data_type, device, False,
@@ -442,14 +439,234 @@ class EETT5Model():
         else:
             torch_model = torch_model.float()
 
-        shared = torch_model.shared
-        encoder_final_layernorm = torch_model.encoder.final_layer_norm
-        decoder_final_layernorm = torch_model.decoder.final_layer_norm
+        shared = torch_model.shared.cuda()
+        encoder_final_layernorm = torch_model.encoder.final_layer_norm.cuda()
+        decoder_final_layernorm = torch_model.decoder.final_layer_norm.cuda()
         encoder_position_embedding = torch_model.encoder.block[0].layer[0].SelfAttention.relative_attention_bias
         decoder_position_embedding = torch_model.decoder.block[0].layer[0].SelfAttention.relative_attention_bias
 
-        encoder = EETT5Encoder.from_torch(encoder_config, cfg, encoder_position_embedding, encoder_layer_model_dict, cfg.num_layers, data_type=data_type, bias=False)
-        decoder = EETT5Decoder.from_torch(decoder_config, cfg, decoder_position_embedding, decoder_layer_model_dict, cfg.num_decoder_layers, data_type=data_type, bias=False)
-        eet_model = EETT5Model(cfg, shared, encoder, encoder_final_layernorm, decoder, decoder_final_layernorm)
+        encoder = EETT5Encoder.from_torch(encoder_config, cfg, shared, encoder_position_embedding, encoder_final_layernorm, encoder_layer_model_dict, cfg.num_layers, data_type=data_type, bias=False)
+        decoder = EETT5Decoder.from_torch(decoder_config, cfg, shared, decoder_position_embedding, decoder_final_layernorm, decoder_layer_model_dict, cfg.num_decoder_layers, data_type=data_type, bias=False)
+        eet_model = EETT5Model(cfg, encoder, decoder)
 
         return eet_model
+
+    @staticmethod
+    def from_torch(torch_model, max_batch, full_seq_len, data_type=torch.float32):
+        """from torch"""
+        torch.set_grad_enabled(False)
+        encoder_model_dict = {}
+        decoder_model_dict = {}
+
+        model_name = type(torch_model).__name__
+        cfg = torch_model.config
+
+        for k, v in torch_model.state_dict().items():
+            k = convert_name(k, model_name, verbose=False)
+            if 'encoder.layer.' in k:
+                k = k[k.find('layer.'):]
+                encoder_model_dict[k] = v
+            if 'decoder.layer.' in k:
+                k = k[k.find('layer.'):]
+                decoder_model_dict[k] = v
+
+             # Group by layer id in model_dict's keys
+        from itertools import groupby
+        encoder_layer_model_dict = {k: dict(v) for k, v in groupby(list(encoder_model_dict.items()),
+                                                                   lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
+        decoder_layer_model_dict = {k: dict(v) for k, v in groupby(list(decoder_model_dict.items()),
+                                                                   lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
+
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
+        if cfg.feed_forward_proj == "gated-gelu":
+            activation_fn = "gelu_new"
+        if not hasattr(cfg, "n_positions"):
+            cfg.n_positions = 512
+        batch_size = max_batch
+        encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.num_layers,
+                                   cfg.n_positions, cfg.n_positions, data_type, device, False,
+                                   activation_fn)
+        decoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.num_decoder_layers,
+                                   cfg.n_positions, cfg.n_positions, data_type, device, False,
+                                   activation_fn)
+
+        if data_type==torch.float16:
+            torch_model = torch_model.half()
+        else:
+            torch_model = torch_model.float()
+
+        shared = torch_model.shared.cuda()
+        encoder_final_layernorm = torch_model.encoder.final_layer_norm.cuda()
+        decoder_final_layernorm = torch_model.decoder.final_layer_norm.cuda()
+        encoder_position_embedding = torch_model.encoder.block[0].layer[0].SelfAttention.relative_attention_bias
+        decoder_position_embedding = torch_model.decoder.block[0].layer[0].SelfAttention.relative_attention_bias
+
+        encoder = EETT5Encoder.from_torch(encoder_config, cfg, shared, encoder_position_embedding, encoder_final_layernorm, encoder_layer_model_dict, cfg.num_layers, data_type=data_type, bias=False)
+        decoder = EETT5Decoder.from_torch(decoder_config, cfg, shared, decoder_position_embedding, decoder_final_layernorm, decoder_layer_model_dict, cfg.num_decoder_layers, data_type=data_type, bias=False)
+        eet_model = EETT5Model(cfg, encoder, decoder)
+
+        return eet_model       
+
+
+class EETT5ForConditionalGeneration(GenerationMixin_EET):
+    def __init__(self, t5model, lm_head, config):
+        self.model = t5model
+        self.lm_head = lm_head
+        self.config = config
+        self.main_input_name = "input_ids"
+        self.device = "cuda:0"
+
+    def get_encoder(self):
+        return self.model.encoder
+
+    def get_decoder(self):
+        return self.model.decoder
+
+    def _prepare_encoder_decoder_kwargs_for_generation(self, inputs_tensor, model_kwargs, model_input_name=None):
+        # 1. get encoder
+        encoder = self.get_encoder()
+
+        # 2. prepare encoder args and encoder kwargs
+        encoder_kwargs = {}
+        attention_mask = model_kwargs["attention_mask"]
+
+        if attention_mask is None:
+            pre_padding_len = torch.empty(0).long()
+        else:
+            # transformers 0 - padding;1 - nopadding
+            pre_padding_len = torch.sum(1 - attention_mask, 1).long().cuda()
+        encoder_kwargs["normalize_before"] = True
+        encoder_kwargs["pre_padding_len"] = pre_padding_len
+
+        # 3. make sure that encoder returns `ModelOutput`
+        model_input_name = model_input_name if model_input_name is not None else self.main_input_name
+        encoder_kwargs[model_input_name] = inputs_tensor.cuda()
+        
+        encoder_last_hidden_state = encoder(**encoder_kwargs)
+        encoder_outputs = BaseModelOutput(last_hidden_state=encoder_last_hidden_state)
+        model_kwargs["encoder_outputs"]: BaseModelOutput = encoder_outputs
+
+        return model_kwargs
+
+    def prepare_inputs_for_generation(
+        self,
+        input_ids,
+        first_pass=True, 
+        past=None,
+        attention_mask=None,
+        head_mask=None,
+        decoder_head_mask=None,
+        cross_attn_head_mask=None,
+        use_cache=None,
+        encoder_outputs=None,
+        pre_padding_len=None,
+        **kwargs
+    ):
+        batch_size, seq_len, _ = encoder_outputs[0].size()
+        # compute per sample length EET增量推理需要输入encoder out的真实句长
+        encoder_seq_length = torch.tensor([seq_len] * batch_size).int().cuda()
+        if attention_mask is not None:
+            pre_padding_len = torch.sum(1 - attention_mask, 1).int().cuda()
+            encoder_seq_length = encoder_seq_length - pre_padding_len
+
+        # only last token for inputs_ids if past is defined in kwargs
+        if first_pass == False:
+            input_ids = input_ids[:, -1].unsqueeze(-1)
+
+        attention_mask = kwargs.get("attention_mask", None)
+        input_ids = input_ids.contiguous()
+        encoder_outputs.last_hidden_state = encoder_outputs.last_hidden_state.contiguous()
+
+        return {
+            "decoder_input_ids": input_ids,
+            "past_key_values": past,
+            "attention_mask": attention_mask,
+            "encoder_outputs": encoder_outputs.last_hidden_state,
+            "encoder_seq_length": encoder_seq_length,
+        }
+
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        head_mask=None,
+        decoder_input_ids=None,
+        decoder_attention_mask=None,
+        encoder_outputs=None,
+        past_key_values=None,
+        labels=None,
+        use_cache=None,
+        encoder_seq_length=None,
+        reorder_state=None,
+        first_pass=True,
+        self_past_key_values_length=0,
+    ):
+        
+        transformer_outputs = self.model(
+            input_ids=input_ids,
+            encoder_outputs=encoder_outputs,
+            encoder_seq_length=encoder_seq_length,
+            first_pass=first_pass,
+            attention_mask=attention_mask,
+            decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=decoder_attention_mask,
+            reorder_state=reorder_state,
+            self_past_key_values_length=self_past_key_values_length,
+        )
+        # if self.config.feed_forward_proj != "gated-gelu":
+        #     transformer_outputs = transformer_outputs * (self.config.d_model**-0.5)
+        lm_logits = self.lm_head(transformer_outputs)
+        return Seq2SeqLMOutput(
+            loss=None,
+            logits=lm_logits,
+            past_key_values=None,
+            decoder_hidden_states=None,
+            decoder_attentions=None,
+            cross_attentions=None,
+            encoder_last_hidden_state=None,
+            encoder_hidden_states=None,
+            encoder_attentions=None,
+        )
+
+    def __call__(
+        self,
+        input_ids=None,
+        past_key_values=None,
+        attention_mask=None,
+        head_mask=None,
+        encoder_outputs=None,
+        decoder_input_ids=None,
+        first_pass=True,
+        encoder_seq_length=torch.empty(0),
+        self_past_key_values_length=0,
+        **kwargs,
+    ):
+        return self.forward(        
+            input_ids=input_ids,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            encoder_outputs=encoder_outputs,
+            decoder_input_ids=decoder_input_ids,
+            first_pass=first_pass,
+            encoder_seq_length=encoder_seq_length,
+            self_past_key_values_length=self_past_key_values_length,
+            )
+
+    def from_pretrained(model_id_or_path: str, max_batch, full_seq_len, data_type):
+        """from_pretrained"""
+        torch.set_grad_enabled(False)
+        model_dict = {}
+        embedding_dict = {}
+        torch_model = T5ForConditionalGeneration.from_pretrained(model_id_or_path)
+        if data_type == torch.float32:
+            torch_model = torch_model.float()
+        else:
+            torch_model = torch_model.half()
+
+        t5 = EETT5Model.from_pretrained(model_id_or_path, max_batch, full_seq_len, data_type)
+
+        lm_head = torch_model.lm_head.cuda()
+        model = EETT5ForConditionalGeneration(t5, lm_head, torch_model.config)
+
+        return model
