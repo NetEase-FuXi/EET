@@ -394,7 +394,7 @@ class EETT5Model():
         return decoder_out
 
     @staticmethod
-    def from_pretrained(model_id_or_path: str, max_batch, full_seq_len, data_type=torch.float32, device_id=0):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type=torch.float32, device_id=0):
         """from pretrained."""
         torch.set_grad_enabled(False)
         encoder_model_dict = {}
@@ -452,7 +452,7 @@ class EETT5Model():
         return eet_model
 
     @staticmethod
-    def from_torch(torch_model, max_batch, full_seq_len, data_type=torch.float32):
+    def from_torch(torch_model, max_batch, data_type=torch.float32):
         """from torch"""
         torch.set_grad_enabled(False)
         encoder_model_dict = {}
@@ -653,7 +653,7 @@ class EETT5ForConditionalGeneration(GenerationMixin_EET):
             self_past_key_values_length=self_past_key_values_length,
             )
 
-    def from_pretrained(model_id_or_path: str, max_batch, full_seq_len, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -664,7 +664,7 @@ class EETT5ForConditionalGeneration(GenerationMixin_EET):
         else:
             torch_model = torch_model.half()
 
-        t5 = EETT5Model.from_pretrained(model_id_or_path, max_batch, full_seq_len, data_type)
+        t5 = EETT5Model.from_pretrained(model_id_or_path, max_batch, data_type)
 
         lm_head = torch_model.lm_head.cuda()
         model = EETT5ForConditionalGeneration(t5, lm_head, torch_model.config)

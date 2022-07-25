@@ -76,7 +76,7 @@ def test(batch_size=4, seq_len=8, max_seq_len=1024, using_half=True, using_eet=T
 
     if using_eet:
     # load model
-        eet_model = EETT5Model.from_pretrained(model_dir, batch_size, seq_len, data_type=data_type)
+        eet_model = EETT5Model.from_pretrained(model_dir, batch_size, data_type=data_type)
 
         '''
         first_pass 用于判断生成任务时是否是第一步，也就是是否是在做提示词的推理。true代表在做提示词的推理，false代表在做生成推理
@@ -122,7 +122,7 @@ def test_text_generate():
     
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     model = T5ForConditionalGeneration.from_pretrained(model_dir, from_flax=False).to('cuda:0')
-    eet_model = EETT5ForConditionalGeneration.from_pretrained(model_dir, max_batch=10, full_seq_len=100, data_type=torch.float16)
+    eet_model = EETT5ForConditionalGeneration.from_pretrained(model_dir, max_batch=10, data_type=torch.float16)
     
     input_str = "少侠路过码头时，一位船夫哽咽着向少侠求救：“少侠，我两年前出海时答应过儿子会给他带一把铁木剑，可船靠岸时那把剑不小心掉水里了，我沿着船舷上刻的记号找了许久也没找到， \
     # 这可如何是好？”少侠说：“帮你下水去捞。”<extra_id_0>船夫的儿子获得了铁木剑，十分开心。</s>"

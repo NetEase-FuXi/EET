@@ -61,7 +61,7 @@ def main():
     time_ts = t4 - t3
 
     # load eet model
-    eet_model = EETT5Model.from_pretrained('t5-small', batch_size, seq_len, data_type=data_type)
+    eet_model = EETT5Model.from_pretrained('t5-small', batch_size, data_type=data_type)
     '''
     first_pass 用于判断生成任务时是否是第一步，也就是是否是在做提示词的推理。true代表在做提示词的推理，false代表在做生成推理
     由于eet不会返回past_key_value，前一步的信息全部在内部做了保存，所以没法通过past_key_value做判断，故增加此参数。
