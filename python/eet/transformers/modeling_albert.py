@@ -177,8 +177,7 @@ class EETAlbertModel():
         return sequence_output, pooled_output
 
     @staticmethod
-    def create_state_dict(torch_model):
-        model_name = type(torch_model).__name__
+    def create_state_dict(torch_model, model_name):
         model_dict = {}
         embedding_dict = {}
         layer_model_dict = {}
@@ -212,9 +211,10 @@ class EETAlbertModel():
         torch.set_grad_enabled(False)
         torch_model = AlbertModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
+        model_name = cfg.model_type
 
         # create eet model state dict
-        model_dict = EETAlbertModel.create_state_dict(torch_model)
+        model_dict = EETAlbertModel.create_state_dict(torch_model, model_name)
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
@@ -235,9 +235,10 @@ class EETAlbertModel():
         """from torch."""
         torch.set_grad_enabled(False)
         cfg = torch_model.config
+        model_name = cfg.model_type
 
         # create eet model state dict
-        model_dict = EETAlbertModel.create_state_dict(torch_model)
+        model_dict = EETAlbertModel.create_state_dict(torch_model, model_name)
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act

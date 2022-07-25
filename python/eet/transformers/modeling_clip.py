@@ -218,8 +218,7 @@ class EETCLIPModel():
         return (logits_per_image, logits_per_text)
 
     @staticmethod
-    def create_state_dict(torch_model):
-        model_name = type(torch_model).__name__
+    def create_state_dict(torch_model, model_name):
         model_dict = {}
         text_layer_model_dict = {}
         text_embedding_dict = {}
@@ -275,12 +274,13 @@ class EETCLIPModel():
         cfg = torch_model.config
         text_cfg = cfg.text_config
         vision_cfg = cfg.vision_config
+        model_name = cfg.model_type
 
         # torch model config 'num_channels' is required but not set 
         vision_cfg.num_channels = num_channels
 
         # create eet model state dict
-        model_dict = EETCLIPModel.create_state_dict(torch_model)
+        model_dict = EETCLIPModel.create_state_dict(torch_model, model_name)
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         batch_size = max_batch

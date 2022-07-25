@@ -91,8 +91,8 @@ class EETRobertaModel():
         model_dict = {}
         embedding_dict = {}
         torch_model = RobertaModel.from_pretrained(model_id_or_path)
-        model_name = type(torch_model).__name__
         cfg = torch_model.config
+        model_name = cfg.model_type
 
         for k, v in torch_model.state_dict().items():
             if 'embeddings.' in k:
@@ -130,8 +130,8 @@ class EETRobertaModel():
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
-        model_name = type(torch_model.roberta).__name__
         cfg = torch_model.config
+        model_name = cfg.model_type
 
         for k, v in torch_model.roberta.state_dict().items():
             if 'embeddings.' in k:

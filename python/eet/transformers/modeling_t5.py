@@ -401,8 +401,8 @@ class EETT5Model():
         decoder_model_dict = {}
 
         torch_model = T5Model.from_pretrained(model_id_or_path)
-        model_name = type(torch_model).__name__
         cfg = torch_model.config
+        model_name = cfg.model_type
 
         for k, v in torch_model.state_dict().items():
             k = convert_name(k, model_name, verbose=False)
@@ -452,14 +452,14 @@ class EETT5Model():
         return eet_model
 
     @staticmethod
-    def from_torch(torch_model, max_batch, data_type=torch.float32):
+    def from_torch(torch_model, max_batch, data_type=torch.float32, device_id=0):
         """from torch"""
         torch.set_grad_enabled(False)
         encoder_model_dict = {}
         decoder_model_dict = {}
 
-        model_name = type(torch_model).__name__
         cfg = torch_model.config
+        model_name = cfg.model_type
 
         for k, v in torch_model.state_dict().items():
             k = convert_name(k, model_name, verbose=False)
@@ -664,7 +664,7 @@ class EETT5ForConditionalGeneration(GenerationMixin_EET):
         else:
             torch_model = torch_model.half()
 
-        t5 = EETT5Model.from_pretrained(model_id_or_path, max_batch, data_type)
+        t5 = EETT5Model.from_torch(torch_model, max_batch, data_type)
 
         lm_head = torch_model.lm_head.cuda()
         model = EETT5ForConditionalGeneration(t5, lm_head, torch_model.config)

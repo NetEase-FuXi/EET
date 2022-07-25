@@ -1,12 +1,12 @@
 Mappings = {
-    "RobertaModel": "transformers_bert_mapping",
-    "BertModel": "transformers_bert_mapping",
-    "ViTModel": "transformers_vit_mapping",
-    "AlbertModel": "transformers_albert_mapping",
-    "GPTModel": "transformers_gpt_mapping",
-    "CLIPModel": "transformers_clip_mapping",
-    "BartModel": "transformers_bart_mapping",
-    "T5Model": "transformers_t5_mapping",
+    "roberta": "transformers_bert_mapping",
+    "bert": "transformers_bert_mapping",
+    "vit": "transformers_vit_mapping",
+    "albert": "transformers_albert_mapping",
+    "gpt": "transformers_gpt_mapping",
+    "clip": "transformers_clip_mapping",
+    "bart": "transformers_bart_mapping",
+    "t5": "transformers_t5_mapping",
 }
 
 transformers_albert_mapping = {
