@@ -121,9 +121,9 @@ namespace eet{
             //qkv add bias                
             Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * mem_seq_len_ *
+            Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
-            Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * mem_seq_len_ *
+            Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
                                     desc_.hidden_units_, desc_.dtype_, desc_.options_);
             qkv_add_bias(q_buffer, k_buffer, v_buffer, q_buf, k_buf, v_buf);
 
@@ -133,7 +133,7 @@ namespace eet{
 
             //q * k
             Buffer& qk_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.head_num_ *
-                                         desc_.max_full_seq_len_ * mem_seq_len_, desc_.dtype_, desc_.options_);
+                                         desc_.max_full_seq_len_ * desc_.max_seq_len_, desc_.dtype_, desc_.options_);
             q_k_mul(q_buf, k_buf, qk_buf);
             q_buf.free();
 

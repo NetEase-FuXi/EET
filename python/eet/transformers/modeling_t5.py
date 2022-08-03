@@ -394,7 +394,7 @@ class EETT5Model():
         return decoder_out
 
     @staticmethod
-    def from_pretrained(model_id_or_path: str, max_batch, data_type=torch.float32, device_id=0):
+    def from_pretrained(model_id_or_path: str, max_batch, max_prompt_seq_len=200, max_full_seq_len=512, data_type=torch.float32, device_id=0):
         """from pretrained."""
         torch.set_grad_enabled(False)
         encoder_model_dict = {}
@@ -424,14 +424,15 @@ class EETT5Model():
         activation_fn = cfg.feed_forward_proj
         if cfg.feed_forward_proj == "gated-gelu":
             activation_fn = "gelu_new"
-        if not hasattr(cfg, "n_positions"):
-            cfg.n_positions = 512
+        if hasattr(cfg, "n_positions"):
+            max_prompt_seq_len = cfg.n_positions
+            max_full_seq_len = cfg.n_positions
         batch_size = max_batch
         encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.num_layers,
-                                   cfg.n_positions, cfg.n_positions, data_type, device, False,
+                                   max_prompt_seq_len, max_full_seq_len, data_type, device, False,
                                    activation_fn)
         decoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.num_decoder_layers,
-                                   cfg.n_positions, cfg.n_positions, data_type, device, False,
+                                   max_prompt_seq_len, max_full_seq_len, data_type, device, False,
                                    activation_fn)
 
         if data_type==torch.float16:
@@ -452,7 +453,7 @@ class EETT5Model():
         return eet_model
 
     @staticmethod
-    def from_torch(torch_model, max_batch, data_type=torch.float32, device_id=0):
+    def from_torch(torch_model, max_batch, max_prompt_seq_len=200, max_full_seq_len=512, data_type=torch.float32, device_id=0):
         """from torch"""
         torch.set_grad_enabled(False)
         encoder_model_dict = {}
@@ -480,14 +481,15 @@ class EETT5Model():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         if cfg.feed_forward_proj == "gated-gelu":
             activation_fn = "gelu_new"
-        if not hasattr(cfg, "n_positions"):
-            cfg.n_positions = 512
+        if hasattr(cfg, "n_positions"):
+            max_prompt_seq_len = cfg.n_positions
+            max_full_seq_len = cfg.n_positions
         batch_size = max_batch
         encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.num_layers,
-                                   cfg.n_positions, cfg.n_positions, data_type, device, False,
+                                   max_prompt_seq_len, max_full_seq_len, data_type, device, False,
                                    activation_fn)
         decoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.num_decoder_layers,
-                                   cfg.n_positions, cfg.n_positions, data_type, device, False,
+                                   max_prompt_seq_len, max_full_seq_len, data_type, device, False,
                                    activation_fn)
 
         if data_type==torch.float16:
@@ -653,7 +655,7 @@ class EETT5ForConditionalGeneration(GenerationMixin_EET):
             self_past_key_values_length=self_past_key_values_length,
             )
 
-    def from_pretrained(model_id_or_path: str, max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, max_prompt_seq_len=200, max_full_seq_len=512, data_type=torch.float32):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
@@ -664,7 +666,7 @@ class EETT5ForConditionalGeneration(GenerationMixin_EET):
         else:
             torch_model = torch_model.half()
 
-        t5 = EETT5Model.from_torch(torch_model, max_batch, data_type)
+        t5 = EETT5Model.from_torch(torch_model, max_batch, max_prompt_seq_len, max_full_seq_len, data_type)
 
         lm_head = torch_model.lm_head.cuda()
         model = EETT5ForConditionalGeneration(t5, lm_head, torch_model.config)
