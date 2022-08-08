@@ -8,9 +8,9 @@ from PIL import Image
 import requests
 import time
 
-using_half = False
-batch_size = 5
-seq_len = 64
+using_half = True
+batch_size = 4
+seq_len = 32
 loop = 100
 
 def main():
@@ -40,6 +40,7 @@ def main():
     for i in range(loop):
         res_ts = ts_model(input_ids, pixel_values, attention_mask=None)
 
+    torch.cuda.synchronize()
     t1 = time.perf_counter()
     with torch.no_grad():
         for i in range(loop):
@@ -54,6 +55,7 @@ def main():
 
 
     # inference
+    torch.cuda.synchronize()
     t3 = time.perf_counter()
     for i in range(loop):
         res_eet = eet_model(input_ids, pixel_values, attention_mask=None)

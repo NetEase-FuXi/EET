@@ -30,8 +30,8 @@ namespace eet{
             layernorm_weights_(layernorm_weights.data_ptr()),
             layernorm_bias_(layernorm_bias.data_ptr())
         {
-            // size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
-            size_per_head_ = 64;
+            // size_per_head_ = 64;
+            size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
             inner_dim_ = size_per_head_* desc_.head_num_;
 
             with_bias_ = q_bias_ != nullptr ? true : false;

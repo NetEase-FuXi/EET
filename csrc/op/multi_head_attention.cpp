@@ -32,9 +32,9 @@ namespace eet{
             layernorm_bias_(layernorm_bias.data_ptr())
         {   
             with_bias_ = q_bias_ != nullptr ? true : false;
-            size_per_head_ = 64;
+            // size_per_head_ = 64;
+            size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
             inner_dim_ = size_per_head_* desc_.head_num_;
-            // size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
             // output_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
             Buffer& attn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn");
 
