@@ -67,7 +67,7 @@ class EETTransformerEmbedding():
         self.padding_idx = 1
         self.weight = self.embedding_weights
         self.embed_scale = args.no_scale_embedding
-        self.embedding = eet_embedding(meta_des,self.embedding_weights,self.embedding_weights,self.embedding_weights ,self.embedding_weights ,self.embedding_weights)
+        self.embedding = eet_embedding(meta_des,self.embedding_weights,self.embedding_weights,self.embedding_weights ,self.embedding_weights ,self.embedding_weights, "emb_cache")
 
     def __call__(self,
                 tokens,
@@ -82,7 +82,7 @@ class EETTransformerEmbedding():
         return feedforward
 
 class EETTransformerFeedforward():
-    def __init__(self,meta_des,model_dict,data_type =  torch.float32):
+    def __init__(self, meta_des, model_dict, data_type=torch.float32, name="ffn_out_cache"):
 
         self.intermediate_weights = torch.t([x[1] for x in model_dict.items() if 'fc1.weight' in x[0]][0]).contiguous().cuda().type(data_type)
         self.intermediate_bias = [x[1] for x in model_dict.items() if 'fc1.bias' in x[0]][0].cuda().type(data_type)
@@ -91,7 +91,7 @@ class EETTransformerFeedforward():
         self.layernorm_weights = [x[1] for x in model_dict.items() if 'final_layer_norm.weight' in x[0]][0].cuda().type(data_type)
         self.layernorm_bias = [x[1] for x in model_dict.items() if 'final_layer_norm.bias' in x[0]][0].cuda().type(data_type)
 
-        self.ffn = eet_ffn(meta_des,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias)
+        self.ffn = eet_ffn(meta_des,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias, name)
 
     def __call__(self,
                 input_id,
