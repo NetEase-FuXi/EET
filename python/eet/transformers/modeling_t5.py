@@ -394,7 +394,7 @@ class EETT5Model():
         return decoder_out
 
     @staticmethod
-    def from_pretrained(model_id_or_path: str, max_batch, max_prompt_seq_len=200, max_full_seq_len=512, data_type=torch.float32, device_id=0):
+    def from_pretrained(model_id_or_path: str, max_batch, max_prompt_seq_len=512, max_full_seq_len=512, data_type=torch.float32, device_id=0):
         """from pretrained."""
         torch.set_grad_enabled(False)
         encoder_model_dict = {}
