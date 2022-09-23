@@ -567,3 +567,69 @@ class EETTransformerDecoder(GenerationMixin_EET):
         eet_decoder =  EETTransformerDecoder(args,gpt2_config,batch_size,dictionary,embedding, DecoderLayers,layer_norm)
 
         return eet_decoder
+    
+    
+    @staticmethod
+    def from_fairseq_pretrained(model_id_or_path: str, dictionary, args, config:dict, no_encoder_attn=False, device="cuda:0"):                  
+        """from_pretrained."""
+        """
+        Args:
+            model_id_or_path : pytorch model path
+            dictionary (~fairseq.data.Dictionary): decoding dictionary
+            config:dic[max_full_seq_len,max_batch,data_type]
+            {   
+                full_seq_len: The maximum length that can be supported by full decoding 
+                max_batch: the largest batch_size that can be supported, and it is supported if it is smaller than max_batch, so as to support dynamic batch
+                data_type: data_type (default: torch.float32)
+            }
+            no_encoder_attn (bool, optional): whether to attend to encoder outputs
+                (default: False).
+        Returns:
+            eet_decoder : EETTransformerDecoder
+        """
+        
+        torch.set_grad_enabled(False)
+        pretrained_dict = torch.load(model_id_or_path)
+        gpt2_config = None
+        full_seq_len = config['full_seq_len']
+        batch_size = config['max_batch']
+        data_type = config['data_type']
+
+        model_dict = {}
+        DecoderLayers = []
+        for k, v in pretrained_dict['model'].items():
+            model_dict[k] = v
+        from itertools import groupby
+        # Intercept k,num = length of 'decoder.layers.**'=17; If your weight name has changed please change it here
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:FROM_TORCH_PARAM_LEN])}
+
+        device = device
+        activation_fn = args.activation_fn
+
+        if args.max_target_positions is None:
+            args.max_target_positions = DEFAULT_MAX_TARGER_POSITIONS
+        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
+        embedding = EETTransformerEmbedding.from_torch(args,meta_des,model_dict['decoder.embed_tokens.weight'],data_type)
+
+        if args.decoder_normalize_before:
+            layer_norm = EETTransformerLayerNorm.from_torch(args,meta_des,model_dict['decoder.layer_norm.weight'],model_dict['decoder.layer_norm.bias'],data_type)
+        else:
+            layer_norm = None
+        for i in range(args.decoder_layers):
+            if i < 10:
+                DecoderLayers.extend(
+                    [
+                        EETTransformerDecoderLayer.from_torch(args,meta_des,layer_model_dict['decoder.layers.'+str(i)+'.'],no_encoder_attn,data_type)
+                    ]
+                )
+            else:
+                DecoderLayers.extend(
+                    [
+                        EETTransformerDecoderLayer.from_torch(args,meta_des,layer_model_dict['decoder.layers.'+str(i)],no_encoder_attn,data_type)
+                    ]
+                )
+
+        eet_decoder = EETTransformerDecoder(args, gpt2_config,batch_size, dictionary, embedding, DecoderLayers,layer_norm)
+        return eet_decoder
+
+
