@@ -274,7 +274,7 @@ class EETCLIPModel():
         cfg = torch_model.config
         text_cfg = cfg.text_config
         vision_cfg = cfg.vision_config
-        model_name = cfg.model_type
+        model_name = 'clip'     #cfg.model_type
 
         # torch model config 'num_channels' is required but not set 
         vision_cfg.num_channels = num_channels

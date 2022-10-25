@@ -119,7 +119,7 @@ class EETBertModel():
         embedding_dict = {}
         torch_model = BertModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
-        model_name = cfg.model_type
+        model_name = 'bert'     #cfg.model_type
         
         for k, v in torch_model.state_dict().items():
             if 'embeddings.' in k:
@@ -158,7 +158,7 @@ class EETBertModel():
         model_dict = {}
         embedding_dict = {}
         cfg = torch_model.config
-        model_name = cfg.model_type
+        model_name = 'bert'         #cfg.model_type
         
         for k, v in torch_model.bert.state_dict().items():
             if 'embeddings.' in k:

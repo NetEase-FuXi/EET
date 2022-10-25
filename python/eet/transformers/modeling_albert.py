@@ -211,7 +211,7 @@ class EETAlbertModel():
         torch.set_grad_enabled(False)
         torch_model = AlbertModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
-        model_name = cfg.model_type
+        model_name = 'albert'       #cfg.model_type
 
         # create eet model state dict
         model_dict = EETAlbertModel.create_state_dict(torch_model, model_name)
@@ -235,7 +235,7 @@ class EETAlbertModel():
         """from torch."""
         torch.set_grad_enabled(False)
         cfg = torch_model.config
-        model_name = cfg.model_type
+        model_name = 'albert'   #cfg.model_type
 
         # create eet model state dict
         model_dict = EETAlbertModel.create_state_dict(torch_model, model_name)

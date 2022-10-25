@@ -162,7 +162,7 @@ class EETBartModel():
 
         torch_model = BartModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
-        model_name = cfg.model_type
+        model_name = 'bart'     #cfg.model_type
 
         for k, v in torch_model.state_dict().items():
             k = convert_name(k, model_name, verbose=False)

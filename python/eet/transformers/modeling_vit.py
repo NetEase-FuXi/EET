@@ -83,7 +83,7 @@ class EETViTModel():
         other_dict = {}
         torch_model = ViTModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
-        model_name = cfg.model_type
+        model_name = 'vit'      #cfg.model_type
 
         # print ts model param dict
         for k, v in torch_model.state_dict().items():
@@ -126,7 +126,7 @@ class EETViTModel():
         other_dict = {}
 
         cfg = torch_model.config
-        model_name = cfg.model_type
+        model_name = 'vit'      #cfg.model_type
 
         # print ts model param dict
         for k, v in torch_model.vit.state_dict().items():
