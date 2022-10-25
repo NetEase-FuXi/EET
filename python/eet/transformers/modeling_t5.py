@@ -183,6 +183,11 @@ class EETT5Block():
                 first_pass=first_pass,
                 relative_attention_bias=position_bias,
             )
+            # clamp inf values to enable fp16 inference
+            if self_attn_out.dtype == torch.float16 and torch.isinf(self_attn_out).any():
+                clamp_value = torch.finfo(self_attn_out.dtype).max - 1000
+                self_attn_out = torch.clamp(self_attn_out, min=-clamp_value, max=clamp_value)
+
             cross_attn_out = self.cross_attention(
                 hidden_states=self_attn_out,
                 pre_padding_len=pre_padding_len,
@@ -192,11 +197,20 @@ class EETT5Block():
                 add_residual=add_residual,
                 first_pass=first_pass
             )
+            # clamp inf values to enable fp16 inference
+            if cross_attn_out.dtype == torch.float16 and torch.isinf(cross_attn_out).any():
+                clamp_value = torch.finfo(cross_attn_out.dtype).max - 1000
+                cross_attn_out = torch.clamp(cross_attn_out, min=-clamp_value, max=clamp_value)
+
             out = self.feedforward(
                 cross_attn_out,
                 pre_layernorm=normalize_before,
                 add_residual=add_residual
             )
+            # clamp inf values to enable fp16 inference
+            if out.dtype == torch.float16 and torch.isinf(out).any():
+                clamp_value = torch.finfo(out.dtype).max - 1000
+                out = torch.clamp(out, min=-clamp_value, max=clamp_value)
         else:
             ''' encoder: self_attn -> ffn''' 
             self_attn_out = self.attention(
@@ -206,12 +220,21 @@ class EETT5Block():
                 add_residual=add_residual,
                 relative_attention_bias=position_bias,
             )
+            # clamp inf values to enable fp16 inference
+            if self_attn_out.dtype == torch.float16 and torch.isinf(self_attn_out).any():
+                clamp_value = torch.finfo(self_attn_out.dtype).max - 1000
+                self_attn_out = torch.clamp(self_attn_out, min=-clamp_value, max=clamp_value)
 
             out = self.feedforward(
                 self_attn_out,
                 pre_layernorm=normalize_before,
                 add_residual=add_residual
             )
+            # clamp inf values to enable fp16 inference
+            if out.dtype == torch.float16 and torch.isinf(out).any():
+                clamp_value = torch.finfo(out.dtype).max - 1000
+                out = torch.clamp(out, min=-clamp_value, max=clamp_value)
+
         return (out, position_bias)
 
     @staticmethod
