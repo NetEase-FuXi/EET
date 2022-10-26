@@ -41,7 +41,7 @@ void embedding_lookup_kernel(const void* embedding_table, const int64_t* input_i
 
   const int m = num_id;
   int k = hidden_units;
-  assert(m <= 65536);
+  // assert(m <= 65536);
   int fold_coeff = 1;
   if (k <= 1024){
     fold_coeff = 1;
