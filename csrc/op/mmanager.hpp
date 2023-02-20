@@ -12,11 +12,10 @@ namespace eet{
     class Buffer{
         public:
         Buffer(const int& size, const c10::ScalarType& dtype, const torch::TensorOptions options,std::string str = "no_name_"):
-                size_(size), dtype_(dtype), options_(options){
+                size_(size), dtype_(dtype), options_(options), str_(str) {
 
             tensor_ = torch::ones(size, options_).contiguous();
             is_idle_ = false;
-            strs_.push_back(str);
         }
 
         void* data_ptr() const{
@@ -31,41 +30,32 @@ namespace eet{
         }
 
         //now we ignore the compare for dtype
-        bool is_ok(const int &size, const c10::ScalarType &dtype) const
+        bool check_size(const int &size, bool strict) const
         {
-            if (!is_idle_)
-            {
-                return false;
-            }
-            if (size == size_)
-            {
+            if (strict && size == size_ || !strict && size <= size_) {
                 return true;
-            }
-            else
-            {
+            } else {
                 return false;
             }
         }
 
         bool check_str(const std::string& str) const
         {
-            for (auto& str_ : strs_) {
-                if (str.compare(str_) != 0) {
-                    return false;
-                } else {
-                    return true;
-                }
+            if (str.compare(str_) == 0) {
+                return true;
+            } else {
+                return false;
             }
         }
 
         void register_str(const std::string& str){
-            if (std::find(strs_.begin(), strs_.end(),str) == strs_.end()) {
-                strs_.push_back(str);
+            if (str.compare(str_) != 0) {
+                str_ = str;
             }
         }
 
-        std::vector<std::string> get_strs() const{
-            return strs_;
+        std::string get_str() const{
+            return str_;
         }
 
         void set_busy(){
@@ -121,7 +111,7 @@ namespace eet{
             c10::ScalarType dtype_;
             torch::TensorOptions options_;
             torch::Tensor tensor_;
-            std::vector<std::string> strs_;
+            std::string str_;
     };
 
     // memory manager
@@ -134,18 +124,14 @@ namespace eet{
 
         void report_buffer(){
             for (auto& buf : buffers_){
-                for (auto& str : buf.get_strs()) {
-                    std::cout << str << " -->  ";
-                }
+                std::cout << buf.get_str() << " -->  ";
                 std::cout << buf.get_tensor().sizes() << std::endl;
             }
         }
 
         void report_cache(){
             for (auto& buf : cache_){
-                for (auto& str : buf.get_strs()) {
-                    std::cout << str << " -->  ";
-                }
+                std::cout << buf.get_str() << " -->  ";
                 std::cout << buf.get_tensor().sizes() << std::endl;
             }
         }
@@ -154,34 +140,54 @@ namespace eet{
         //        false --> size smaller, then reuse
         Buffer& get_buffer(const size_t& size, const c10::ScalarType& dtype,
                            const torch::TensorOptions& options,
-                           const std::string& name = "no_name",
-                           bool strict = true){
-                    int itemsize = 0;
-                     switch (dtype) {
-                         case torch::kFloat32:
-                             itemsize = 4;
-                             break;
-                         case torch::kFloat16:
-                             itemsize = 2;
-                             break;
-                             //TODO
-                         case torch::kInt8:
-                             itemsize = 1;
-                             break;
-                     }
-                    for (auto& buffer : buffers_){
-                        if ((buffer.is_ok(size, dtype) && strict) ||
-                                (buffer.get_tensor().nbytes() >= size * itemsize && !strict)){
-                            buffer.set_busy();
-                            buffer.register_str(name);
-                            return buffer;
-                        }
-                    }
-                    std::cout << "There are " << buffers_.size() << " buffer in vector" << std::endl;
-                    std::cout << "Request a buffer of size : " << size << std::endl;
+                           bool strict = false,
+                           const std::string& name = "default") {
+            // int itemsize = 0;
+            // switch (dtype)
+            // {
+            // case torch::kFloat32:
+            //     itemsize = 4;
+            //     break;
+            // case torch::kFloat16:
+            //     itemsize = 2;
+            //     break;
+            // case torch::kBFloat16:
+            //     itemsize = 2;
+            //     break;
+            //     // TODO
+            // case torch::kInt8:
+            //     itemsize = 1;
+            //     break;
+            // }
+            for (auto &buffer : buffers_) {
+                if (buffer.is_idle() && buffer.check_size(size, strict))
+                {
+#ifdef _DEBUG_MODE_
+                    std::cout << "There are " << buffers_.size() << " buffer in vector" << "    Get a buffer of size : " << size << " buffer name: " << buffer.get_str() << std::endl;
+#endif
+                    buffer.set_busy();
+                    return buffer;
+                }
+            }
+            std::cout << "There are " << buffers_.size() << " buffer in vector"
+                      << "    Request a buffer of size : " << size << " buffer name: " << name << std::endl;
 
-                    buffers_.emplace_back(size, dtype, options,name);
-                    return buffers_.back();
+            buffers_.emplace_back(size, dtype, options, name);
+            return buffers_.back();
+        }
+
+        void allocate_buffer(const size_t &size, const c10::ScalarType &dtype,
+                             const torch::TensorOptions &options,
+                             const std::string &name = "no_name") {
+            for (auto &buffer : buffers_) {
+                if (buffer.check_str(name)) {
+                    return;
+                }
+            }
+            std::cout << "There are " << buffers_.size() << " buffer in vector"
+                      << "    Request a buffer of size : " << size << " buffer name: " << name << std::endl;
+            buffers_.emplace_back(size, dtype, options, name);
+            buffers_.back().free();
         }
 
         Buffer &get_cache(const size_t &size, const c10::ScalarType &dtype, const torch::TensorOptions &options, std::string str)
@@ -192,10 +198,9 @@ namespace eet{
                     return cache;
                 }
             }
-            std::cout << "There are " << cache_.size() << " buffer in cache vector" << std::endl;
-            std::cout << "Request a cache of size : " << size << std::endl;
+            std::cout << "There are " << cache_.size() << " cache in cache vector" << "    Request a cache of size : " << size << " cache name: " << str << std::endl;
 
-            cache_.emplace_back(size, dtype, options,str);
+            cache_.emplace_back(size, dtype, options, str);
             return cache_.back();
         }
 

@@ -55,9 +55,9 @@ namespace eet
                 size_per_head_ = desc_.d_kv_;
                 d_ff_ = desc_.d_ff_;
             }
-            // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
-            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
-
+            MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, ffn_cache_name_);
+            MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "t5ffn_buffer1");
+            MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "t5ffn_buffer2");
             switch (desc_.dtype_)
             {
             case torch::kFloat32:
@@ -70,9 +70,9 @@ namespace eet
                 *((float *)beta_) = 0.0f;
                 break;
             case torch::kFloat16:
-                fc1_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-                fc2_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-                fc3_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+                fc1_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc2_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc3_algo_ = CUBLAS_GEMM_DEFAULT;
                 alpha_ = new half();
                 beta_ = new half();
                 *((half *)alpha_) = (half)1.0f;
@@ -93,14 +93,11 @@ namespace eet
             cur_seq_len_ = input.sizes()[1];
 
             //ffn_inner
-            Buffer &ffn_inner_gelu = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                                                        d_ff_, desc_.dtype_, desc_.options_);
-            Buffer &ffn_inner_linear = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                                                        d_ff_, desc_.dtype_, desc_.options_);
+            Buffer &ffn_inner_gelu = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_);
+            Buffer &ffn_inner_linear = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_);
 
             // pre_layerNorm
-            Buffer& layernorm_tensor = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                                                               desc_.hidden_units_, desc_.dtype_, desc_.options_, "ffn_layernorm");
+            Buffer& layernorm_tensor = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_);
             layer_norm(input, layernorm_tensor);
 
             fc1_mul(layernorm_tensor.data_ptr(), ffn_inner_gelu);
@@ -110,13 +107,13 @@ namespace eet
             gated_gelu(ffn_inner_gelu, ffn_inner_linear);
             ffn_inner_linear.free();
 
-            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
+            Buffer &output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, ffn_cache_name_);
 
             fc3_mul(ffn_inner_gelu, output);
 
             ffn_inner_gelu.free();
 
-            add_input_bias_layernorm(output,input,pre_layernorm, add_residual);
+            add_input_bias_layernorm(output, input, pre_layernorm, add_residual);
 
             auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
             return std::move(res);

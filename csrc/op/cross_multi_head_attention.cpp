@@ -40,10 +40,10 @@ namespace eet{
                 size_per_head_ = desc_.d_kv_;
                 inner_dim_ = size_per_head_ * desc_.head_num_;
             }
-            // output_ = torch::zeros({desc_.batch_size_ , desc_.max_full_seq_len_ ,desc_.hidden_units_}, desc_.options_);
-            key_mem_cache_ =torch::zeros({desc_.batch_size_, desc_.max_seq_len_, inner_dim_}, desc_.options_);
+            key_mem_cache_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, inner_dim_}, desc_.options_);
             value_mem_cache_ = torch::zeros_like(key_mem_cache_);
-            // Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"cross_attn");
+            // attn_out_cache_ = torch::zeros({desc_.batch_size_, desc_.head_num_, 1, desc_.max_full_seq_len_}, desc_.options_);
+            MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "cross_attn_cache");     // TODO cur_seq_len_
 
             switch(desc_.dtype_){
                 case torch::kFloat32:
@@ -56,9 +56,9 @@ namespace eet{
                     *((float*)beta_)  = 0.0f;
                     break;
                 case torch::kFloat16:
-                    qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-                    q_k_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-                    attn_v_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+                    qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT;
+                    q_k_algo_ = CUBLAS_GEMM_DEFAULT;
+                    attn_v_algo_ = CUBLAS_GEMM_DEFAULT;
                     alpha_ = new half();
                     beta_  = new half();
                     *((half*)alpha_) = (half)1.0f;
@@ -99,36 +99,36 @@ namespace eet{
             mem_seq_len_ = memory.sizes()[1];
             step_ = 1;
             //qkv * weights
-            Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
+            Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+            Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
                                     inner_dim_, desc_.dtype_, desc_.options_);
-            Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
-            Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
+            Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
                                     inner_dim_, desc_.dtype_, desc_.options_);
             
             if(pre_layernorm)
             {
                 // pre_layerNorm
-                Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                        desc_.hidden_units_, desc_.dtype_, desc_.options_);
-                layer_norm(input,layernormed_query);
+                Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                        desc_.hidden_units_, desc_.dtype_, desc_.options_, false);
+                layer_norm(input, layernormed_query);
 
                 //qkv * weights
-                qkv_weights_mul(layernormed_query.data_ptr(), memory,q_buffer,k_buffer,v_buffer);
+                qkv_weights_mul(layernormed_query.data_ptr(), memory, q_buffer, k_buffer, v_buffer);
                 layernormed_query.free();
             }
             else{
                 //qkv * weights
-                qkv_weights_mul(input.data_ptr(),memory, q_buffer,k_buffer,v_buffer);
+                qkv_weights_mul(input.data_ptr(), memory, q_buffer, k_buffer, v_buffer);
             }
 
-            //qkv add bias                
-            Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
+            //qkv add bias
+            Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false);
             Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_, false);
             Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_, false);
             qkv_add_bias(q_buffer, k_buffer, v_buffer, q_buf, k_buf, v_buf);
 
             q_buffer.free();
@@ -137,40 +137,36 @@ namespace eet{
 
             //q * k
             Buffer& qk_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.head_num_ *
-                                         desc_.max_full_seq_len_ * desc_.max_seq_len_, desc_.dtype_, desc_.options_);
+                                         cur_seq_len_ * desc_.max_seq_len_, desc_.dtype_, desc_.options_, false);
             q_k_mul(q_buf, k_buf, qk_buf);
             q_buf.free();
 
             //softmax
             qk_softmax(qk_buf,pre_padding_length);
 
-            //attn * v
-            Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
-            
-            attn_v_mul(qk_buf,v_buf,transpose_dst);
-
-            qk_buf.free();
-
             // transpose k\v cache
-            kv_transpose(key_mem_cache_,value_mem_cache_,k_buf,v_buf);
-
-
+            kv_transpose(key_mem_cache_, value_mem_cache_, k_buf, v_buf);
             k_buf.free();
+
+            //attn * v
+            Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+            
+            attn_v_mul(qk_buf, v_buf, transpose_dst);
+            qk_buf.free();
             v_buf.free();
 
             //transpose
-            Buffer& dst = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
+            Buffer& dst = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false);
 
             transpose(transpose_dst, dst);
             transpose_dst.free();
 
-            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"cross_attn");
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * cur_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "cross_attn_cache");
 
             //project
             project(dst,output,input ,pre_layernorm,add_residual);
-            // project(dst, output_);
             dst.free();
             step_ = cur_seq_len_;
 
@@ -188,48 +184,38 @@ namespace eet{
             step_ += 1;
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
-            //qkv * weights
-            Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
 
-            // TODO not use qkv_mul => q_mul
-            Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
-            Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
+            //q * weights
+            Buffer &q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ * inner_dim_, desc_.dtype_, desc_.options_, false);
 
-            
             if(pre_layernorm)
             {
                 // pre_layerNorm
-                Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                        desc_.hidden_units_, desc_.dtype_, desc_.options_);
-                layer_norm(input,layernormed_query);
+                Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                        desc_.hidden_units_, desc_.dtype_, desc_.options_, false);
+                layer_norm(input, layernormed_query);
 
-                //qkv * weights
-                qkv_weights_mul(layernormed_query.data_ptr(), memory,q_buffer,k_buffer,v_buffer);
+                //q * weights
+                q_weights_mul(layernormed_query.data_ptr(), q_buffer);
                 layernormed_query.free();
             }
             else{
-                //qkv * weights
-                qkv_weights_mul(input.data_ptr(),memory, q_buffer,k_buffer,v_buffer);
+                //q * weights
+                q_weights_mul(input.data_ptr(), q_buffer);
             }
 
-            Buffer& context_buf = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_);
+            Buffer &context_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_*
+                                    inner_dim_, desc_.dtype_, desc_.options_, false);
 
 
             //attention_dispatch
             attention_dispatch(q_buffer,length_per_sample,context_buf);
         
             q_buffer.free();
-            k_buffer.free();
-            v_buffer.free();
-            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"cross_attn");
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * cur_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "cross_attn_cache");
 
-            project(context_buf, output, input,pre_layernorm,add_residual);
+            project(context_buf, output, input, pre_layernorm, add_residual);
 
-            // project(context_buf, output_);
             context_buf.free();
             auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
             return std::move(res);
@@ -252,65 +238,83 @@ namespace eet{
 #endif
         }
 
+        void CrossMultiHeadAttention::q_weights_mul(void *input,
+                                                    Buffer &q_buffer)
+        {
+            const int m = cur_batch_size_ * cur_seq_len_;
+            const int k = desc_.hidden_units_;
+            const int n = inner_dim_;
+            check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                                          CUBLAS_OP_N, CUBLAS_OP_N,
+                                          n, m, k,
+                                          alpha_,
+                                          q_weights_, desc_.computeType_, n,
+                                          input, desc_.computeType_, k,
+                                          beta_,
+                                          q_buffer.data_ptr(), desc_.computeType_, n,
+                                          desc_.computeType_,
+                                          qkv_weights_algo_));
 
-        void CrossMultiHeadAttention::qkv_weights_mul(void* input, 
-                                    torch::Tensor& memory, 
-                                    Buffer& q_buffer,
-                                    Buffer& k_buffer,
-                                    Buffer& v_buffer){
-               
-                int m = cur_batch_size_ * cur_seq_len_;
-                const int k = desc_.hidden_units_;
-                const int n = inner_dim_;
-                check_cuda_error(cublasGemmEx(desc_.cublasHandle,
-                        CUBLAS_OP_N, CUBLAS_OP_N, 
-                        n, m, k, 
-                        alpha_, 
-                        q_weights_, desc_.computeType_, n, 
-                        input, desc_.computeType_, k, 
-                        beta_, 
-                        q_buffer.data_ptr(), desc_.computeType_, n, 
-                        desc_.computeType_, 
-                        qkv_weights_algo_));
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
 
-    #ifdef _DEBUG_MODE_
-        cudaDeviceSynchronize();
-        check_cuda_error(cudaGetLastError());
-    #endif      
-                if(step_ == 1)
-                {   
-                    m = cur_batch_size_ * mem_seq_len_;
-                    check_cuda_error(cublasGemmEx(desc_.cublasHandle,
-                        CUBLAS_OP_N, CUBLAS_OP_N,
-                        n, m, k, 
-                        alpha_, 
-                        k_weights_, desc_.computeType_, n, 
-                        memory.data_ptr(), desc_.computeType_, k, 
-                        beta_, 
-                        k_buffer.data_ptr(), desc_.computeType_, n, 
-                        desc_.computeType_, 
-                        qkv_weights_algo_));
+        void CrossMultiHeadAttention::qkv_weights_mul(void *input,
+                                                      torch::Tensor &memory,
+                                                      Buffer &q_buffer,
+                                                      Buffer &k_buffer,
+                                                      Buffer &v_buffer)
+        {
+            int m = cur_batch_size_ * cur_seq_len_;
+            const int k = desc_.hidden_units_;
+            const int n = inner_dim_;
+            check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                                          CUBLAS_OP_N, CUBLAS_OP_N,
+                                          n, m, k,
+                                          alpha_,
+                                          q_weights_, desc_.computeType_, n,
+                                          input, desc_.computeType_, k,
+                                          beta_,
+                                          q_buffer.data_ptr(), desc_.computeType_, n,
+                                          desc_.computeType_,
+                                          qkv_weights_algo_));
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+            m = cur_batch_size_ * mem_seq_len_;
+            check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                                          CUBLAS_OP_N, CUBLAS_OP_N,
+                                          n, m, k,
+                                          alpha_,
+                                          k_weights_, desc_.computeType_, n,
+                                          memory.data_ptr(), desc_.computeType_, k,
+                                          beta_,
+                                          k_buffer.data_ptr(), desc_.computeType_, n,
+                                          desc_.computeType_,
+                                          qkv_weights_algo_));
 
-    #ifdef _DEBUG_MODE_
-        cudaDeviceSynchronize();
-        check_cuda_error(cudaGetLastError());
-    #endif
-                check_cuda_error(cublasGemmEx(desc_.cublasHandle,
-                        CUBLAS_OP_N, CUBLAS_OP_N, 
-                        n, m, k,
-                        alpha_,
-                        v_weights_, desc_.computeType_, n, 
-                        memory.data_ptr(), desc_.computeType_, k, 
-                        beta_, 
-                        v_buffer.data_ptr(), desc_.computeType_, n, 
-                        desc_.computeType_, 
-                        qkv_weights_algo_));
-                
-    #ifdef _DEBUG_MODE_
-        cudaDeviceSynchronize();
-        check_cuda_error(cudaGetLastError());
-    #endif
-                }
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+            check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                                          CUBLAS_OP_N, CUBLAS_OP_N,
+                                          n, m, k,
+                                          alpha_,
+                                          v_weights_, desc_.computeType_, n,
+                                          memory.data_ptr(), desc_.computeType_, k,
+                                          beta_,
+                                          v_buffer.data_ptr(), desc_.computeType_, n,
+                                          desc_.computeType_,
+                                          qkv_weights_algo_));
+
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
         }
 
         void CrossMultiHeadAttention::qkv_add_bias(const Buffer& q_buffer,

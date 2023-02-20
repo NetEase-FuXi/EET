@@ -83,13 +83,13 @@ namespace eet
             //ffn_inner
             Buffer &ffn_inner = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                                                         desc_.hidden_units_ * 4,
-                                                                    desc_.dtype_, desc_.options_, "ffn_inner", false);
+                                                                    desc_.dtype_, desc_.options_, false, "ffn_inner");
 
             if(pre_layernorm)
             {
                 // pre_layerNorm
                 Buffer& layernorm_tensor = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                                                               desc_.hidden_units_, desc_.dtype_, desc_.options_, "ffn_layernorm");
+                                                                               desc_.hidden_units_, desc_.dtype_, desc_.options_, true, "ffn_layernorm");
                 layer_norm(input, layernorm_tensor);
 
                 fc1_mul(layernorm_tensor.data_ptr(), ffn_inner);

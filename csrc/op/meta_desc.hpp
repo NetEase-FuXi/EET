@@ -24,8 +24,8 @@ class MetaDesc{
             d_kv_(d_kv),
             d_ff_(d_ff),
             layer_num_(layer_num),
-            max_seq_len_(max_seq_len),
-            max_full_seq_len_(max_full_seq_len),
+            max_seq_len_(max_seq_len),                      // prompt seq_len
+            max_full_seq_len_(max_full_seq_len),            // max generated seq_len
             activation_fn_(activation_fn)
     {
         dtype_ = torch::python::detail::py_object_to_dtype(dtype);
@@ -65,8 +65,8 @@ class MetaDesc{
             head_num_(head_num),
             hidden_units_(hidden_units),
             layer_num_(layer_num),
-            max_seq_len_(max_seq_len),
-            max_full_seq_len_(max_full_seq_len),
+            max_seq_len_(max_seq_len),                      // prompt seq_len
+            max_full_seq_len_(max_full_seq_len),            // max generated seq_len
             dtype_(dtype),
             activation_fn_(activation_fn)
     {

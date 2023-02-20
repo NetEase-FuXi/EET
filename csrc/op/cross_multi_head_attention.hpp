@@ -49,46 +49,50 @@ namespace eet{
             };
             
         private:
-            void layer_norm(const torch::Tensor& input_tensor,
-                        Buffer& layernorm_query);
+            void layer_norm(const torch::Tensor &input_tensor,
+                            Buffer &layernorm_query);
 
-            void qkv_weights_mul(void* input, 
-                                    torch::Tensor& memory,
-                                    Buffer& q_buffer,
-                                    Buffer& k_buffer,
-                                    Buffer& v_buffer);
+            void q_weights_mul(void *input,
+                               Buffer &q_buffer);
 
-            void qkv_add_bias(const Buffer& q_buffer,
-                                    const Buffer& k_buffer,
-                                    const Buffer& v_buffer,
-                                    Buffer& q_buf,
-                                    Buffer& k_buf,
-                                    Buffer& v_buf);
+            void qkv_weights_mul(void *input,
+                                 torch::Tensor &memory,
+                                 Buffer &q_buffer,
+                                 Buffer &k_buffer,
+                                 Buffer &v_buffer);
 
-            void q_k_mul(const Buffer& q_buf, const Buffer& k_buf, 
+            void qkv_add_bias(const Buffer &q_buffer,
+                              const Buffer &k_buffer,
+                              const Buffer &v_buffer,
+                              Buffer &q_buf,
+                              Buffer &k_buf,
+                              Buffer &v_buf);
+
+            void q_k_mul(const Buffer& q_buf, 
+            const Buffer& k_buf, 
                             Buffer& qk_buf);
 
             void qk_softmax(Buffer& qk_buf, const torch::Tensor& padding_index);
 
-            void attn_v_mul(const Buffer& qk_buf, const Buffer& v_buf,
-                            Buffer& transpose_dst);
+            void attn_v_mul(const Buffer &qk_buf, const Buffer &v_buf,
+                            Buffer &transpose_dst);
 
-            void transpose(const Buffer& transpose_dst, Buffer&  dst);
+            void transpose(const Buffer &transpose_dst, Buffer &dst);
 
-            void project(const Buffer& dst, 
-                    Buffer& res,
-                    torch::Tensor& input, 
-                    bool pre_layernorm,
-                    bool add_residual);
+            void project(const Buffer &dst,
+                         Buffer &res,
+                         torch::Tensor &input,
+                         bool pre_layernorm,
+                         bool add_residual);
 
             void attention_dispatch(const Buffer& q_buffer,
                                 const torch::Tensor& length_per_sample,
                                 Buffer& context_buf);
 
-            void kv_transpose(torch::Tensor& d_K_buf, torch::Tensor& d_V_buf,Buffer& K_buf,Buffer& V_buf);
+            void kv_transpose(torch::Tensor &d_K_buf, torch::Tensor &d_V_buf, Buffer &K_buf, Buffer &V_buf);
             MetaDesc desc_;
             // torch::Tensor output_;
-            torch::Tensor key_mem_cache_, value_mem_cache_;
+            torch::Tensor key_mem_cache_, value_mem_cache_, attn_out_cache_;
 
             cublasGemmAlgo_t qkv_weights_algo_, q_k_algo_, attn_v_algo_;
 
