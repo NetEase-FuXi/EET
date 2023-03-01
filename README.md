@@ -88,8 +88,8 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
 * gcc:>= 7.4.0 
 * torch:>=1.5.0 
 * numpy:>=1.19.1 
-* fairseq
-* transformers
+* fairseq:==0.10.0
+* transformers:==4.22.0
 
 The above environment is the minimum configuration, and it is best to use a newer version.
 
