@@ -19,7 +19,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     #endif
 
     py::class_<eet::MetaDesc>(m, "MetaDesc")
-        .def(py::init<const int&, const int&,const int&, const int&, const int&,const int&, const py::object&, const std::string& ,const bool&, const std::string& >());
+        .def(py::init<const int&, const int&,const int&, const int&, const int&, const int&, const int&,const int&, const py::object&, const std::string& ,const bool&, const std::string& >());
 
     py::class_<eet::op::MaskedMultiHeadAttention>(m, "MaskedMultiHeadAttention")
         .def(py::init<eet::MetaDesc,const torch::Tensor&,const torch::Tensor&,

@@ -48,9 +48,13 @@ namespace eet
                 std::cout << "unsupported activation " << std::endl;
                 return;
             }
-            // size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
-            size_per_head_ = 64;
-            d_ff_ = 1920;
+            if (desc_.d_ff_ == 0) {
+                size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+                d_ff_ = desc_.hidden_units_ * 4;
+            } else {
+                size_per_head_ = desc_.d_kv_;
+                d_ff_ = desc_.d_ff_;
+            }
             // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
             Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
 

@@ -105,7 +105,7 @@ class EETViTModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size,
+        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, 0, 0,
                            cfg.num_hidden_layers, cfg.hidden_size, cfg.hidden_size, data_type, device, False, activation_fn)
 
         embedding = EETViTEmbedding(cfg, embedding_dict, data_type)
@@ -148,7 +148,7 @@ class EETViTModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size,
+        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, 0, 0,
                            cfg.num_hidden_layers, cfg.hidden_size, cfg.hidden_size, data_type, device, False, activation_fn)
 
         embedding = EETViTEmbedding(cfg, embedding_dict, data_type)

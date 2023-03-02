@@ -9,7 +9,9 @@ namespace eet {
 class MetaDesc{
     public:
     
-    MetaDesc(const int& batch_size,const int& head_num, const int& hidden_units,const int& layer_num, 
+    MetaDesc(const int& batch_size,const int& head_num, 
+                const int& hidden_units, const int& d_kv, const int& d_ff,
+                const int& layer_num, 
                 const int& max_seq_len,
                 const int& max_full_seq_len,
                 const py::object& dtype,
@@ -18,7 +20,9 @@ class MetaDesc{
                 const std::string& activation_fn = "gelu"):
             batch_size_(batch_size), 
             head_num_(head_num),
-            hidden_units_(hidden_units), 
+            hidden_units_(hidden_units),
+            d_kv_(d_kv),
+            d_ff_(d_ff),
             layer_num_(layer_num),
             max_seq_len_(max_seq_len),
             max_full_seq_len_(max_full_seq_len),
@@ -34,7 +38,7 @@ class MetaDesc{
             case torch::kFloat16:
                 computeType_ = CUDA_R_16F;
                 break;
-            //TODO    
+            //TODO
             case torch::kInt8:
                 break;
             default:
@@ -96,6 +100,8 @@ class MetaDesc{
     int batch_size_;
     int head_num_;
     int hidden_units_;
+    int d_kv_;
+    int d_ff_;
     int max_seq_len_;
     int max_full_seq_len_;
     int layer_num_;

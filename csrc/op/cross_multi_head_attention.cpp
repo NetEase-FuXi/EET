@@ -33,13 +33,17 @@ namespace eet{
             layernorm_bias_(layernorm_bias.data_ptr())
         {
             with_bias_ = q_bias_ != nullptr ? true : false;
-            size_per_head_ = 64;
-            // size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
-            inner_dim_ = size_per_head_* desc_.head_num_;
+            if (desc_.d_kv_ == 0) {
+                size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+                inner_dim_ = desc_.hidden_units_;
+            } else {
+                size_per_head_ = desc_.d_kv_;
+                inner_dim_ = size_per_head_ * desc_.head_num_;
+            }
             // output_ = torch::zeros({desc_.batch_size_ , desc_.max_full_seq_len_ ,desc_.hidden_units_}, desc_.options_);
-            key_mem_cache_ =torch::zeros({desc_.batch_size_ , desc_.max_seq_len_ ,desc_.hidden_units_}, desc_.options_);
+            key_mem_cache_ =torch::zeros({desc_.batch_size_, desc_.max_seq_len_, inner_dim_}, desc_.options_);
             value_mem_cache_ = torch::zeros_like(key_mem_cache_);
-            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"cross_attn");
+            // Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"cross_attn");
 
             switch(desc_.dtype_){
                 case torch::kFloat32:
@@ -120,11 +124,11 @@ namespace eet{
 
             //qkv add bias                
             Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             qkv_add_bias(q_buffer, k_buffer, v_buffer, q_buf, k_buf, v_buf);
 
             q_buffer.free();
@@ -186,13 +190,13 @@ namespace eet{
             cur_seq_len_ = input.sizes()[1];
             //qkv * weights
             Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
 
-            // not use
+            // TODO not use qkv_mul => q_mul
             Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
 
             
             if(pre_layernorm)
@@ -212,7 +216,7 @@ namespace eet{
             }
 
             Buffer& context_buf = MManager::get_instance().get_buffer(desc_.batch_size_ *  desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
 
 
             //attention_dispatch

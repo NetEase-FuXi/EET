@@ -189,10 +189,10 @@ class EETBartModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.activation_function
         batch_size = max_batch
-        encoder_config = meta_desc(batch_size, cfg.encoder_attention_heads, cfg.d_model, cfg.encoder_layers,
+        encoder_config = meta_desc(batch_size, cfg.encoder_attention_heads, cfg.d_model, 0, 0, cfg.encoder_layers,
                                    cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False,
                                    activation_fn)
-        decoder_config = meta_desc(batch_size, cfg.decoder_attention_heads, cfg.d_model, cfg.decoder_layers,
+        decoder_config = meta_desc(batch_size, cfg.decoder_attention_heads, cfg.d_model, 0, 0, cfg.decoder_layers,
                                    cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False,
                                    activation_fn)
 

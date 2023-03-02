@@ -219,8 +219,8 @@ class EETAlbertModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers, cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
-        config_emb = meta_desc(batch_size, cfg.num_attention_heads, cfg.embedding_size, cfg.num_hidden_layers, cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
+        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, 0, 0, cfg.num_hidden_layers, cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
+        config_emb = meta_desc(batch_size, cfg.num_attention_heads, cfg.embedding_size, 0, 0, cfg.num_hidden_layers, cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
 
         embedding = EETBertEmbedding.from_torch(config_emb, model_dict['embeddings'], data_type)
         encoder = EETAlbertEncoder.from_torch(model_dict, config, cfg, data_type)
@@ -243,8 +243,8 @@ class EETAlbertModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, cfg.num_hidden_layers, cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
-        config_emb = meta_desc(batch_size, cfg.num_attention_heads, cfg.embedding_size, cfg.num_hidden_layers, cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
+        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, 0, 0, cfg.num_hidden_layers, cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
+        config_emb = meta_desc(batch_size, cfg.num_attention_heads, cfg.embedding_size, 0, 0, cfg.num_hidden_layers, cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False, activation_fn)
 
         embedding = EETBertEmbedding.from_torch(config_emb, model_dict['embeddings'], data_type)
         encoder = EETAlbertEncoder.from_torch(model_dict, config, cfg, data_type)

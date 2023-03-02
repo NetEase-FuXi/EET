@@ -475,7 +475,7 @@ class EETTransformerDecoder(GenerationMixin_EET):
 
         if args.max_target_positions is None:
             args.max_target_positions = DEFAULT_MAX_TARGER_POSITIONS
-        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, 0, 0, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
         embedding = EETTransformerEmbedding.from_torch(args,meta_des,model_dict['decoder.embed_tokens.weight'],data_type)
 
         if args.decoder_normalize_before:
@@ -543,7 +543,7 @@ class EETTransformerDecoder(GenerationMixin_EET):
         if args.max_target_positions is None:
             args.max_target_positions = DEFAULT_MAX_TARGER_POSITIONS
 
-        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, 0, 0, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
         embedding = EETTransformerEmbedding.from_torch(args,meta_des,model_dict['embed_tokens.weight'],data_type)
 
         if args.decoder_normalize_before:
@@ -610,7 +610,7 @@ class EETTransformerDecoder(GenerationMixin_EET):
 
         if args.max_target_positions is None:
             args.max_target_positions = DEFAULT_MAX_TARGER_POSITIONS
-        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(batch_size, args.decoder_attention_heads, args.decoder_embed_dim, 0, 0, args.decoder_layers ,args.max_target_positions, full_seq_len, data_type, device, False, activation_fn)
         embedding = EETTransformerEmbedding.from_torch(args,meta_des,model_dict['decoder.embed_tokens.weight'],data_type)
 
         if args.decoder_normalize_before:

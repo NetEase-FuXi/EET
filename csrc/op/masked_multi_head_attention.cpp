@@ -30,15 +30,19 @@ namespace eet{
             layernorm_weights_(layernorm_weights.data_ptr()),
             layernorm_bias_(layernorm_bias.data_ptr())
         {
-            size_per_head_ = 64;
-            // size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
-            inner_dim_ = size_per_head_* desc_.head_num_;
+            if (desc_.d_kv_ == 0) {
+                size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+                inner_dim_ = desc_.hidden_units_;
+            } else {
+                size_per_head_ = desc_.d_kv_;
+                inner_dim_ = size_per_head_ * desc_.head_num_;
+            }
 
             with_bias_ = q_bias_ != nullptr ? true : false;
-            k_cache_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
+            k_cache_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, inner_dim_}, desc_.options_);
             v_cache_ = torch::zeros_like(k_cache_);
             check_cuda_error(cudaMalloc(&fused_qkv_ptr_,sizeof(void**) * FUSED_QKV_PTR_SIZE));
-            Buffer& attn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn_cache");
+            // Buffer& attn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn_cache");
 
             qkv_kernel_ = (void**)fused_qkv_ptr_;
             qkv_input_  = qkv_kernel_ + QKV_PTR_SIZE;
@@ -114,7 +118,7 @@ namespace eet{
             assert((cur_batch_size_ <= desc_.batch_size_)&& "cur_batch_size_ must be less than or equal to max_batch_size_");
 
             Buffer& qkv_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_ * 3, desc_.dtype_, desc_.options_, "qkv_buffer_full");
+                                    inner_dim_ * 3, desc_.dtype_, desc_.options_, "qkv_buffer_full");
             if(pre_layernorm)
             {
                 // pre_layerNorm
@@ -209,7 +213,7 @@ namespace eet{
             cur_seq_len_ = input.sizes()[1];
             assert(cur_seq_len_ == 1);
             Buffer& qkv_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_ * 3, desc_.dtype_, desc_.options_, "qkv_buffer_inc");
+                                    inner_dim_ * 3, desc_.dtype_, desc_.options_, "qkv_buffer_inc");
             if(pre_layernorm)
             {
                 // pre_layerNorm
@@ -227,16 +231,17 @@ namespace eet{
             }
 
             Buffer& context_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
-                                    desc_.hidden_units_, desc_.dtype_, desc_.options_, "context_inc");
+                                    inner_dim_, desc_.dtype_, desc_.options_, "context_inc");
+
 
             // masked_attention_dispatch
             const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
             const int64_t *reorder_index = reorder_state.data_ptr<int64_t>();
             void* relative_attention_bias_ = relative_attention_bias.data_ptr();
-            
+
             masked_attention(qkv_buffer,context_buf,padding_len,reorder_index, relative_attention_bias_);
-            qkv_buffer.free();
-			
+            qkv_buffer.free();		
+            
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,"attn_cache");
             project(context_buf, output, input,pre_layernorm,add_residual);
             context_buf.free();

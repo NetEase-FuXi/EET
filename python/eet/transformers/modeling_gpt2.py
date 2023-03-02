@@ -358,7 +358,7 @@ class EETGPT2Model():
         activation_fn = cfg.activation_function
         batch_size = max_batch
         full_seq_len = full_seq_len
-        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, cfg.n_layer , cfg.n_positions,full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, 0, 0, cfg.n_layer , cfg.n_positions,full_seq_len, data_type, device, False, activation_fn)
         layer_norm = EETLayerNorm.from_torch(meta_des,layernorm_dict['ln_f.weight'],layernorm_dict['ln_f.bias'],data_type)
         embedding = EETGPT2Embedding.from_torch(meta_des,embedding_dict,data_type)
         # embedding = None
@@ -394,7 +394,7 @@ class EETGPT2Model():
         activation_fn = cfg.activation_function
         batch_size = max_batch
         full_seq_len = full_seq_len
-        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, cfg.n_layer , cfg.n_positions,full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, 0, 0, cfg.n_layer, cfg.n_positions,full_seq_len, data_type, device, False, activation_fn)
         layer_norm = EETLayerNorm.from_torch(meta_des,layernorm_dict['ln_f.weight'],layernorm_dict['ln_f.bias'],data_type)
         embedding = EETGPT2Embedding.from_torch(meta_des,embedding_dict,data_type)
         # embedding = None

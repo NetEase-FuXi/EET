@@ -284,9 +284,9 @@ class EETCLIPModel():
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         batch_size = max_batch
-        text_config = meta_desc(batch_size, text_cfg.num_attention_heads, text_cfg.hidden_size,
+        text_config = meta_desc(batch_size, text_cfg.num_attention_heads, text_cfg.hidden_size, 0, 0,
                                 text_cfg.num_hidden_layers, text_cfg.hidden_size, text_cfg.hidden_size, data_type, device, False, text_cfg.hidden_act)
-        vision_config = meta_desc(batch_size, vision_cfg.num_attention_heads, vision_cfg.hidden_size,
+        vision_config = meta_desc(batch_size, vision_cfg.num_attention_heads, vision_cfg.hidden_size, 0, 0,
                                   vision_cfg.num_hidden_layers, vision_cfg.hidden_size, vision_cfg.hidden_size, data_type, device, False, vision_cfg.hidden_act)
 
         # vision model        
