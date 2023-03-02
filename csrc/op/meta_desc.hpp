@@ -33,10 +33,12 @@ class MetaDesc{
         options_ = torch::TensorOptions().dtype(dtype_).device(cuda_device).requires_grad(requires_grad);
         switch(dtype_){
             case torch::kFloat32:
-                computeType_ = CUDA_R_32F;
+                dataType_ = CUDA_R_32F;
+                computeType_ = CUBLAS_COMPUTE_32F_FAST_16F;
                 break;
             case torch::kFloat16:
-                computeType_ = CUDA_R_16F;
+                dataType_ = CUDA_R_16F;
+                computeType_ = CUBLAS_COMPUTE_16F;
                 break;
             //TODO
             case torch::kInt8:
@@ -73,10 +75,12 @@ class MetaDesc{
         options_ = torch::TensorOptions().dtype(dtype_).device(cuda_device).requires_grad(requires_grad);
         switch(dtype_){
             case torch::kFloat32:
-                computeType_ = CUDA_R_32F;
+                dataType_ = CUDA_R_32F;
+                computeType_ = CUBLAS_COMPUTE_32F_FAST_16F;
                 break;
             case torch::kFloat16:
-                computeType_ = CUDA_R_16F;
+                dataType_ = CUDA_R_16F;
+                computeType_ = CUBLAS_COMPUTE_16F;
                 break;
                 //TODO
             case torch::kInt8:
@@ -107,8 +111,11 @@ class MetaDesc{
     int layer_num_;
     std::string activation_fn_;
     torch::TensorOptions options_;
-    cudaDataType_t computeType_;
-    c10::ScalarType dtype_;
+    cudaDataType_t dataType_;           // cuda dtype
+    // cudaDataType_t computeType_;     // cuda dtype
+    cublasComputeType_t computeType_;   // cublas type
+    c10::ScalarType dtype_;             // torch dtype
+
 
     static cublasHandle_t cublasHandle;
     static cudaStream_t stream;

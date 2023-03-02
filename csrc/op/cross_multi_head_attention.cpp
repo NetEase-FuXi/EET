@@ -248,10 +248,10 @@ namespace eet{
                                           CUBLAS_OP_N, CUBLAS_OP_N,
                                           n, m, k,
                                           alpha_,
-                                          q_weights_, desc_.computeType_, n,
-                                          input, desc_.computeType_, k,
+                                          q_weights_, desc_.dataType_ , n,
+                                          input, desc_.dataType_ , k,
                                           beta_,
-                                          q_buffer.data_ptr(), desc_.computeType_, n,
+                                          q_buffer.data_ptr(), desc_.dataType_ , n,
                                           desc_.computeType_,
                                           qkv_weights_algo_));
 
@@ -274,10 +274,10 @@ namespace eet{
                                           CUBLAS_OP_N, CUBLAS_OP_N,
                                           n, m, k,
                                           alpha_,
-                                          q_weights_, desc_.computeType_, n,
-                                          input, desc_.computeType_, k,
+                                          q_weights_, desc_.dataType_ , n,
+                                          input, desc_.dataType_ , k,
                                           beta_,
-                                          q_buffer.data_ptr(), desc_.computeType_, n,
+                                          q_buffer.data_ptr(), desc_.dataType_ , n,
                                           desc_.computeType_,
                                           qkv_weights_algo_));
 #ifdef _DEBUG_MODE_
@@ -289,10 +289,10 @@ namespace eet{
                                           CUBLAS_OP_N, CUBLAS_OP_N,
                                           n, m, k,
                                           alpha_,
-                                          k_weights_, desc_.computeType_, n,
-                                          memory.data_ptr(), desc_.computeType_, k,
+                                          k_weights_, desc_.dataType_ , n,
+                                          memory.data_ptr(), desc_.dataType_ , k,
                                           beta_,
-                                          k_buffer.data_ptr(), desc_.computeType_, n,
+                                          k_buffer.data_ptr(), desc_.dataType_ , n,
                                           desc_.computeType_,
                                           qkv_weights_algo_));
 
@@ -304,10 +304,10 @@ namespace eet{
                                           CUBLAS_OP_N, CUBLAS_OP_N,
                                           n, m, k,
                                           alpha_,
-                                          v_weights_, desc_.computeType_, n,
-                                          memory.data_ptr(), desc_.computeType_, k,
+                                          v_weights_, desc_.dataType_ , n,
+                                          memory.data_ptr(), desc_.dataType_ , k,
                                           beta_,
-                                          v_buffer.data_ptr(), desc_.computeType_, n,
+                                          v_buffer.data_ptr(), desc_.dataType_ , n,
                                           desc_.computeType_,
                                           qkv_weights_algo_));
 
@@ -339,10 +339,10 @@ namespace eet{
                 CUBLAS_OP_T, CUBLAS_OP_N,
                 mem_seq_len_, cur_seq_len_, size_per_head_,
                 alpha_,
-                k_buf.data_ptr(), desc_.computeType_, size_per_head_, mem_seq_len_ * size_per_head_,
-                q_buf.data_ptr(), desc_.computeType_, size_per_head_, cur_seq_len_ * size_per_head_,
+                k_buf.data_ptr(), desc_.dataType_ , size_per_head_, mem_seq_len_ * size_per_head_,
+                q_buf.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
                 beta_,
-                qk_buf.data_ptr(), desc_.computeType_, mem_seq_len_, mem_seq_len_ * cur_seq_len_,
+                qk_buf.data_ptr(), desc_.dataType_ , mem_seq_len_, mem_seq_len_ * cur_seq_len_,
                 cur_batch_size_ * desc_.head_num_,
                 desc_.computeType_,
                 q_k_algo_));
@@ -372,10 +372,10 @@ namespace eet{
                     CUBLAS_OP_N, CUBLAS_OP_N,
                     size_per_head_, cur_seq_len_, mem_seq_len_,
                     alpha_,
-                    v_buf.data_ptr(), desc_.computeType_, size_per_head_, mem_seq_len_ * size_per_head_,
-                    qk_buf.data_ptr(), desc_.computeType_, mem_seq_len_, mem_seq_len_ * cur_seq_len_,
+                    v_buf.data_ptr(), desc_.dataType_ , size_per_head_, mem_seq_len_ * size_per_head_,
+                    qk_buf.data_ptr(), desc_.dataType_ , mem_seq_len_, mem_seq_len_ * cur_seq_len_,
                     beta_,
-                    transpose_dst.data_ptr(), desc_.computeType_, size_per_head_, cur_seq_len_ * size_per_head_,
+                    transpose_dst.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
                     cur_batch_size_ * desc_.head_num_,
                     desc_.computeType_,
                     attn_v_algo_));
@@ -404,10 +404,10 @@ namespace eet{
                                             CUBLAS_OP_N, CUBLAS_OP_N,
                                             n, m, k,
                                             alpha_,
-                                            output_weights_, desc_.computeType_, n,
-                                            dst.data_ptr(), desc_.computeType_, k,
+                                            output_weights_, desc_.dataType_ , n,
+                                            dst.data_ptr(), desc_.dataType_ , k,
                                             beta_,
-                                            res.data_ptr(), desc_.computeType_, n,
+                                            res.data_ptr(), desc_.dataType_ , n,
                                             desc_.computeType_,
                                             qkv_weights_algo_));
             if(add_residual)

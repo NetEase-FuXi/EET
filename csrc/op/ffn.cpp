@@ -141,10 +141,10 @@ namespace eet
                                 CUBLAS_OP_N, CUBLAS_OP_N,
                                 n, m, k,
                                 alpha_,
-                                intermediate_weights_, desc_.computeType_, n,
-                                input, desc_.computeType_, k,
+                                intermediate_weights_, desc_.dataType_ , n,
+                                input, desc_.dataType_ , k,
                                 beta_,
-                                ffn_inner.data_ptr(), desc_.computeType_, n,
+                                ffn_inner.data_ptr(), desc_.dataType_ , n,
                                 desc_.computeType_,
                                 fc1_algo_));
 
@@ -177,10 +177,10 @@ namespace eet
                                           CUBLAS_OP_N, CUBLAS_OP_N,
                                           n, m, k,
                                           alpha_,
-                                          output_weights_, desc_.computeType_, n,
-                                          ffn_inner.data_ptr(), desc_.computeType_, k,
+                                          output_weights_, desc_.dataType_ , n,
+                                          ffn_inner.data_ptr(), desc_.dataType_ , k,
                                           beta_,
-                                          output.data_ptr(), desc_.computeType_, n,
+                                          output.data_ptr(), desc_.dataType_ , n,
                                           desc_.computeType_,
                                           fc2_algo_));
             
