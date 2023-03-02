@@ -51,16 +51,16 @@ namespace eet
             switch (desc_.dtype_)
             {
             case torch::kFloat32:
-                fc1_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-                fc2_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+                fc1_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc2_algo_ = CUBLAS_GEMM_DEFAULT;
                 alpha_ = new float();
                 beta_ = new float();
                 *((float *)alpha_) = 1.0f;
                 *((float *)beta_) = 0.0f;
                 break;
             case torch::kFloat16:
-                fc1_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-                fc2_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+                fc1_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc2_algo_ = CUBLAS_GEMM_DEFAULT;
                 alpha_ = new half();
                 beta_ = new half();
                 *((half *)alpha_) = (half)1.0f;

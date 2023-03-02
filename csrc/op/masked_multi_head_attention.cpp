@@ -51,9 +51,9 @@ namespace eet{
             switch (desc_.dtype_)
             {
             case torch::kFloat32:
-                qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-                q_k_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-                attn_v_algo_ = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+                qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT;
+                q_k_algo_ = CUBLAS_GEMM_DEFAULT;
+                attn_v_algo_ = CUBLAS_GEMM_DEFAULT;
                 alpha_ = new float();
                 beta_ = new float();
                 atten_scaler_ = new float();
