@@ -83,7 +83,7 @@ namespace eet
             //ffn_inner
             Buffer &ffn_inner = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
                                                                         desc_.hidden_units_ * 4,
-                                                                    desc_.dtype_, desc_.options_, false, "ffn_inner");
+                                                                    desc_.dtype_, desc_.options_, "ffn_inner");
 
             if(pre_layernorm)
             {

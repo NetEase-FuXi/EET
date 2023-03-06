@@ -100,7 +100,7 @@ namespace eet{
             step_ = 1;
             //qkv * weights
             Buffer& q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& k_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
                                     inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& v_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
@@ -110,7 +110,7 @@ namespace eet{
             {
                 // pre_layerNorm
                 Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                        desc_.hidden_units_, desc_.dtype_, desc_.options_, false);
+                        desc_.hidden_units_, desc_.dtype_, desc_.options_);
                 layer_norm(input, layernormed_query);
 
                 //qkv * weights
@@ -124,11 +124,11 @@ namespace eet{
 
             //qkv add bias
             Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             qkv_add_bias(q_buffer, k_buffer, v_buffer, q_buf, k_buf, v_buf);
 
             q_buffer.free();
@@ -137,7 +137,7 @@ namespace eet{
 
             //q * k
             Buffer& qk_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.head_num_ *
-                                         cur_seq_len_ * desc_.max_seq_len_, desc_.dtype_, desc_.options_, false);
+                                         cur_seq_len_ * desc_.max_seq_len_, desc_.dtype_, desc_.options_);
             q_k_mul(q_buf, k_buf, qk_buf);
             q_buf.free();
 
@@ -150,7 +150,7 @@ namespace eet{
 
             //attn * v
             Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
             
             attn_v_mul(qk_buf, v_buf, transpose_dst);
             qk_buf.free();
@@ -158,7 +158,7 @@ namespace eet{
 
             //transpose
             Buffer& dst = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
 
             transpose(transpose_dst, dst);
             transpose_dst.free();
@@ -186,13 +186,13 @@ namespace eet{
             cur_seq_len_ = input.sizes()[1];
 
             //q * weights
-            Buffer &q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ * inner_dim_, desc_.dtype_, desc_.options_, false);
+            Buffer &q_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ * inner_dim_, desc_.dtype_, desc_.options_);
 
             if(pre_layernorm)
             {
                 // pre_layerNorm
                 Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                        desc_.hidden_units_, desc_.dtype_, desc_.options_, false);
+                        desc_.hidden_units_, desc_.dtype_, desc_.options_);
                 layer_norm(input, layernormed_query);
 
                 //q * weights
@@ -205,7 +205,7 @@ namespace eet{
             }
 
             Buffer &context_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_*
-                                    inner_dim_, desc_.dtype_, desc_.options_, false);
+                                    inner_dim_, desc_.dtype_, desc_.options_);
 
 
             //attention_dispatch
