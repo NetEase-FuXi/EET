@@ -101,7 +101,7 @@ namespace eet{
         Buffer() = delete;
         Buffer(const Buffer&){
             printf("[EET][ERROR] Buffer capacity is over, increse macro MAX_BUFFER_SIZE to solve it \n");
-            exit(0);
+            exit(-1);
         }
         Buffer& operator = (const Buffer&) = delete;
 
