@@ -19,7 +19,7 @@ args.decoder_layerdrop = 0
 args.share_decoder_input_output_embed = True
 args.decoder_embed_dim = 768
 args.decoder_output_dim = 768
-args.max_target_positions = max_seq_len
+args.max_target_positions = context_len
 args.no_scale_embedding = False
 args.decoder_learned_pos = False
 args.no_token_positional_embeddings = False
@@ -46,15 +46,15 @@ def main():
     此demo是用于方便测试性能对比，直接构造模型，随机生成权重参数。
     '''
     torch.set_grad_enabled(False)
-    tokens = np.random.randint(3,13672,max_seq_len * batch,dtype="int64")
+    tokens = np.random.randint(3, 13672, max_seq_len * batch, dtype="int64")
     tokens = torch.from_numpy(tokens).long().reshape(batch, max_seq_len).cuda()
 
     model_dict = {}
     torch_decoder = TransformerDecoder(args, dictionary, embedding, True).cuda().eval()
 
     # eet 需要传入数据类型、最大的batch_size,以及提示词长度，该长度可根据具体业务判断最长会到多长去设定。
-    eet_config = {"data_type":torch.float32,"max_batch":batch,"full_seq_len":context_len}
-    eet_model = EETTransformerDecoder.from_torch(torch_decoder = torch_decoder,dictionary = dictionary,args = args,config = eet_config,no_encoder_attn = True)
+    eet_config = {"data_type": torch.float32, "max_batch": batch, "full_seq_len": max_seq_len}
+    eet_model = EETTransformerDecoder.from_torch(torch_decoder=torch_decoder, dictionary=dictionary, args=args, config=eet_config, no_encoder_attn=True)
 
     torch.cuda.synchronize()
     t1 = time.perf_counter()
@@ -74,7 +74,7 @@ def main():
                 input_ids_eet = tokens[:, :step + 1].contiguous().cuda().long()
             else:
                 input_ids_eet = tokens[:, step:step + 1].contiguous().cuda().long()
-            res_eet = eet_model(input_ids_eet,reorder_state=reorder_state, first_pass = first_pass)
+            res_eet = eet_model(input_ids_eet, reorder_state=reorder_state, first_pass=first_pass)
             first_pass = False
 
     torch.cuda.synchronize()
@@ -87,14 +87,13 @@ def main():
     for i in range(loop):
         incremental_state = {}
         for step in range(0, max_seq_len):
-            res_torch, incremental_state = torch_decoder(tokens[:,:step+1], incremental_state=incremental_state)
+            res_torch, incremental_state = torch_decoder(tokens[:, :step+1], incremental_state=incremental_state)
 
     torch.cuda.synchronize()
     t4 = time.perf_counter()
 
-
     print('Time for Fairseq : ', t4 - t3)
-    print('SpeedUp is : ', (t4 - t3)/(t2- t1))
+    print('SpeedUp is : ', (t4 - t3)/(t2 - t1))
 
 
 if __name__ == '__main__':

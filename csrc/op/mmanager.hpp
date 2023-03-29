@@ -162,9 +162,9 @@ namespace eet{
             for (auto &buffer : buffers_) {
                 if (buffer.is_idle() && buffer.check_size(size, strict))
                 {
-#ifdef _DEBUG_MODE_
-                    std::cout << "There are " << buffers_.size() << " buffer in vector" << "    Get a buffer of size : " << size << " buffer name: " << buffer.get_str() << std::endl;
-#endif
+// #ifdef _DEBUG_MODE_
+//                     std::cout << "There are " << buffers_.size() << " buffer in vector" << "    Get a buffer of size : " << size << " buffer name: " << buffer.get_str() << std::endl;
+// #endif
                     buffer.set_busy();
                     return buffer;
                 }
