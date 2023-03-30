@@ -497,7 +497,8 @@ class EETGPT2LMHeadModel(GenerationMixin_EET):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        first_pass = True,
+        first_pass=True,
+        self_past_key_values_length=0,
     ):
         return self.forward(        
             input_ids=input_ids,
@@ -591,7 +592,7 @@ class EETGPT2DoubleHeadsModel(GenerationMixin_EET):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        first_pass = True,
+        first_pass=True,
         **kwargs,
     ):
         transformer_outputs = self.transformer(
@@ -678,17 +679,18 @@ class EETGPT2ForSequenceClassification(GenerationMixin_EET):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        first_pass = True,
+        first_pass=True,
+        **kwargs,
     ):
         transformer_outputs = self.transformer(
             self,
-            input_ids = input_ids,
-            encoder_out = None,
-            first_pass = first_pass,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
-            attention_mask = attention_mask,
-            reorder_state = None,
+            input_ids=input_ids,
+            encoder_out=None,
+            first_pass=first_pass,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            reorder_state=None,
         )
 
 
@@ -765,17 +767,18 @@ class EETGPT2ForTokenClassification(GenerationMixin_EET):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        first_pass = True,
+        first_pass=True,
+        **kwargs,
     ):
         transformer_outputs = self.transformer(
             self,
-            input_ids = input_ids,
-            encoder_out = None,
-            first_pass = first_pass,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
-            attention_mask = attention_mask,
-            reorder_state = None,
+            input_ids=input_ids,
+            encoder_out=None,
+            first_pass=first_pass,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            reorder_state=None,
         )
 
 
@@ -802,10 +805,10 @@ class EETGPT2ForTokenClassification(GenerationMixin_EET):
         else:
             torch_model = torch_model.half()
 
-        gpt2 = EETGPT2Model.from_torch(torch_model,max_batch,full_seq_len,data_type)
+        gpt2 = EETGPT2Model.from_torch(torch_model, max_batch, full_seq_len, data_type)
 
         classifier = torch_model.classifier.cuda()
 
-        model =  EETGPT2ForTokenClassification(gpt2,classifier,torch_model.config)
+        model = EETGPT2ForTokenClassification(gpt2, classifier, torch_model.config)
 
         return model

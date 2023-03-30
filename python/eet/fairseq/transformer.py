@@ -317,10 +317,10 @@ class EETTransformerDecoder(GenerationMixin_EET):
     def forward(
         self,
         input_ids,
-        reorder_state = None,
+        reorder_state=None,
         encoder_out: Optional[Dict[str, List[Tensor]]] = None,
         features_only: bool = False,
-        first_pass = False
+        first_pass=False
     ):
         """
         Args:
@@ -399,18 +399,19 @@ class EETTransformerDecoder(GenerationMixin_EET):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
-        first_pass = True,
-        reorder_state = None,
+        first_pass=True,
+        reorder_state=None,
         encoder_out: Optional[Dict[str, List[Tensor]]] = None,
         features_only: bool = False,
+        self_past_key_values_length=0,
     ):
-        return self.forward(        
+        return self.forward(
             input_ids=input_ids,
-            first_pass = first_pass,
-            reorder_state = reorder_state,
-            encoder_out = encoder_out,
-            features_only = features_only,
-            )
+            first_pass=first_pass,
+            reorder_state=reorder_state,
+            encoder_out=encoder_out,
+            features_only=features_only,
+        )
 
 
     def output_layer(self, features):

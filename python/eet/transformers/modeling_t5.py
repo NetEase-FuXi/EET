@@ -160,7 +160,7 @@ class EETT5Block():
         position_bias=None,
     ):
         batch_size, seq_length = hidden_states.shape[:2]
-        real_seq_length = seq_length + self_past_key_values_length        
+        real_seq_length = seq_length + self_past_key_values_length
         if position_bias is None and self.position_embedding is not None:
             position_bias = self.compute_bias(real_seq_length, real_seq_length)
             # if past_key_value is not none
@@ -400,7 +400,7 @@ class EETT5Model():
             self.reorder_state = reorder_state.long()       
         if decoder_input_ids is None:
             raise ValueError(f"You have to specify decoder input ids")
-        
+
         decoder_out = self.decoder(
             input_ids=decoder_input_ids,
             encoder_outputs=encoder_outputs,
