@@ -168,8 +168,8 @@ int t_main(c10::ScalarType dtype, int bh,int head, int hidden, int nlayers){
     int head_num = head;
     int hidden_units = hidden;
     int layer_num = nlayers;
-    int max_seq_len = 1024;
-    int max_full_seq_len = max_seq_len / 2;
+    int max_seq_len = 512;
+    int max_full_seq_len = 1024;
     int vocab_size = 10000;
     int full_seq_len = max_full_seq_len;
     int loop_time = 2;

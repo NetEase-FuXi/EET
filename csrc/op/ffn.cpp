@@ -45,8 +45,8 @@ namespace eet
                 return;
             }
             size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
-            // output_ = torch::zeros({desc_.batch_size_, desc_.max_full_seq_len_, desc_.hidden_units_}, desc_.options_);
-            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
+            // output_ = torch::zeros({desc_.batch_size_, desc_.max_seq_len_, desc_.hidden_units_}, desc_.options_);
+            Buffer& emb_ffn_out = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
 
             switch (desc_.dtype_)
             {
@@ -81,14 +81,14 @@ namespace eet
             cur_seq_len_ = input.sizes()[1];
 
             //ffn_inner
-            Buffer &ffn_inner = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
+            Buffer &ffn_inner = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
                                                                         desc_.hidden_units_ * 4,
                                                                     desc_.dtype_, desc_.options_, "ffn_inner");
 
             if(pre_layernorm)
             {
                 // pre_layerNorm
-                Buffer& layernorm_tensor = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_full_seq_len_ *
+                Buffer& layernorm_tensor = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
                                                                                desc_.hidden_units_, desc_.dtype_, desc_.options_, true, "ffn_layernorm");
                 layer_norm(input, layernorm_tensor);
 
@@ -102,7 +102,7 @@ namespace eet
             }
 
             add_bias_act(ffn_inner);
-            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_full_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_,ffn_cache_name_);
 
             fc2_mul(ffn_inner, output);
 

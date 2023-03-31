@@ -511,7 +511,7 @@ class EETTransformerDecoder(GenerationMixin_EET):
             args (argparse.Namespace): parsed command-line arguments
             config:dic[full_seq_len,max_batch,data_type]
             {   
-                full_seq_len: The maximum length that can be supported by full decoding 
+                full_seq_len: The maximum length that can be generated 
                 max_batch: the largest batch_size that can be supported, and it is supported if it is smaller than max_batch, so as to support dynamic batch
                 data_type: data_type (default: torch.float32)
             }

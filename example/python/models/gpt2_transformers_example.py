@@ -24,7 +24,7 @@ def main():
         data_type = torch.float16
 
     # load model
-    eet_model = EETGPT2Model.from_pretrained('gpt2',max_batch = batch, full_seq_len = prompt_seq_len,data_type = data_type)
+    eet_model = EETGPT2Model.from_pretrained('gpt2',max_batch = batch, full_seq_len = max_seq_len,data_type = data_type)
     torch_model = GPT2Model.from_pretrained('gpt2').cuda()
     if using_half:
         torch_model =torch_model.half()

@@ -9,7 +9,7 @@ namespace eet
             desc_(desc),
             layernorm_weights_(gamma.data_ptr()),
             layernorm_bias_(beta.data_ptr()){
-            output_ = torch::zeros({desc_.batch_size_ , desc_.max_full_seq_len_ ,desc_.hidden_units_}, desc_.options_);
+            output_ = torch::zeros({desc_.batch_size_ , desc_.max_seq_len_ ,desc_.hidden_units_}, desc_.options_);
         }
 
         // layerNorm

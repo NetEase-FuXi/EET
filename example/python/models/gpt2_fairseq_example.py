@@ -23,7 +23,7 @@ def main():
     data_type = torch.float32
     if using_half:
         data_type = torch.float16
-    eet_model = EETTransformerDecoder.from_pretrained(model_id_or_path = model_id_or_path,max_batch = batch, full_seq_len = prompt_seq_len,data_type = data_type,no_encoder_attn = True)
+    eet_model = EETTransformerDecoder.from_pretrained(model_id_or_path = model_id_or_path,max_batch = batch, full_seq_len = max_seq_len,data_type = data_type,no_encoder_attn = True)
 
 
     total_time_eet = 0

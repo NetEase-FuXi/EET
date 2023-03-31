@@ -183,8 +183,8 @@ def main(cfg: FairseqConfig):
     src_dict = task.source_dictionary
     tgt_dict = task.target_dictionary
 
-    # full_seq_len is the max length of the prompt
-    seq_len = 128
+    # full_seq_len is the max length of the generated seq_len
+    seq_len = 512
     batch = cfg.dataset.batch_size
     data_type = torch.float32
     if common_cfg.fp16 is True:

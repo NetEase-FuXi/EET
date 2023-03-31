@@ -449,7 +449,6 @@ class EETT5Model():
             activation_fn = "gelu_new"
         if hasattr(cfg, "n_positions"):
             max_prompt_seq_len = cfg.n_positions
-            max_full_seq_len = cfg.n_positions
         batch_size = max_batch
         encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.d_kv, cfg.d_ff, cfg.num_layers,
                                    max_prompt_seq_len, max_full_seq_len, data_type, device, False,
@@ -506,7 +505,6 @@ class EETT5Model():
             activation_fn = "gelu_new"
         if hasattr(cfg, "n_positions"):
             max_prompt_seq_len = cfg.n_positions
-            max_full_seq_len = cfg.n_positions
         batch_size = max_batch
         encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.d_kv, cfg.d_ff, cfg.num_layers,
                                    max_prompt_seq_len, max_full_seq_len, data_type, device, False,
