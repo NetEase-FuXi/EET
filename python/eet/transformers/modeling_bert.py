@@ -10,7 +10,7 @@ import torch.nn as nn
 import numpy as np
 from torch import Tensor
 from typing import Any, Dict, List, Optional, Tuple
-from transformers import  (
+from transformers import (
     BertModel,
     BertForPreTraining,
     BertLMHeadModel,
@@ -40,11 +40,14 @@ from EET import MultiHeadAttention as eet_attention
 from EET import Embedding as eet_embedding
 
 __all__ = ['EETBertEmbedding', 'EETBertModel', 'EETBertForPreTraining', 'EETBertLMHeadModel', 'EETBertForMaskedLM',
-             'EETBertForNextSentencePrediction', 'EETBertForSequenceClassification', 'EETBertForMultipleChoice', 
-             'EETBertForTokenClassification', 'EETBertForQuestionAnswering']
+           'EETBertForNextSentencePrediction', 'EETBertForSequenceClassification', 'EETBertForMultipleChoice',
+           'EETBertForTokenClassification', 'EETBertForQuestionAnswering']
+
+
 class BertForPreTrainingOutput(ModelOutput):
     prediction_logits: torch.FloatTensor = None
     seq_relationship_logits: torch.FloatTensor = None
+
 
 class EETBertEmbedding():
     def __init__(self, config, embedding_dict, data_type=torch.float32, name='emb_cache'):
@@ -54,14 +57,14 @@ class EETBertEmbedding():
         self.token_type_weights = embedding_dict['embeddings.token_type_embeddings.weight'].cuda().type(data_type)
         self.Layernorm_weights = embedding_dict['embeddings.LayerNorm.weight'].cuda().type(data_type)
         self.Layernorm_bias = embedding_dict['embeddings.LayerNorm.bias'].cuda().type(data_type)
-        self.embedding = eet_embedding(config,self.embedding_weights,self.position_weights,self.token_type_weights,self.Layernorm_weights,self.Layernorm_bias, name)
-    
+        self.embedding = eet_embedding(config, self.embedding_weights, self.position_weights, self.token_type_weights, self.Layernorm_weights, self.Layernorm_bias, name)
+
     def __call__(self,
-                input_ids,
-                position_ids,
-                token_type_ids):
-        return self.embedding.forward_transformers(input_ids,position_ids,token_type_ids,self.if_layernorm)
-    
+                 input_ids,
+                 position_ids,
+                 token_type_ids):
+        return self.embedding.forward_transformers(input_ids, position_ids, token_type_ids, self.if_layernorm)
+
     @staticmethod
     def from_torch(config, embedding_dict, data_type=torch.float32, name='emb_cache'):
         embedding = EETBertEmbedding(config, embedding_dict, data_type=data_type, name=name)
@@ -69,20 +72,21 @@ class EETBertEmbedding():
 
 
 class EETBertModel():
-    def __init__(self,config,embedding,encoder, pooler=None):
+    def __init__(self, config, embedding, encoder, pooler=None):
         self.embedding = embedding
         self.encoder = encoder
         if pooler is not None:
             pooler = pooler.cuda()
         self.pooler = pooler
         self.pre_padding_len = torch.empty(0).long()
-        self.position_ids = torch.arange(0,config.max_position_embeddings).reshape(1,config.max_position_embeddings).cuda()
+        self.position_ids = torch.arange(0, config.max_position_embeddings).reshape(1, config.max_position_embeddings).cuda()
+
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
     ):
         '''
         attention_mask:attention_padding_mask(:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length)`, `optional`, defaults to :obj:`None`):
@@ -96,31 +100,31 @@ class EETBertModel():
 
         if token_type_ids is None:
             token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
-        
+
         if attention_mask is None:
             pre_padding_len = self.pre_padding_len
         else:
             # transformers 0 - padding;1 - nopadding
-            pre_padding_len =  torch.sum(1 - attention_mask,1).long().cuda()
-            
-        embedding_out = self.embedding(input_ids,position_ids,token_type_ids)
-        
+            pre_padding_len = torch.sum(1 - attention_mask, 1).long().cuda()
+
+        embedding_out = self.embedding(input_ids, position_ids, token_type_ids)
+
         sequence_output = self.encoder(embedding_out,
-                    pre_padding_len = pre_padding_len,
-                    normalize_before = False)
+                                       pre_padding_len=pre_padding_len,
+                                       normalize_before=False)
         pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
-        return sequence_output,pooled_output
-    
+        return sequence_output, pooled_output
+
     @staticmethod
-    def from_pretrained(model_id_or_path: str,max_batch, data_type, device_id=0):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type, device_id=0):
         """from_pretrained."""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
-        model_name = 'bert'     #cfg.model_type
-        
+        model_name = 'bert'  # cfg.model_type
+
         for k, v in torch_model.state_dict().items():
             if 'embeddings.' in k:
                 embedding_dict[k] = v
@@ -149,17 +153,17 @@ class EETBertModel():
             torch_model = torch_model.float()
         else:
             torch_model = torch_model.half()
-        eet_model = EETBertModel(cfg, embedding, encoder,torch_model.pooler)
+        eet_model = EETBertModel(cfg, embedding, encoder, torch_model.pooler)
         return eet_model
 
-    def from_torch(torch_model,max_batch, data_type, device_id=0):
+    def from_torch(torch_model, max_batch, data_type, device_id=0):
         """from torch."""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         cfg = torch_model.config
-        model_name = 'bert'         #cfg.model_type
-        
+        model_name = 'bert'  # cfg.model_type
+
         for k, v in torch_model.bert.state_dict().items():
             if 'embeddings.' in k:
                 embedding_dict[k] = v
@@ -188,12 +192,12 @@ class EETBertModel():
             torch_model = torch_model.float()
         else:
             torch_model = torch_model.half()
-        eet_model = EETBertModel(cfg, embedding, encoder,torch_model.bert.pooler)
+        eet_model = EETBertModel(cfg, embedding, encoder, torch_model.bert.pooler)
         return eet_model
 
 
 class EETBertForPreTraining():
-    def __init__(self,bert,cls,config):
+    def __init__(self, bert, cls, config):
         self.config = config
         self.bert = bert
         self.cls = cls
@@ -201,15 +205,15 @@ class EETBertForPreTraining():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
 
         sequence_output, pooled_output = self.bert(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
 
@@ -220,20 +224,21 @@ class EETBertForPreTraining():
             seq_relationship_logits=seq_relationship_score,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertForPreTraining.from_pretrained(model_id_or_path)
-        bert = EETBertModel.from_torch(torch_model,max_batch,data_type)
+        bert = EETBertModel.from_torch(torch_model, max_batch, data_type)
         cls = torch_model.cls.cuda()
-        model =  EETBertForPreTraining(bert, cls,torch_model.config)
+        model = EETBertForPreTraining(bert, cls, torch_model.config)
 
         return model
 
+
 class EETBertLMHeadModel():
-    def __init__(self,bert,cls,config):
+    def __init__(self, bert, cls, config):
         self.config = config
         self.bert = bert
         self.cls = cls
@@ -241,15 +246,15 @@ class EETBertLMHeadModel():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
 
         sequence_output, pooled_output = self.bert(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
 
@@ -264,20 +269,21 @@ class EETBertLMHeadModel():
             cross_attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertLMHeadModel.from_pretrained(model_id_or_path)
-        bert = EETBertModel.from_torch(torch_model,max_batch,data_type)
+        bert = EETBertModel.from_torch(torch_model, max_batch, data_type)
         cls = torch_model.cls.cuda()
-        model =  EETBertLMHeadModel(bert, cls,torch_model.config)
+        model = EETBertLMHeadModel(bert, cls, torch_model.config)
 
         return model
 
+
 class EETBertForMaskedLM():
-    def __init__(self,bert,cls,config):
+    def __init__(self, bert, cls, config):
         self.config = config
         self.bert = bert
         self.cls = cls
@@ -285,15 +291,15 @@ class EETBertForMaskedLM():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
 
         sequence_output, pooled_output = self.bert(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
 
@@ -307,20 +313,21 @@ class EETBertForMaskedLM():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertForMaskedLM.from_pretrained(model_id_or_path)
-        bert = EETBertModel.from_torch(torch_model,max_batch,data_type)
+        bert = EETBertModel.from_torch(torch_model, max_batch, data_type)
         cls = torch_model.cls.cuda()
-        model =  EETBertForMaskedLM(bert, cls,torch_model.config)
+        model = EETBertForMaskedLM(bert, cls, torch_model.config)
 
         return model
 
+
 class EETBertForNextSentencePrediction():
-    def __init__(self,bert,cls,config):
+    def __init__(self, bert, cls, config):
         self.config = config
         self.bert = bert
         self.cls = cls
@@ -328,15 +335,15 @@ class EETBertForNextSentencePrediction():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
 
         sequence_output, pooled_output = self.bert(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         NextSentence_pooled_output = pooled_output
@@ -350,20 +357,21 @@ class EETBertForNextSentencePrediction():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertForNextSentencePrediction.from_pretrained(model_id_or_path)
-        bert = EETBertModel.from_torch(torch_model,max_batch,data_type)
+        bert = EETBertModel.from_torch(torch_model, max_batch, data_type)
         cls = torch_model.cls.cuda()
-        model =  EETBertForNextSentencePrediction(bert, cls,torch_model.config)
+        model = EETBertForNextSentencePrediction(bert, cls, torch_model.config)
 
         return model
 
+
 class EETBertForSequenceClassification():
-    def __init__(self,bert,classifier,config):
+    def __init__(self, bert, classifier, config):
         self.config = config
         self.bert = bert
         self.classifier = classifier
@@ -371,14 +379,14 @@ class EETBertForSequenceClassification():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
         sequence_output, pooled_output = self.bert(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         SequenceClassification_pooled_output = pooled_output
@@ -392,20 +400,21 @@ class EETBertForSequenceClassification():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertForSequenceClassification.from_pretrained(model_id_or_path)
-        bert = EETBertModel.from_torch(torch_model,max_batch,data_type)
+        bert = EETBertModel.from_torch(torch_model, max_batch, data_type)
         classifier = torch_model.classifier.cuda()
-        model =  EETBertForSequenceClassification(bert, classifier,torch_model.config)
+        model = EETBertForSequenceClassification(bert, classifier, torch_model.config)
 
         return model
 
+
 class EETBertForMultipleChoice():
-    def __init__(self,bert,classifier,config):
+    def __init__(self, bert, classifier, config):
         self.config = config
         self.bert = bert
         self.classifier = classifier
@@ -413,15 +422,15 @@ class EETBertForMultipleChoice():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
         num_choices = input_ids.shape[1]
         sequence_output, pooled_output = self.bert(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         MultipleChoice_pooled_output = pooled_output
@@ -436,20 +445,21 @@ class EETBertForMultipleChoice():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertForMultipleChoice.from_pretrained(model_id_or_path)
-        bert = EETBertModel.from_torch(torch_model,max_batch,data_type)
+        bert = EETBertModel.from_torch(torch_model, max_batch, data_type)
         classifier = torch_model.classifier.cuda()
-        model =  EETBertForMultipleChoice(bert, classifier,torch_model.config)
+        model = EETBertForMultipleChoice(bert, classifier, torch_model.config)
 
         return model
 
+
 class EETBertForTokenClassification():
-    def __init__(self,bert,classifier,config):
+    def __init__(self, bert, classifier, config):
         self.config = config
         self.bert = bert
         self.classifier = classifier
@@ -457,14 +467,14 @@ class EETBertForTokenClassification():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
         sequence_output, pooled_output = self.bert(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         MultipleChoice_sequence_output = sequence_output
@@ -478,19 +488,20 @@ class EETBertForTokenClassification():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertForTokenClassification.from_pretrained(model_id_or_path)
-        bert = EETBertModel.from_torch(torch_model,max_batch,data_type)
+        bert = EETBertModel.from_torch(torch_model, max_batch, data_type)
         classifier = torch_model.classifier.cuda()
-        model =  EETBertForTokenClassification(bert, classifier,torch_model.config)
+        model = EETBertForTokenClassification(bert, classifier, torch_model.config)
         return model
 
+
 class EETBertForQuestionAnswering():
-    def __init__(self,bert,qa_outputs,config):
+    def __init__(self, bert, qa_outputs, config):
         self.config = config
         self.bert = bert
         self.qa_outputs = qa_outputs
@@ -498,14 +509,14 @@ class EETBertForQuestionAnswering():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
         sequence_output, pooled_output = self.bert(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         QuestionAnswering_sequence_output = sequence_output
@@ -523,13 +534,13 @@ class EETBertForQuestionAnswering():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = BertForQuestionAnswering.from_pretrained(model_id_or_path)
-        bert = EETBertModel.from_torch(torch_model,max_batch,data_type)
+        bert = EETBertModel.from_torch(torch_model, max_batch, data_type)
         qa_outputs = torch_model.qa_outputs.cuda()
-        model =  EETBertForQuestionAnswering(bert, qa_outputs,torch_model.config)
+        model = EETBertForQuestionAnswering(bert, qa_outputs, torch_model.config)
         return model

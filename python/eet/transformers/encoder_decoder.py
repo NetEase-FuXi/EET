@@ -23,7 +23,7 @@ from EET import LayerNorm as eet_layernorm
 
 
 __all__ = [
-    'FCLayer', 'EETLayerNorm', 'EETFeedforward', 'EETSelfAttention', 'EETEncoderLayer', 'EETEncoder', 
+    'FCLayer', 'EETLayerNorm', 'EETFeedforward', 'EETSelfAttention', 'EETEncoderLayer', 'EETEncoder',
     'EETSelfMaskedAttention', 'EETCrossAttention', 'EETDecoderLayer', 'EETDecoder',
 ]
 
@@ -45,14 +45,17 @@ class EETLayerNorm():
 
     def __call__(self, input):
         return self.layernorm.layer_norm(input)
-    
+
     @staticmethod
     def from_torch(config, layernorm_weight, layernorm_bias, data_type=torch.float32):
         layernorm = EETLayerNorm(config, layernorm_weight, layernorm_bias, data_type=data_type)
         return layernorm
 
-# is_standard: transformers模型proj层使用linear, weight需要转置
-# not is_standard: transformers模型proj层使用Conv1D, weight无需转置
+
+"""
+is_standard: transformers模型proj层使用linear, weight需要转置
+not is_standard: transformers模型proj层使用Conv1D, weight无需转置
+"""
 class EETFeedforward():
     def __init__(self, config, model_dict, layer_id, data_type=torch.float32, bias=True, is_standard=True, name="out_cache"):
         self.is_standard = is_standard
@@ -60,7 +63,7 @@ class EETFeedforward():
         self.layernorm_bias = model_dict['layer.' + str(layer_id) + '.ffn.layernorm.bias'].cuda().type(data_type) if bias else torch.empty(0)
         self.intermediate_bias = model_dict['layer.' + str(layer_id) + '.ffn.intermediate.bias'].cuda().type(data_type) if bias else torch.empty(0)
         self.output_bias = model_dict['layer.' + str(layer_id) + '.ffn.output.bias'].cuda().type(data_type) if bias else torch.empty(0)
-        
+
         if self.is_standard:
             self.intermediate_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.intermediate.weight']).contiguous().cuda().type(data_type)
             self.output_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.output.weight']).contiguous().cuda().type(data_type)
@@ -156,7 +159,7 @@ class EETCrossAttention():
             self.out_bias = model_dict['layer.' + str(layer_id) + '.encoder_attn.out_proj.bias'].cuda().type(data_type) if bias else torch.empty(0)
 
         self.attention = eet_cross_attention(config, self.q_weights, self.k_weights, self.v_weights, self.q_bias,
-                                            self.k_bias, self.v_bias, self.out_weights, self.out_bias, self.layernorm_weights, self.layernorm_bias)
+                                             self.k_bias, self.v_bias, self.out_weights, self.out_bias, self.layernorm_weights, self.layernorm_bias)
 
     def __call__(
         self,
@@ -203,7 +206,7 @@ class EETSelfMaskedAttention():
             self.out_bias = model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.bias'].cuda().type(data_type) if bias else torch.empty(0)
 
         self.attention = eet_masked_attention(config, self.qkv_weights, self.q_bias, self.k_bias,
-                                             self.v_bias, self.out_weights, self.out_bias, self.layernorm_weights, self.layernorm_bias)
+                                              self.v_bias, self.out_weights, self.out_bias, self.layernorm_weights, self.layernorm_bias)
 
     def __call__(
         self,
@@ -297,7 +300,7 @@ class EETDecoderLayer():
         self.attention = attention
         self.cross_attention = cross_attention
         self.feedforward = feedforward
-    
+
     def __call__(
         self,
         x,
@@ -336,7 +339,7 @@ class EETDecoderLayer():
                 add_residual=add_residual
             )
         else:
-            ''' self_attn -> ffn''' 
+            ''' self_attn -> ffn'''
             self_attn_out = self.attention(
                 hidden_states=x,
                 pre_padding_len=pre_padding_len,
@@ -363,7 +366,7 @@ class EETDecoderLayer():
             layer = EETDecoderLayer(config, attention, feedforward, cross_attention)
         else:
             layer = EETDecoderLayer(config, attention, feedforward)
-        
+
         return layer
 
 
@@ -395,7 +398,7 @@ class EETDecoder():
                 add_residual=True,
             )
         return hidden_states
-    
+
     @staticmethod
     def from_torch(config, layer_model_dict, layer_num, data_type=torch.float32, add_cross_attn=True, bias=True, is_standard=True):
         """from torch."""

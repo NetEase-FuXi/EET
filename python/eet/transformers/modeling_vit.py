@@ -23,7 +23,8 @@ from EET import MultiHeadAttention as eet_attention
 from EET import Embedding as eet_embedding
 from EET import LayerNorm as eet_layernorm
 
-__all__ = ['EETViTEmbedding', 'EETViTModel','EETViTForMaskedImageModeling','EETViTForImageClassification']
+__all__ = ['EETViTEmbedding', 'EETViTModel', 'EETViTForMaskedImageModeling', 'EETViTForImageClassification']
+
 
 class EETViTEmbedding(nn.Module):
     def __init__(self, config, embedding_dict, data_type=torch.float32):
@@ -31,12 +32,13 @@ class EETViTEmbedding(nn.Module):
         self.patch_embeddings = nn.Conv2d(config.num_channels, config.hidden_size, kernel_size=config.patch_size, stride=config.patch_size)
         self.patch_embeddings.weight = Parameter(embedding_dict['embeddings.patch_embeddings.projection.weight'].cuda().type(data_type))
         self.patch_embeddings.bias = Parameter(embedding_dict['embeddings.patch_embeddings.projection.bias'].cuda().type(data_type))
-        
+
         self.position_embeddings = Parameter(embedding_dict['embeddings.position_embeddings'].cuda().type(data_type))
         self.cls_token = Parameter(embedding_dict['embeddings.cls_token'].cuda().type(data_type))
         self.dropout = nn.Dropout(0.0)
         self.num_patches = (config.image_size // config.patch_size) * (config.image_size // config.patch_size)
         self.data_type = data_type
+
     def __call__(self, pixel_values):
         batch_size, num_features, height, width = pixel_values.shape
         pixel_values = pixel_values.to(self.data_type)
@@ -71,7 +73,7 @@ class EETViTModel():
         encoder_out = self.encoder(embedding_out, pre_padding_len=self.pre_padding_len, normalize_before=True)
         sequence_output = self.layernorm(encoder_out)
         pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
-        
+
         return sequence_output, pooled_output
 
     @staticmethod
@@ -83,7 +85,7 @@ class EETViTModel():
         other_dict = {}
         torch_model = ViTModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
-        model_name = 'vit'      #cfg.model_type
+        model_name = 'vit'  # cfg.model_type
 
         # print ts model param dict
         for k, v in torch_model.state_dict().items():
@@ -92,14 +94,14 @@ class EETViTModel():
             elif 'layer.' in k:
                 # Structure mapping
                 k = convert_name(k, model_name)
-                k = k[k.find('layer.'):]                 
+                k = k[k.find('layer.'):]
                 model_dict[k] = v
             else:
                 other_dict[k] = v
 
         # Group by layer id in model_dict's keys
         from itertools import groupby
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), 
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
@@ -126,7 +128,7 @@ class EETViTModel():
         other_dict = {}
 
         cfg = torch_model.config
-        model_name = 'vit'      #cfg.model_type
+        model_name = 'vit'  # cfg.model_type
 
         # print ts model param dict
         for k, v in torch_model.vit.state_dict().items():
@@ -135,14 +137,14 @@ class EETViTModel():
             elif 'layer.' in k:
                 # Structure mapping
                 k = convert_name(k, model_name)
-                k = k[k.find('layer.'):]                 
+                k = k[k.find('layer.'):]
                 model_dict[k] = v
             else:
                 other_dict[k] = v
 
         # Group by layer id in model_dict's keys
         from itertools import groupby
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), 
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
                                                            lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
@@ -163,8 +165,9 @@ class EETViTModel():
         eet_model = EETViTModel(config, embedding, encoder, layer_norm, torch_model.pooler.to(device))
         return eet_model
 
+
 class EETViTForMaskedImageModeling():
-    def __init__(self,vit,decoder,config):
+    def __init__(self, vit, decoder, config):
         self.config = config
         self.vit = vit
         self.decoder = decoder
@@ -172,11 +175,11 @@ class EETViTForMaskedImageModeling():
     def __call__(
         self,
         pixel_values,
-        attention_mask = None,
-    ) :
+        attention_mask=None,
+    ):
         num_choices = pixel_values.shape[1]
         sequence_output, pooled_output = self.vit(
-            pixel_values = pixel_values,
+            pixel_values=pixel_values,
             attention_mask=attention_mask,
         )
         sequence_output = sequence_output[:, 1:]
@@ -193,20 +196,21 @@ class EETViTForMaskedImageModeling():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = ViTForMaskedImageModeling.from_pretrained(model_id_or_path)
-        vit = EETViTModel.from_torch(torch_model,max_batch,data_type)
+        vit = EETViTModel.from_torch(torch_model, max_batch, data_type)
         decoder = torch_model.decoder.cuda()
-        model =  EETViTForMaskedImageModeling(vit, decoder,torch_model.config)
+        model = EETViTForMaskedImageModeling(vit, decoder, torch_model.config)
 
         return model
 
+
 class EETViTForImageClassification():
-    def __init__(self,vit,classifier,config):
+    def __init__(self, vit, classifier, config):
         self.config = config
         self.vit = vit
         self.classifier = classifier
@@ -214,10 +218,10 @@ class EETViTForImageClassification():
     def __call__(
         self,
         pixel_values,
-        attention_mask = None,
-    ) :
+        attention_mask=None,
+    ):
         sequence_output, pooled_output = self.vit(
-            pixel_values = pixel_values,
+            pixel_values=pixel_values,
             attention_mask=attention_mask,
         )
 
@@ -230,13 +234,13 @@ class EETViTForImageClassification():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = ViTForImageClassification.from_pretrained(model_id_or_path)
-        vit = EETViTModel.from_torch(torch_model,max_batch,data_type)
+        vit = EETViTModel.from_torch(torch_model, max_batch, data_type)
         classifier = torch_model.classifier.cuda()
-        model =  EETViTForImageClassification(vit, classifier,torch_model.config)
+        model = EETViTForImageClassification(vit, classifier, torch_model.config)
         return model

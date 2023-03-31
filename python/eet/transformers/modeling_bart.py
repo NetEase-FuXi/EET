@@ -27,6 +27,8 @@ from EET import LayerNorm as eet_layernorm
 
 # different to other models, Bart automatically creates decoder_input_ids from
 # input_ids if no decoder_input_ids are provided
+
+
 def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int):
     """
     Shift input ids one token to the right.
@@ -101,7 +103,7 @@ class EETBartModel():
         if decoder_input_ids is None:
             decoder_input_ids = shift_tokens_right(
                 input_ids, self.cfg.pad_token_id, self.cfg.decoder_start_token_id
-            )            
+            )
         decoder_input_shape = decoder_input_ids.size()
 
         if attention_mask is None:
@@ -109,14 +111,14 @@ class EETBartModel():
         else:
             # transformers 0 - padding;1 - nopadding
             pre_padding_len = torch.sum(1 - attention_mask, 1).int().cuda()
-        
+
         if decoder_attention_mask is None:
             decoder_pre_padding_len = self.decoder_pre_padding_len
         else:
             # transformers 0 - padding;1 - nopadding
             decoder_pre_padding_len = torch.sum(1 - decoder_attention_mask, 1).int().cuda()
 
-        per_sample_length = encoder_seq_length # encoder_seq_length是encoder output实际的长度（去掉padding len）
+        per_sample_length = encoder_seq_length  # encoder_seq_length是encoder output实际的长度（去掉padding len）
         if not first_pass:
             assert per_sample_length is not None
             encoder_outputs = torch.empty(0)
@@ -135,7 +137,7 @@ class EETBartModel():
         if reorder_state is not None:
             self.reorder_state = reorder_state.long()
 
-        position_ids = self.position_ids[:, self_past_key_values_length:self_past_key_values_length+decoder_input_shape[1]] + self.offset  
+        position_ids = self.position_ids[:, self_past_key_values_length:self_past_key_values_length+decoder_input_shape[1]] + self.offset
         hidden_states = self.decoder_embedding(decoder_input_ids, position_ids, token_type_ids=None)
 
         decoder_out = self.decoder(
@@ -150,7 +152,6 @@ class EETBartModel():
         )
         return decoder_out
 
-
     @staticmethod
     def from_pretrained(model_id_or_path: str, max_batch, full_seq_len, data_type=torch.float32, device_id=0):
         """from torch."""
@@ -162,7 +163,7 @@ class EETBartModel():
 
         torch_model = BartModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
-        model_name = 'bart'     #cfg.model_type
+        model_name = 'bart'  # cfg.model_type
 
         for k, v in torch_model.state_dict().items():
             k = convert_name(k, model_name, verbose=False)
@@ -185,7 +186,7 @@ class EETBartModel():
                                                                    lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
         decoder_layer_model_dict = {k: dict(v) for k, v in groupby(list(decoder_model_dict.items()),
                                                                    lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
-        
+
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.activation_function
         batch_size = max_batch
@@ -201,5 +202,5 @@ class EETBartModel():
         decoder_embedding = EETBartEmbedding.from_torch(decoder_config, decoder_embedding_dict, data_type=data_type, name='decoder_out_cache')
         decoder = EETDecoder.from_torch(decoder_config, decoder_layer_model_dict, cfg.decoder_layers, data_type=data_type, bias=True)
         eet_model = EETBartModel(cfg, encoder_embedding, encoder, decoder_embedding, decoder)
-        
+
         return eet_model

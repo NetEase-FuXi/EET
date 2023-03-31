@@ -76,10 +76,10 @@ namespace eet{
                                     bool pre_layernorm,
                                     bool add_residual,
                                     const torch::Tensor& length_per_sample,
-                                    bool first_pass){
+                                    bool first_pass) {
             if(first_pass)
             {
-                return forward_full(input,memory,pre_padding_length,pre_layernorm,add_residual);
+                return forward_full(input, memory, pre_padding_length, pre_layernorm, add_residual);
             }
             else
             {
@@ -92,7 +92,7 @@ namespace eet{
                             torch::Tensor& memory,
                             const torch::Tensor& pre_padding_length,
                             bool pre_layernorm,
-                            bool add_residual){
+                            bool add_residual) {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as CrossMultiHeadAttention's dtype");
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
@@ -166,7 +166,7 @@ namespace eet{
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * cur_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "cross_attn_cache");
 
             //project
-            project(dst,output,input ,pre_layernorm,add_residual);
+            project(dst,output, input, pre_layernorm, add_residual);
             dst.free();
             step_ = cur_seq_len_;
 
@@ -209,7 +209,7 @@ namespace eet{
 
 
             //attention_dispatch
-            attention_dispatch(q_buffer,length_per_sample,context_buf);
+            attention_dispatch(q_buffer, length_per_sample, context_buf);
         
             q_buffer.free();
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * cur_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "cross_attn_cache");
@@ -227,9 +227,9 @@ namespace eet{
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;
             if (with_bias_) {
-                RUN_KERNEL(layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_query.data_ptr(), m, n, desc_.stream);
+                RUN_KERNEL(layernorm, desc_.dtype_, input_tensor.data_ptr(), layernorm_weights_, layernorm_bias_, layernorm_query.data_ptr(), m, n, desc_.stream);
             } else {
-                RUN_KERNEL(T5layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_query.data_ptr(), m, n, desc_.stream);
+                RUN_KERNEL(T5layernorm, desc_.dtype_, input_tensor.data_ptr(), layernorm_weights_, layernorm_query.data_ptr(), m, n, desc_.stream);
             }
             
 #ifdef _DEBUG_MODE_
@@ -322,11 +322,11 @@ namespace eet{
                                     const Buffer& v_buffer,
                                     Buffer& q_buf,
                                     Buffer& k_buf,
-                                    Buffer& v_buf){
-            RUN_KERNEL(add_QKV_bias_cross_opt_kernel,desc_.dtype_,q_buffer.data_ptr(), q_bias_,
-                        k_buffer.data_ptr(), k_bias_, v_buffer.data_ptr(), v_bias_,
-                        q_buf.data_ptr(), k_buf.data_ptr(), v_buf.data_ptr(),
-                        cur_batch_size_, cur_seq_len_, mem_seq_len_,desc_.head_num_, size_per_head_, desc_.stream);
+                                    Buffer& v_buf) {
+            RUN_KERNEL(add_QKV_bias_cross_opt_kernel, desc_.dtype_, q_buffer.data_ptr(), q_bias_,
+                       k_buffer.data_ptr(), k_bias_, v_buffer.data_ptr(), v_bias_,
+                       q_buf.data_ptr(), k_buf.data_ptr(), v_buf.data_ptr(),
+                       cur_batch_size_, cur_seq_len_, mem_seq_len_, desc_.head_num_, size_per_head_, desc_.stream);
 #ifdef _DEBUG_MODE_
       cudaDeviceSynchronize();
       check_cuda_error(cudaGetLastError());
@@ -334,18 +334,18 @@ namespace eet{
         }
 
         void CrossMultiHeadAttention::q_k_mul(const Buffer& q_buf, const Buffer& k_buf,
-                                                Buffer& qk_buf){
-            check_cuda_error(cublasGemmStridedBatchedEx(MetaDesc::cublasHandle,
-                CUBLAS_OP_T, CUBLAS_OP_N,
-                mem_seq_len_, cur_seq_len_, size_per_head_,
-                alpha_,
-                k_buf.data_ptr(), desc_.dataType_ , size_per_head_, mem_seq_len_ * size_per_head_,
-                q_buf.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
-                beta_,
-                qk_buf.data_ptr(), desc_.dataType_ , mem_seq_len_, mem_seq_len_ * cur_seq_len_,
-                cur_batch_size_ * desc_.head_num_,
-                desc_.computeType_,
-                q_k_algo_));
+                                                Buffer& qk_buf) {
+            check_cuda_error(cublasGemmStridedBatchedEx(desc_.cublasHandle,
+                                                        CUBLAS_OP_T, CUBLAS_OP_N,
+                                                        mem_seq_len_, cur_seq_len_, size_per_head_,
+                                                        alpha_,
+                                                        k_buf.data_ptr(), desc_.dataType_, size_per_head_, mem_seq_len_ * size_per_head_,
+                                                        q_buf.data_ptr(), desc_.dataType_, size_per_head_, cur_seq_len_ * size_per_head_,
+                                                        beta_,
+                                                        qk_buf.data_ptr(), desc_.dataType_, mem_seq_len_, mem_seq_len_ * cur_seq_len_,
+                                                        cur_batch_size_ * desc_.head_num_,
+                                                        desc_.computeType_,
+                                                        q_k_algo_));
 
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
@@ -353,12 +353,12 @@ namespace eet{
 #endif
         }
 
-        void CrossMultiHeadAttention::qk_softmax(Buffer& qk_buf, const torch::Tensor& padding_index){
+        void CrossMultiHeadAttention::qk_softmax(Buffer& qk_buf, const torch::Tensor& padding_index) {
             float scalar = 1.0f;
             if (with_bias_)
                 scalar = 1 / sqrtf(size_per_head_ * 1.0f);
-            RUN_KERNEL(cross_softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), cur_batch_size_,
-                    desc_.head_num_,cur_seq_len_, mem_seq_len_, scalar, desc_.stream);
+            RUN_KERNEL(cross_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), cur_batch_size_,
+                       desc_.head_num_, cur_seq_len_, mem_seq_len_, scalar, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
     check_cuda_error(cudaGetLastError());
@@ -369,16 +369,16 @@ namespace eet{
                                              const Buffer& v_buf,
                                              Buffer& transpose_dst){
             check_cuda_error(cublasGemmStridedBatchedEx(desc_.cublasHandle,
-                    CUBLAS_OP_N, CUBLAS_OP_N,
-                    size_per_head_, cur_seq_len_, mem_seq_len_,
-                    alpha_,
-                    v_buf.data_ptr(), desc_.dataType_ , size_per_head_, mem_seq_len_ * size_per_head_,
-                    qk_buf.data_ptr(), desc_.dataType_ , mem_seq_len_, mem_seq_len_ * cur_seq_len_,
-                    beta_,
-                    transpose_dst.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
-                    cur_batch_size_ * desc_.head_num_,
-                    desc_.computeType_,
-                    attn_v_algo_));
+                                                        CUBLAS_OP_N, CUBLAS_OP_N,
+                                                        size_per_head_, cur_seq_len_, mem_seq_len_,
+                                                        alpha_,
+                                                        v_buf.data_ptr(), desc_.dataType_ , size_per_head_, mem_seq_len_ * size_per_head_,
+                                                        qk_buf.data_ptr(), desc_.dataType_ , mem_seq_len_, mem_seq_len_ * cur_seq_len_,
+                                                        beta_,
+                                                        transpose_dst.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
+                                                        cur_batch_size_ * desc_.head_num_,
+                                                        desc_.computeType_,
+                                                        attn_v_algo_));
 
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
@@ -386,9 +386,8 @@ namespace eet{
 #endif
         }
 
-        void CrossMultiHeadAttention::transpose(const Buffer& transpose_dst, Buffer&  dst){
-            RUN_KERNEL(transpose_kernel,desc_.dtype_,transpose_dst.data_ptr(),dst.data_ptr(), cur_batch_size_, cur_seq_len_,
-                    desc_.head_num_, size_per_head_, desc_.stream);
+        void CrossMultiHeadAttention::transpose(const Buffer &transpose_dst, Buffer &dst) {
+            RUN_KERNEL(transpose_kernel, desc_.dtype_, transpose_dst.data_ptr(), dst.data_ptr(), cur_batch_size_, cur_seq_len_, desc_.head_num_, size_per_head_, desc_.stream);
 
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
@@ -401,30 +400,28 @@ namespace eet{
             int k = inner_dim_;
             int n = desc_.hidden_units_;
             check_cuda_error(cublasGemmEx(desc_.cublasHandle,
-                                            CUBLAS_OP_N, CUBLAS_OP_N,
-                                            n, m, k,
-                                            alpha_,
-                                            output_weights_, desc_.dataType_ , n,
-                                            dst.data_ptr(), desc_.dataType_ , k,
-                                            beta_,
-                                            res.data_ptr(), desc_.dataType_ , n,
-                                            desc_.computeType_,
-                                            qkv_weights_algo_));
+                                          CUBLAS_OP_N, CUBLAS_OP_N,
+                                          n, m, k,
+                                          alpha_,
+                                          output_weights_, desc_.dataType_, n,
+                                          dst.data_ptr(), desc_.dataType_, k,
+                                          beta_,
+                                          res.data_ptr(), desc_.dataType_, n,
+                                          desc_.computeType_,
+                                          qkv_weights_algo_));
             if(add_residual)
             {   
                 if(!pre_layernorm)
                 {   
                     // add_bias + add_residual + layer_norm
-                    RUN_KERNEL(add_bias_input_layernorm_kernel,desc_.dtype_,
-                                        res.data_ptr(),input.data_ptr(), 
-                                        output_bias_,layernorm_weights_,
-                                        layernorm_bias_,m , n, desc_.stream);
+                    RUN_KERNEL(add_bias_input_layernorm_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(),
+                               output_bias_, layernorm_weights_, layernorm_bias_, m, n, desc_.stream);
                 }
                 else
                 {
                     // add_bias + add_residual
-                    RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(),output_bias_,
-                           m , n, desc_.stream);
+                    RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(), output_bias_,
+                               m, n, desc_.stream);
                 }
             }
             else
@@ -435,21 +432,21 @@ namespace eet{
                                m, n, desc_.stream);
                 }
             }
-            #ifdef _DEBUG_MODE_
+#ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
-            #endif
+#endif
 
          }
 
         void CrossMultiHeadAttention::kv_transpose(torch::Tensor& d_K_buf, torch::Tensor& d_V_buf,Buffer& K_buf,Buffer& V_buf)
          {
-            RUN_KERNEL(copyKV_transpose_cross_kernel,desc_.dtype_,d_K_buf.data_ptr(), d_V_buf.data_ptr(),K_buf.data_ptr(), V_buf.data_ptr(),cur_batch_size_, mem_seq_len_,
-                   desc_.head_num_, size_per_head_);
-            #ifdef _DEBUG_MODE_
+            RUN_KERNEL(copyKV_transpose_cross_kernel, desc_.dtype_, d_K_buf.data_ptr(), d_V_buf.data_ptr(), K_buf.data_ptr(), V_buf.data_ptr(), cur_batch_size_, mem_seq_len_,
+                       desc_.head_num_, size_per_head_);
+#ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
-            #endif
+#endif
          }
         
         void CrossMultiHeadAttention::attention_dispatch(const Buffer& q_buffer,
@@ -457,14 +454,13 @@ namespace eet{
                                                         Buffer& context_buf
                                                         )
          {
-            RUN_KERNEL(cross_attention_dispatch,desc_.dtype_,q_buffer.data_ptr(),
-                        q_bias_,key_mem_cache_.data_ptr(),k_bias_,value_mem_cache_.data_ptr(),v_bias_,(int *)length_per_sample.data_ptr(),
-                        context_buf.data_ptr(),cur_batch_size_,desc_.head_num_,size_per_head_,step_,mem_seq_len_, desc_.stream);
-                        
-            #ifdef _DEBUG_MODE_
+            RUN_KERNEL(cross_attention_dispatch, desc_.dtype_, q_buffer.data_ptr(), q_bias_, key_mem_cache_.data_ptr(), k_bias_, value_mem_cache_.data_ptr(), v_bias_,
+                       (int *)length_per_sample.data_ptr(), context_buf.data_ptr(), cur_batch_size_, desc_.head_num_, size_per_head_, step_, mem_seq_len_, desc_.stream);
+
+#ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
-            #endif
+#endif
          }
     } // namespace op
 } // namespace eet

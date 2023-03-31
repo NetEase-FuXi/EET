@@ -14,7 +14,7 @@ from transformers import RobertaModel
 from eet.transformers.encoder_decoder import *
 from eet.transformers.modeling_bert import EETBertEmbedding
 from eet.utils.mapping import convert_name
-from transformers import  (
+from transformers import (
     RobertaModel,
     RobertaForCausalLM,
     RobertaForMaskedLM,
@@ -46,6 +46,7 @@ class EETRobertaModel():
         if pooler is not None:
             pooler = pooler.cuda()
         self.pooler = pooler
+
     def __call__(
             self,
             input_ids,
@@ -78,12 +79,13 @@ class EETRobertaModel():
         embedding_out = self.embedding(input_ids, position_ids, token_type_ids)
 
         sequence_output = self.encoder(embedding_out,
-                                   pre_padding_len=pre_padding_len,
-                                   normalize_before=False)
+                                       pre_padding_len=pre_padding_len,
+                                       normalize_before=False)
 
         pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
 
-        return sequence_output,pooled_output
+        return sequence_output, pooled_output
+
     @staticmethod
     def from_pretrained(model_id_or_path: str, max_batch, data_type, device_id=0):
         """from_pretrained."""
@@ -92,7 +94,7 @@ class EETRobertaModel():
         embedding_dict = {}
         torch_model = RobertaModel.from_pretrained(model_id_or_path)
         cfg = torch_model.config
-        model_name = 'roberta'      #cfg.model_type
+        model_name = 'roberta'  # cfg.model_type
 
         for k, v in torch_model.state_dict().items():
             if 'embeddings.' in k:
@@ -122,7 +124,7 @@ class EETRobertaModel():
             torch_model = torch_model.float()
         else:
             torch_model = torch_model.half()
-        eet_model = EETRobertaModel(cfg, embedding, encoder,torch_model.pooler)
+        eet_model = EETRobertaModel(cfg, embedding, encoder, torch_model.pooler)
         return eet_model
 
     def from_torch(torch_model, max_batch, data_type, device_id=0):
@@ -131,7 +133,7 @@ class EETRobertaModel():
         model_dict = {}
         embedding_dict = {}
         cfg = torch_model.config
-        model_name = 'roberta'         #cfg.model_type
+        model_name = 'roberta'  # cfg.model_type
 
         for k, v in torch_model.roberta.state_dict().items():
             if 'embeddings.' in k:
@@ -166,7 +168,7 @@ class EETRobertaModel():
 
 
 class EETRobertaForCausalLM():
-    def __init__(self,roberta,lm_head,config):
+    def __init__(self, roberta, lm_head, config):
         self.config = config
         self.roberta = roberta
         self.lm_head = lm_head
@@ -174,15 +176,15 @@ class EETRobertaForCausalLM():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
 
         sequence_output, pooled_output = self.roberta(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         lm_loss = None
@@ -198,20 +200,21 @@ class EETRobertaForCausalLM():
             cross_attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = RobertaForCausalLM.from_pretrained(model_id_or_path)
-        roberta = EETRobertaModel.from_torch(torch_model,max_batch,data_type)
+        roberta = EETRobertaModel.from_torch(torch_model, max_batch, data_type)
         lm_head = torch_model.lm_head.cuda()
-        model =  EETRobertaForCausalLM(roberta, lm_head,torch_model.config)
+        model = EETRobertaForCausalLM(roberta, lm_head, torch_model.config)
 
         return model
 
+
 class EETRobertaForMaskedLM():
-    def __init__(self,roberta,lm_head,config):
+    def __init__(self, roberta, lm_head, config):
         self.config = config
         self.roberta = roberta
         self.lm_head = lm_head
@@ -219,15 +222,15 @@ class EETRobertaForMaskedLM():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
 
         sequence_output, pooled_output = self.roberta(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
 
@@ -241,20 +244,21 @@ class EETRobertaForMaskedLM():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = RobertaForMaskedLM.from_pretrained(model_id_or_path)
-        roberta = EETRobertaModel.from_torch(torch_model,max_batch,data_type)
+        roberta = EETRobertaModel.from_torch(torch_model, max_batch, data_type)
         lm_head = torch_model.lm_head.cuda()
-        model =  EETRobertaForMaskedLM(roberta, lm_head,torch_model.config)
+        model = EETRobertaForMaskedLM(roberta, lm_head, torch_model.config)
 
         return model
 
+
 class EETRobertaForSequenceClassification():
-    def __init__(self,roberta,classifier,config):
+    def __init__(self, roberta, classifier, config):
         self.config = config
         self.roberta = roberta
         self.classifier = classifier
@@ -262,14 +266,14 @@ class EETRobertaForSequenceClassification():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
         sequence_output, pooled_output = self.roberta(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
 
@@ -282,20 +286,21 @@ class EETRobertaForSequenceClassification():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = RobertaForSequenceClassification.from_pretrained(model_id_or_path)
-        roberta = EETRobertaModel.from_torch(torch_model,max_batch,data_type)
+        roberta = EETRobertaModel.from_torch(torch_model, max_batch, data_type)
         classifier = torch_model.classifier.cuda()
-        model =  EETRobertaForSequenceClassification(roberta, classifier,torch_model.config)
+        model = EETRobertaForSequenceClassification(roberta, classifier, torch_model.config)
 
         return model
 
+
 class EETRobertaForMultipleChoice():
-    def __init__(self,roberta,classifier,config):
+    def __init__(self, roberta, classifier, config):
         self.config = config
         self.roberta = roberta
         self.classifier = classifier
@@ -303,15 +308,15 @@ class EETRobertaForMultipleChoice():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
         num_choices = input_ids.shape[1]
         sequence_output, pooled_output = self.roberta(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         MultipleChoice_pooled_output = pooled_output
@@ -326,20 +331,21 @@ class EETRobertaForMultipleChoice():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = RobertaForMultipleChoice.from_pretrained(model_id_or_path)
-        roberta = EETRobertaModel.from_torch(torch_model,max_batch,data_type)
+        roberta = EETRobertaModel.from_torch(torch_model, max_batch, data_type)
         classifier = torch_model.classifier.cuda()
-        model =  EETRobertaForMultipleChoice(roberta, classifier,torch_model.config)
+        model = EETRobertaForMultipleChoice(roberta, classifier, torch_model.config)
 
         return model
 
+
 class EETRobertaForTokenClassification():
-    def __init__(self,roberta,classifier,config):
+    def __init__(self, roberta, classifier, config):
         self.config = config
         self.roberta = roberta
         self.classifier = classifier
@@ -347,14 +353,14 @@ class EETRobertaForTokenClassification():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
         sequence_output, pooled_output = self.roberta(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         MultipleChoice_sequence_output = sequence_output
@@ -368,19 +374,20 @@ class EETRobertaForTokenClassification():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = RobertaForTokenClassification.from_pretrained(model_id_or_path)
-        roberta = EETRobertaModel.from_torch(torch_model,max_batch,data_type)
+        roberta = EETRobertaModel.from_torch(torch_model, max_batch, data_type)
         classifier = torch_model.classifier.cuda()
-        model =  EETRobertaForTokenClassification(roberta, classifier,torch_model.config)
+        model = EETRobertaForTokenClassification(roberta, classifier, torch_model.config)
         return model
 
+
 class EETRobertaForQuestionAnswering():
-    def __init__(self,roberta,qa_outputs,config):
+    def __init__(self, roberta, qa_outputs, config):
         self.config = config
         self.roberta = roberta
         self.qa_outputs = qa_outputs
@@ -388,14 +395,14 @@ class EETRobertaForQuestionAnswering():
     def __call__(
         self,
         input_ids,
-        position_ids = None,
-        token_type_ids = None,
-        attention_mask = None,
-    ) :
+        position_ids=None,
+        token_type_ids=None,
+        attention_mask=None,
+    ):
         sequence_output, pooled_output = self.roberta(
-            input_ids = input_ids,
-            position_ids = position_ids,
-            token_type_ids = token_type_ids,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )
         QuestionAnswering_sequence_output = sequence_output
@@ -413,13 +420,13 @@ class EETRobertaForQuestionAnswering():
             attentions=None,
         )
 
-    def from_pretrained(model_id_or_path: str,max_batch, data_type):
+    def from_pretrained(model_id_or_path: str, max_batch, data_type):
         """from_pretrained"""
         torch.set_grad_enabled(False)
         model_dict = {}
         embedding_dict = {}
         torch_model = RobertaForQuestionAnswering.from_pretrained(model_id_or_path)
-        roberta = EETRobertaModel.from_torch(torch_model,max_batch,data_type)
+        roberta = EETRobertaModel.from_torch(torch_model, max_batch, data_type)
         qa_outputs = torch_model.qa_outputs.cuda()
-        model =  EETRobertaForQuestionAnswering(roberta, qa_outputs,torch_model.config)
+        model = EETRobertaForQuestionAnswering(roberta, qa_outputs, torch_model.config)
         return model
