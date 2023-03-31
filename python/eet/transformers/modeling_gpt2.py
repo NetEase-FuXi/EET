@@ -12,6 +12,9 @@ from torch import Tensor
 from typing import Any, Dict, List, Optional, Tuple
 from transformers import GPT2Model,GPT2LMHeadModel,GPT2DoubleHeadsModel,GPT2ForSequenceClassification,GPT2ForTokenClassification
 from transformers.file_utils import ModelOutput
+
+from eet.transformers.encoder_decoder import *
+from eet.utils.mapping import convert_name
 from EET import MetaDesc as meta_desc
 from EET import LayerNorm as eet_layernorm
 from EET import FeedForwardNetwork as eet_ffn
@@ -25,7 +28,7 @@ logger = logging.getLogger(__name__)
 BEGIN_OF_PARAM = 12
 
 __all__ = [
-    'EETLayerNorm', 'EETGPT2Embedding', 'EETGPT2Feedforward', 'EETGPT2Attention', 'EETGPT2DecoderLayer', 'EETGPT2Decoder', 'EETGPT2Model',
+    'EETLayerNorm', 'EETGPT2Embedding', 'EETGPT2Model',
     'EETGPT2LMHeadModel','EETGPT2DoubleHeadsModel','EETGPT2ForSequenceClassification','EETGPT2ForTokenClassification'
 ]
 class CausalLMOutputWithCrossAttentions(ModelOutput):
@@ -97,185 +100,9 @@ class EETGPT2Embedding():
     
     @staticmethod
     def from_torch(meta_des,embedding_dict,data_type = torch.float32):
-        feedforward = EETGPT2Embedding(meta_des,embedding_dict,data_type = data_type)
-        return feedforward
+        embedding = EETGPT2Embedding(meta_des,embedding_dict,data_type = data_type)
+        return embedding
 
-class EETGPT2Feedforward():
-    def __init__(self,meta_des,model_dict,layer_id,data_type = torch.float32):
-        self.intermediate_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'mlp.c_fc.weight' in x[0]][0].transpose(0,1)).contiguous()).contiguous().cuda().type(data_type)
-        self.intermediate_bias = [x[1] for x in model_dict.items() if 'mlp.c_fc.bias' in x[0]][0].cuda().type(data_type)
-        self.output_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'mlp.c_proj.weight' in x[0]][0].transpose(0,1)).contiguous()).contiguous().cuda().type(data_type)
-        self.output_bias = [x[1] for x in model_dict.items() if 'mlp.c_proj.bias' in x[0]][0].cuda().type(data_type)
-        self.layernorm_weights = [x[1] for x in model_dict.items() if 'ln_2.weight' in x[0]][0].cuda().type(data_type)
-        self.layernorm_bias = [x[1] for x in model_dict.items() if 'ln_2.bias' in x[0]][0].cuda().type(data_type)
-        self.ffn = eet_ffn(meta_des,self.intermediate_weights,self.intermediate_bias,self.output_weights,self.output_bias,self.layernorm_weights,self.layernorm_bias, 'ffn_out_cache')
-    def __call__(self,
-                input_id,
-                pre_layernorm = True,
-                add_residual = True):
-        return self.ffn.forward(input_id,pre_layernorm,add_residual)
-    
-    @staticmethod
-    def from_torch(meta_des,model_dict,layer_id,data_type = torch.float32):
-        feedforward = EETGPT2Feedforward(meta_des,model_dict,layer_id,data_type = data_type)
-        return feedforward
-
-class EETGPT2Attention():
-    def __init__(self,meta_des, model_dict,layer_id,data_type = torch.float32,cross_attn = False):
-        self.cross_attn = cross_attn
-        if self.cross_attn:
-            self.layernorm_weights = [x[1] for x in model_dict.items() if 'ln_1.weight' in x[0]][0].cuda().type(data_type)
-            self.layernorm_bias = [x[1] for x in model_dict.items() if 'ln_1.bias' in x[0]][0].cuda().type(data_type)
-            emb_size = self.layernorm_bias.size()[0]
-            self.q_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'c_attn.weight' in x[0]][0].transpose(0,1)[:emb_size]).contiguous()).cuda().type(data_type)
-            self.k_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'c_attn.weight' in x[0]][0].transpose(0,1)[emb_size:emb_size*2]).contiguous()).cuda().type(data_type)
-            self.v_weights = torch.clone(torch.t([x[1] for x in model_dict.items() if 'c_attn.weight' in x[0]][0].transpose(0,1)[emb_size*2:]).contiguous()).cuda().type(data_type)
-            self.q_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][:emb_size].cuda().type(data_type)
-            self.k_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][emb_size:emb_size*2].cuda().type(data_type)
-            self.v_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][emb_size*2:].cuda().type(data_type)
-            self.out_weights = [x[1] for x in model_dict.items() if 'attn.c_proj.weight' in x[0]][0].cuda().type(data_type)
-            self.out_bias = [x[1] for x in model_dict.items() if 'attn.c_proj.bias' in x[0]][0].cuda().type(data_type)
-            self.attention = eet_cross_attention(meta_des,self.q_weights,self.k_weights,self.v_weights,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
-        else:
-            self.layernorm_weights = [x[1] for x in model_dict.items() if 'ln_1.weight' in x[0]][0].cuda().type(data_type)
-            self.layernorm_bias = [x[1] for x in model_dict.items() if 'ln_1.bias' in x[0]][0].cuda().type(data_type)
-            emb_size = self.layernorm_bias.size()[0]
-            self.qkv_weights = torch.t([x[1] for x in model_dict.items() if 'c_attn.weight' in x[0]][0].transpose(0,1)).contiguous().cuda().type(data_type)
-            self.q_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][:emb_size].cuda().type(data_type)
-            self.k_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][emb_size:emb_size*2].cuda().type(data_type)
-            self.v_bias = [x[1] for x in model_dict.items() if 'c_attn.bias' in x[0]][0][emb_size*2:].cuda().type(data_type)
-            self.out_weights = [x[1] for x in model_dict.items() if 'attn.c_proj.weight' in x[0]][0].cuda().type(data_type)
-            self.out_bias = [x[1] for x in model_dict.items() if 'attn.c_proj.bias' in x[0]][0].cuda().type(data_type)
-            self.attention = eet_attention(meta_des,self.qkv_weights,self.q_bias,self.k_bias,self.v_bias,self.out_weights,self.out_bias,self.layernorm_weights,self.layernorm_bias)
-
-    def __call__(self,
-                input_id,
-                pre_padding_len,
-                reorder_state = None,
-                encoder_out = None,
-                encoder_padding_mask  = None,
-                pre_layernorm = False,
-                add_residual = True,
-                first_pass = False):
-                
-        if self.cross_attn:
-            return self.attention.forward(input_id,encoder_out,pre_padding_len,pre_layernorm,add_residual,encoder_padding_mask,first_pass)
-        else:
-            return self.attention.forward(input_id,pre_padding_len,reorder_state,pre_layernorm,add_residual, first_pass)
-
-    @staticmethod
-    def from_torch(meta_des,model_dict,layer_id,data_type = torch.float32):
-        attention = EETGPT2Attention(meta_des,model_dict,layer_id,data_type = data_type)
-        return attention
-
-class EETGPT2DecoderLayer():
-    def __init__(self, config, attention,feedforward,cross_attention = None):
-        self.attetion = attention
-        self.cross_attention = cross_attention
-        self.feedforward = feedforward
-        self.normalize_before = True
-        self.add_residual = True
-        self.add_cross_attention = config.add_cross_attention
-    def __call__(self,
-                x,
-                encoder_out = None,
-                first_pass = True,
-                pre_padding_len = None,
-                encoder_attention_mask = None,
-                head_mask = None,
-                reorder_state = None):
-
-        ''' gpt2 model struct '''
-        ''' layernorm->self_attention-> project->addinputbias->layernorm->ffn->addinputbias'''
-        if encoder_out is not None and self.cross_attention is not None:
-            self_attn_out = self.attetion(input_id = x,
-                        pre_padding_len = pre_padding_len,
-                        reorder_state = reorder_state,
-                        pre_layernorm = self.normalize_before,
-                        add_residual = self.add_residual,
-                        first_pass = first_pass)
-
-            cross_attn_out = self.cross_attention(input_id = self_attn_out,
-                        pre_padding_len = pre_padding_len,
-                        encoder_out = encoder_out,
-                        encoder_padding_mask = encoder_attention_mask,
-                        pre_layernorm = self.normalize_before,
-                        add_residual = self.add_residual,
-                        first_pass = first_pass)
-
-            out = self.feedforward(cross_attn_out,
-                        pre_layernorm = self.normalize_before,
-                        add_residual = self.add_residual)
-        else:
-            self_attn_out = self.attetion(input_id = x,
-                        pre_padding_len = pre_padding_len,
-                        reorder_state = reorder_state,
-                        pre_layernorm = self.normalize_before,
-                        add_residual = self.add_residual,
-                        first_pass = first_pass)
-
-            out = self.feedforward(self_attn_out,
-                        pre_layernorm = self.normalize_before,
-                        add_residual = self.add_residual)          
-
-        return out
-
-    @staticmethod
-    def from_torch(meta_des, config,model_dict,layer_id,data_type = torch.float32):
-        attention = EETGPT2Attention.from_torch(meta_des = meta_des, model_dict = model_dict, layer_id = layer_id,data_type = data_type)
-        feedforward = EETGPT2Feedforward.from_torch(meta_des = meta_des, model_dict = model_dict, layer_id = layer_id,data_type = data_type)
-
-        if config.add_cross_attention:
-            cross_attention = EETGPT2Attention.from_torch(meta_des = meta_des, model_dict = model_dict, layer_id = layer_id,data_type = data_type)
-            layer = EETGPT2DecoderLayer(config, attention, feedforward,cross_attention)
-        else:
-            layer = EETGPT2DecoderLayer(config, attention, feedforward)
-        
-        return layer
-
-class EETGPT2Decoder():
-    def __init__(self,DecoderLayers):
-        self.layers = DecoderLayers
-    def __call__(
-        self,
-        x,
-        encoder_out = None,
-        first_pass = True,
-        pre_padding_len = None,
-        encoder_attention_mask = None,
-        head_mask = None,
-        reorder_state = None,
-    ):
-        for layer in self.layers:
-            x = layer(x,
-                    encoder_out = encoder_out,
-                    first_pass = first_pass,
-                    pre_padding_len = pre_padding_len,
-                    encoder_attention_mask = encoder_attention_mask,
-                    head_mask = None,
-                    reorder_state = reorder_state)
-        return x
-    
-    @staticmethod
-    def from_torch(layer_model_dict,meta_des,config,data_type = torch.float32):
-        """from torch."""
-        DecoderLayers = []
-        for i in range(config.n_layer):
-            if i < 10:
-                DecoderLayers.extend(
-                    [
-                        EETGPT2DecoderLayer.from_torch(meta_des,config,layer_model_dict['h.'+str(i)+'.'],i,data_type = data_type)
-                    ]
-                )
-            else:
-                DecoderLayers.extend(
-                    [
-                        EETGPT2DecoderLayer.from_torch(meta_des,config,layer_model_dict['h.'+str(i)],i,data_type = data_type)
-                    ]
-                )
-
-        eet_decoder =  EETGPT2Decoder(DecoderLayers)
-        return eet_decoder
 
 class EETGPT2Model():
     def __init__(self,config,embedding,decoder, layer_norm):
@@ -298,7 +125,6 @@ class EETGPT2Model():
         reorder_state = None,
     ):
         input_shape = input_ids.size()
-        batch_size = input_shape[0]
         # Attention mask.
         if attention_mask is  None:
             pre_padding_len = self.self_attn_padding_mask
@@ -319,13 +145,15 @@ class EETGPT2Model():
         if reorder_state is not None:
             self.reorder_state = reorder_state.long()
 
-        decoder_out = self.decoder(embedding_out,
-                    encoder_out = encoder_out,
-                    first_pass = first_pass,
-                    pre_padding_len = pre_padding_len,
-                    encoder_attention_mask = self.encoder_attention_mask,
-                    head_mask = None,
-                    reorder_state = self.reorder_state,)
+        decoder_out = self.decoder(
+            embedding_out,
+            encoder_outputs=encoder_out,
+            first_pass=first_pass,
+            pre_padding_len=pre_padding_len,
+            head_mask=None,
+            reorder_state=self.reorder_state,
+            normalize_before=True,
+        )
         
         decoder_out = self.layer_norm(decoder_out)
         return decoder_out
@@ -345,24 +173,26 @@ class EETGPT2Model():
             if 'e.' in k:
                 embedding_dict[k] = v
             if 'h.' in k:
+                k = convert_name(k, "gpt2")
+                k = k[k.find('layer.'):]
                 model_dict[k] = v
             if 'ln_f' in k:
                 layernorm_dict[k] = v
 
         from itertools import groupby
 
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:4])}
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
+                                                           lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
-        # data_type = torch.float32
         device = "cuda:0"
         activation_fn = cfg.activation_function
         batch_size = max_batch
         full_seq_len = full_seq_len
-        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, 0, 0, cfg.n_layer , cfg.n_positions,full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, 0, 0, cfg.n_layer, cfg.n_positions, full_seq_len, data_type, device, False, activation_fn)
         layer_norm = EETLayerNorm.from_torch(meta_des,layernorm_dict['ln_f.weight'],layernorm_dict['ln_f.bias'],data_type)
         embedding = EETGPT2Embedding.from_torch(meta_des,embedding_dict,data_type)
         # embedding = None
-        decoder = EETGPT2Decoder.from_torch(layer_model_dict,meta_des, cfg,data_type)
+        decoder = EETDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.n_layer, data_type=data_type, add_cross_attn=False, bias=True, is_standard=False)
         eet_model =  EETGPT2Model(cfg,embedding, decoder,layer_norm)
         return eet_model
 
@@ -381,24 +211,26 @@ class EETGPT2Model():
             if 'e.' in k:
                 embedding_dict[k] = v
             if 'h.' in k:
+                k = convert_name(k, "gpt2")
+                k = k[k.find('layer.'):]
                 model_dict[k] = v
             if 'ln_f' in k:
                 layernorm_dict[k] = v
 
         from itertools import groupby
 
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()), lambda item: item[0][:4])}
+        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
+                                                           lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
-        # data_type = torch.float32
         device = "cuda:0"
         activation_fn = cfg.activation_function
         batch_size = max_batch
         full_seq_len = full_seq_len
-        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, 0, 0, cfg.n_layer, cfg.n_positions,full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, 0, 0, cfg.n_layer, cfg.n_positions, full_seq_len, data_type, device, False, activation_fn)
         layer_norm = EETLayerNorm.from_torch(meta_des,layernorm_dict['ln_f.weight'],layernorm_dict['ln_f.bias'],data_type)
         embedding = EETGPT2Embedding.from_torch(meta_des,embedding_dict,data_type)
         # embedding = None
-        decoder = EETGPT2Decoder.from_torch(layer_model_dict,meta_des, cfg,data_type)
+        decoder = EETDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.n_layer, data_type=data_type, add_cross_attn=False, bias=True, is_standard=False)
         eet_model =  EETGPT2Model(cfg,embedding, decoder,layer_norm)
         return eet_model
 

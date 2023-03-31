@@ -3,7 +3,7 @@ Mappings = {
     "bert": "transformers_bert_mapping",
     "vit": "transformers_vit_mapping",
     "albert": "transformers_albert_mapping",
-    "gpt": "transformers_gpt_mapping",
+    "gpt2": "transformers_gpt2_mapping",
     "clip": "transformers_clip_mapping",
     "bart": "transformers_bart_mapping",
     "t5": "transformers_t5_mapping",
@@ -52,6 +52,21 @@ transformers_bert_mapping = {
             }
         }
     },
+}
+
+transformers_gpt2_mapping = {
+    "h": {"__name__":"layer",
+        "$": {"__name__":"$",
+            "attn": {"__name__":"self_attn",
+                "c_attn": {"__name__":"qkv_proj"},
+                "c_proj": {"__name__":"out_proj"},
+            },
+            "ln_1": {"__name__":"self_attn.layernorm"},
+            "mlp.c_fc": {"__name__":"ffn.intermediate"},
+            "mlp.c_proj": {"__name__":"ffn.output"},
+            "ln_2": {"__name__":"ffn.layernorm"},
+        }
+    }
 }
 
 transformers_vit_mapping = {
