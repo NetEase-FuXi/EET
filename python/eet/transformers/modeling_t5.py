@@ -379,13 +379,13 @@ class EETT5Model():
             pre_padding_len = self.pre_padding_len
         else:
             # transformers 0 - padding;1 - nopadding
-            pre_padding_len = torch.sum(1 - attention_mask, 1).int().cuda()
+            pre_padding_len = torch.sum(1 - attention_mask, 1).long().cuda()
 
         if decoder_attention_mask is None:
             decoder_pre_padding_len = self.decoder_pre_padding_len
         else:
             # transformers 0 - padding;1 - nopadding
-            decoder_pre_padding_len = torch.sum(1 - decoder_attention_mask, 1).int().cuda()
+            decoder_pre_padding_len = torch.sum(1 - decoder_attention_mask, 1).long().cuda()
 
         per_sample_length = encoder_seq_length  # encoder_seq_length是encoder output实际的长度（去掉padding len）
         if not first_pass:
