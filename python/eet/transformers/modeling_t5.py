@@ -161,6 +161,7 @@ class EETT5Block():
         add_residual=True,
         self_past_key_values_length=0,
         position_bias=None,
+        encoder_pre_padding_len=None,
     ):
         batch_size, seq_length = hidden_states.shape[:2]
         real_seq_length = seq_length + self_past_key_values_length
@@ -193,7 +194,7 @@ class EETT5Block():
 
             cross_attn_out = self.cross_attention(
                 hidden_states=self_attn_out,
-                pre_padding_len=pre_padding_len,
+                pre_padding_len=encoder_pre_padding_len,
                 encoder_outputs=encoder_outputs,
                 per_sample_length=per_sample_length,
                 pre_layernorm=normalize_before,
@@ -319,6 +320,7 @@ class EETT5Decoder():
         normalize_before=True,
         position_bias=None,
         self_past_key_values_length=0,
+        encoder_pre_padding_len=None
     ):
         hidden_states = self.embed_tokens(input_ids)
         for layer in self.layers:
@@ -334,6 +336,7 @@ class EETT5Decoder():
                 add_residual=True,
                 position_bias=position_bias,
                 self_past_key_values_length=self_past_key_values_length,
+                encoder_pre_padding_len=encoder_pre_padding_len,
             )
         hidden_states = self.final_layer_norm(hidden_states)
 
@@ -412,6 +415,7 @@ class EETT5Model():
             encoder_outputs=encoder_outputs,
             first_pass=first_pass,
             pre_padding_len=decoder_pre_padding_len,
+            encoder_pre_padding_len = pre_padding_len,
             per_sample_length=per_sample_length,
             head_mask=None,
             reorder_state=self.reorder_state,

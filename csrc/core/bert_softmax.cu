@@ -155,8 +155,8 @@ __global__ void softmax_kernel_t5(T *qk_buf, T *position_bias, const int64_t *pa
   {
     right_padding_len = padding_len[batch_id];
   }
-
-  for (int i = 0; i < seq_len - right_padding_len; ++i)
+#pragma unroll
+  for (int i = 0; i < seq_len; ++i)
   {
     float qk = threadIdx.x < seq_len ? (float)qk_buf[threadIdx.x + qk_offset] + (float)position_bias[threadIdx.x + bias_offset] : 0.0f;
     float padding_val = (threadIdx.x >= seq_len - right_padding_len) ? -1e20f : 0.0f;
@@ -182,13 +182,6 @@ __global__ void softmax_kernel_t5(T *qk_buf, T *position_bias, const int64_t *pa
     if (threadIdx.x < seq_len)
       qk_buf[threadIdx.x + qk_offset] = (T)(qk / s_sum);
 
-    qk_offset += seq_len;
-    bias_offset += seq_len;
-  }
-  for (int i = seq_len - right_padding_len; i < seq_len; ++i)
-  {
-    if (threadIdx.x < seq_len)
-      qk_buf[threadIdx.x + qk_offset] = 0.0f;
     qk_offset += seq_len;
     bias_offset += seq_len;
   }
@@ -254,7 +247,7 @@ void bert_softmax_kernel(void *qk_buf, void* position_bias, const int64_t *paddi
     softmax_kernel_v2<T><<<grid, block, 0, stream>>>((T*)qk_buf, padding_len, head_num, seq_len);
   } else {
     if (position_bias == nullptr) {
-      if (seq_len >= 64) {
+      if (batch_size * seq_len <= 120) {
         grid.x = batch_size * head_num * seq_len;
         softmax_kernel_bert_opt<T><<<grid, block, 0, stream>>>((T *)qk_buf, padding_len, head_num, seq_len);
       } else {
@@ -262,7 +255,7 @@ void bert_softmax_kernel(void *qk_buf, void* position_bias, const int64_t *paddi
         softmax_kernel_bert<T><<<grid, block, 0, stream>>>((T *)qk_buf,padding_len, head_num, seq_len);
       }
     } else {
-      if (seq_len >= 64) {
+      if (batch_size * seq_len <= 120) {
         grid.x = batch_size * head_num * seq_len;
         softmax_kernel_t5_opt<T><<<grid, block, 0, stream>>>((T *)qk_buf, (T*)position_bias, padding_len, head_num, seq_len);
       } else {

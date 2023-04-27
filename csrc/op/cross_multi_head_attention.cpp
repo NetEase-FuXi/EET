@@ -72,14 +72,14 @@ namespace eet{
 
         torch::Tensor CrossMultiHeadAttention::forward(torch::Tensor& input,
                                     torch::Tensor& memory,
-                                    const torch::Tensor& pre_padding_length,
+                                    const torch::Tensor& enc_pre_padding_length,
                                     bool pre_layernorm,
                                     bool add_residual,
                                     const torch::Tensor& length_per_sample,
                                     bool first_pass) {
             if(first_pass)
             {
-                return forward_full(input, memory, pre_padding_length, pre_layernorm, add_residual);
+                return forward_full(input, memory, enc_pre_padding_length, pre_layernorm, add_residual);
             }
             else
             {
@@ -90,7 +90,7 @@ namespace eet{
         // full decoder
         torch::Tensor CrossMultiHeadAttention::forward_full(torch::Tensor& input,
                             torch::Tensor& memory,
-                            const torch::Tensor& pre_padding_length,
+                            const torch::Tensor& enc_pre_padding_length,
                             bool pre_layernorm,
                             bool add_residual) {
             assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as CrossMultiHeadAttention's dtype");
@@ -141,8 +141,9 @@ namespace eet{
             q_k_mul(q_buf, k_buf, qk_buf);
             q_buf.free();
 
+            const int64_t *padding_len = enc_pre_padding_length.data_ptr<int64_t>();
             //softmax
-            qk_softmax(qk_buf,pre_padding_length);
+            qk_softmax(qk_buf, padding_len);
 
             // transpose k\v cache
             kv_transpose(key_mem_cache_, value_mem_cache_, k_buf, v_buf);
@@ -353,11 +354,11 @@ namespace eet{
 #endif
         }
 
-        void CrossMultiHeadAttention::qk_softmax(Buffer& qk_buf, const torch::Tensor& padding_index) {
+        void CrossMultiHeadAttention::qk_softmax(Buffer& qk_buf, const int64_t *padding_len) {
             float scalar = 1.0f;
             if (with_bias_)
                 scalar = 1 / sqrtf(size_per_head_ * 1.0f);
-            RUN_KERNEL(cross_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), cur_batch_size_,
+            RUN_KERNEL(cross_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), padding_len, cur_batch_size_,
                        desc_.head_num_, cur_seq_len_, mem_seq_len_, scalar, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
