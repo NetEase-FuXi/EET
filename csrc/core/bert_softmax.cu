@@ -44,7 +44,7 @@ __global__ void bert_softmax_kernel_v2(T *qk_buf, const int64_t *padding_len, co
   int batch_id = blockIdx.x / (seq_len * head_num);
   int qk_offset = blockIdx.x * seq_len;
 
-  __shared__ __align__(sizeof(double)) float buf[2048];
+  __shared__ __align__(sizeof(double)) float buf[1024];
   __shared__ float s_sum, s_max;
   int right_padding_len = 0;
   if (padding_len != nullptr)
@@ -177,7 +177,7 @@ __global__ void t5_softmax_kernel_v2(T *qk_buf, T *position_bias, const int64_t 
 
   // extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
   // auto* buf = reinterpret_cast<float*>(shared_buf);
-  __shared__ __align__(sizeof(double)) float buf[2048];
+  __shared__ __align__(sizeof(double)) float buf[1024];
   __shared__ float s_sum, s_max;
   int right_padding_len = 0;
   if (padding_len != nullptr)
@@ -224,12 +224,11 @@ void launch_softmax_kernel(void *qk_buf, void* position_bias, const int64_t *pad
   const int grid_dim_x = batch_size * head_num * seq_len;
   int block_dim_x;
 
+  assert(seq_len <= 1024);
   if (need_sequence_mask) {
-    assert(seq_len <= 1024);
     block_dim_x = min(((seq_len + 31) / 32) * 32, 1024);
     masked_softmax_kernel<T><<<grid_dim_x, block_dim_x, 0, stream>>>((T*)qk_buf, padding_len, head_num, seq_len);
   } else {
-    assert(seq_len <= 2048);
     if (position_bias == nullptr) {
       if (seq_len <= 128) {
         block_dim_x = min(((seq_len + 31) / 32) * 32, 1024);
