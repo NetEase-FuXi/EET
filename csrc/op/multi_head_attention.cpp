@@ -253,7 +253,7 @@ namespace eet{
 
         void MultiHeadAttention::qk_softmax(Buffer &qk_buf, void* relative_attention_bias, const int64_t *padding_len, bool need_sequence_mask) {
             // float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
-            RUN_KERNEL(bert_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), relative_attention_bias, padding_len, cur_batch_size_,
+            RUN_KERNEL(launch_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), relative_attention_bias, padding_len, cur_batch_size_,
                        desc_.head_num_, cur_seq_len_, need_sequence_mask, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();

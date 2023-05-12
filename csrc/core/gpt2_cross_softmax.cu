@@ -58,19 +58,8 @@ void cross_softmax_kernel(void *qk_buf_, const int64_t *padding_len, const int &
 {
   dim3 grid, block;
 
-  if (mem_seq_len <= 32)
-    block.x = 32;
-  else if (mem_seq_len > 32 && mem_seq_len <= 64)
-    block.x = 64;
-  else if (mem_seq_len > 64 && mem_seq_len <= 128)
-    block.x = 128;
-  else if (mem_seq_len > 128 && mem_seq_len <= 256)
-    block.x = 256;
-  else if (mem_seq_len > 256 && mem_seq_len <= 512)
-    block.x = 512;
-  else
-    block.x = 1024;
-
+  assert(mem_seq_len <= 1024);
+  block.x = min(((mem_seq_len + 31) / 32) * 32, 1024);
   grid.x = batch_size * head_num;
   cross_softmax_kernel_opt<T><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_len, head_num, seq_len, mem_seq_len, scalar);
 }

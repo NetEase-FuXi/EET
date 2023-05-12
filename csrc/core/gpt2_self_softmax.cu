@@ -125,18 +125,7 @@ void softmax_kernel(void *qk_buf_, const int64_t *__restrict padding_index, cons
 
   if(seq_len <= 1024)
   {
-    if (seq_len <= 32)
-      block.x = 32;
-    else if (seq_len > 32 && seq_len <= 64)
-      block.x = 64;
-    else if (seq_len > 64 && seq_len <= 128)
-      block.x = 128;
-    else if (seq_len > 128 && seq_len <= 256)
-      block.x = 256;
-    else if (seq_len > 256 && seq_len <= 512)
-      block.x = 512;
-    else
-      block.x = 1024;
+    block.x = min(((seq_len + 31) / 32) * 32, 1024);
     grid.x = batch_size * head_num;
 
     softmax_kernel_gpt2<T><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len);
@@ -147,12 +136,12 @@ void softmax_kernel(void *qk_buf_, const int64_t *__restrict padding_index, cons
     if (seq_len <= 2048)
     {
       // block.x = seq_len/2;
-      block.x = ceil(seq_len / (32.0 * 2)) * 32;         // item_per_thread = 1
+      block.x = ceil(seq_len / (32.0 * 2)) * 32;         // item_per_thread = 2
       softmax_kernel_gpt2_opt<T,2><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len);
     }
     else if (seq_len <= 4096)
     {
-      block.x = ceil(seq_len / (32.0 * 4)) * 32;         // item_per_thread = 1
+      block.x = ceil(seq_len / (32.0 * 4)) * 32;         // item_per_thread = 4
       softmax_kernel_gpt2_opt<T,4><<<grid, block, 0, stream>>>((T *)qk_buf_, padding_index, head_num, seq_len);
     }
     else

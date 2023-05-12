@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include <cuda_runtime.h>
 
 #define FINAL_MASK 0xffffffff
