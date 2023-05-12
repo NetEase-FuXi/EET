@@ -45,11 +45,16 @@ setup(
             name='EET',
             sources=sources,
             include_dirs=include_paths,
-            extra_compile_args={'cxx': ['-g'],
+            extra_compile_args={'cxx': ['-g',
+                                        # "-U NDEBUG",
+                                        ],
+
                                 'nvcc': ['-U__CUDA_NO_HALF_OPERATORS__', 
                                          '-U__CUDA_NO_HALF_CONVERSIONS__',
                                          '-U__CUDA_NO_HALF2_OPERATORS__']},
-            define_macros=[('VERSION_INFO', __version__)]
+            define_macros=[('VERSION_INFO', __version__),
+                        #    ('_DEBUG_MODE_', None),
+                           ]
             )
         ],
     cmdclass={
