@@ -358,7 +358,7 @@ namespace eet{
             float scalar = 1.0f;
             if (with_bias_)
                 scalar = 1 / sqrtf(size_per_head_ * 1.0f);
-            RUN_KERNEL(cross_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), padding_len, cur_batch_size_,
+            RUN_KERNEL(launch_cross_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), padding_len, cur_batch_size_,
                        desc_.head_num_, cur_seq_len_, mem_seq_len_, scalar, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
