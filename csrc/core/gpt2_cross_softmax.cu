@@ -10,33 +10,33 @@ template <typename T>
 __global__
 void cross_softmax_kernel(T *qk_buf_, const int64_t *padding_len, const int head_num, const int seq_len,const int mem_seq_len, const T scalar)
 {
-    int batch_id = blockIdx.x / (seq_len * head_num);
-    int qk_offset = blockIdx.x * mem_seq_len;
-    __shared__ float s_sum, s_max;
+  int batch_id = blockIdx.x / (seq_len * head_num);
+  int qk_offset = blockIdx.x * mem_seq_len;
+  __shared__ float s_sum, s_max;
 
-    int right_padding_len = 0;
-    if (padding_len != nullptr)
-    {
-      right_padding_len = padding_len[batch_id];
-    }
+  int right_padding_len = 0;
+  if (padding_len != nullptr)
+  {
+    right_padding_len = padding_len[batch_id];
+  }
 
-    float qk = threadIdx.x < mem_seq_len - right_padding_len ? (float)qk_buf_[threadIdx.x + qk_offset] * (float)scalar : -1e20f;
-    float max_val = blockReduceMax<float>(qk);
-    if(threadIdx.x == 0)
-      s_max = max_val;
-    __syncthreads();
+  float qk = threadIdx.x < mem_seq_len - right_padding_len ? (float)qk_buf_[threadIdx.x + qk_offset] * (float)scalar : -1e20f;
+  float max_val = blockReduceMax<float>(qk);
+  if(threadIdx.x == 0)
+    s_max = max_val;
+  __syncthreads();
 
-    float qk_tmp = threadIdx.x < mem_seq_len - right_padding_len ? __expf((float)(qk - s_max)) : 0.0f;
-    float sum_val = blockReduceSum<float>(qk_tmp);
+  float qk_tmp = threadIdx.x < mem_seq_len - right_padding_len ? __expf((float)(qk - s_max)) : 0.0f;
+  float sum_val = blockReduceSum<float>(qk_tmp);
 
-    if(threadIdx.x == 0)
-    {
-      s_sum = sum_val + 1e-6f;
-    }
-    __syncthreads();
+  if(threadIdx.x == 0)
+  {
+    s_sum = sum_val + 1e-6f;
+  }
+  __syncthreads();
 
-    if(threadIdx.x < mem_seq_len)
-      qk_buf_[threadIdx.x + qk_offset] = (T)(qk_tmp / s_sum);
+  if(threadIdx.x < mem_seq_len)
+    qk_buf_[threadIdx.x + qk_offset] = (T)(qk_tmp / s_sum);
 }
 
 template <typename T, int block_size>
@@ -46,8 +46,10 @@ __global__ void cross_softmax_kernel_v2(T *qk_buf_, const int64_t *padding_len, 
   int batch_id = blockIdx.x / (seq_len * head_num);
   int qk_offset = blockIdx.x * mem_seq_len;
 
-  __shared__ __align__(sizeof(double)) float buf[1024];
+  extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
+  auto* buf = reinterpret_cast<float*>(shared_buf);
   __shared__ float s_sum, s_max;
+
   int right_padding_len = 0;
   if (padding_len != nullptr)
   {
@@ -90,16 +92,17 @@ template <class T>
 void launch_cross_softmax_kernel(void *qk_buf_, const int64_t *padding_len, const int &batch_size,
                                  const int &head_num, const int &seq_len, const int &mem_seq_len, const float &scalar, const cudaStream_t stream)
 {
+  const size_t smem_size = mem_seq_len * sizeof(float);
   const int grid_dim_x = batch_size * head_num * seq_len;
   int block_dim_x;
 
-  assert(mem_seq_len <= 1024);
+  assert(mem_seq_len <= 2048);
   if (seq_len <= 128) {
     block_dim_x = min(((mem_seq_len + 31) / 32) * 32, 1024);
     cross_softmax_kernel<T><<<grid_dim_x, block_dim_x, 0, stream>>>((T *)qk_buf_, padding_len, head_num, seq_len, mem_seq_len, scalar);
   } else {
     block_dim_x = SOFTMAX_BLOCK_SIZE;
-    cross_softmax_kernel_v2<T, SOFTMAX_BLOCK_SIZE><<<grid_dim_x, block_dim_x, 0, stream>>>((T *)qk_buf_, padding_len, head_num, seq_len, mem_seq_len, scalar);
+    cross_softmax_kernel_v2<T, SOFTMAX_BLOCK_SIZE><<<grid_dim_x, block_dim_x, smem_size, stream>>>((T *)qk_buf_, padding_len, head_num, seq_len, mem_seq_len, scalar);
   }
 }
 

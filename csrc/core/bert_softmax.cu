@@ -44,8 +44,10 @@ __global__ void bert_softmax_kernel_v2(T *qk_buf, const int64_t *padding_len, co
   int batch_id = blockIdx.x / (seq_len * head_num);
   int qk_offset = blockIdx.x * seq_len;
 
-  __shared__ __align__(sizeof(double)) float buf[1024];
+  extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
+  auto* buf = reinterpret_cast<float*>(shared_buf);
   __shared__ float s_sum, s_max;
+
   int right_padding_len = 0;
   if (padding_len != nullptr)
   {
@@ -175,10 +177,10 @@ __global__ void t5_softmax_kernel_v2(T *qk_buf, T *position_bias, const int64_t 
   int qk_offset = blockIdx.x * seq_len;
   int bias_offset = blockIdx.x % (seq_len * head_num) * seq_len;
 
-  // extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
-  // auto* buf = reinterpret_cast<float*>(shared_buf);
-  __shared__ __align__(sizeof(double)) float buf[1024];
+  extern __shared__ __align__(sizeof(double)) unsigned char shared_buf[];
+  auto* buf = reinterpret_cast<float*>(shared_buf);
   __shared__ float s_sum, s_max;
+
   int right_padding_len = 0;
   if (padding_len != nullptr)
   {
@@ -221,10 +223,11 @@ template <class T>
 void launch_softmax_kernel(void *qk_buf, void* position_bias, const int64_t *padding_len, const int batch_size, const int head_num,
                               const int seq_len, bool need_sequence_mask, const cudaStream_t stream)
 {
+  const size_t smem_size = seq_len * sizeof(float);
   const int grid_dim_x = batch_size * head_num * seq_len;
   int block_dim_x;
 
-  assert(seq_len <= 1024);
+  assert(seq_len <= 2048);
   if (need_sequence_mask) {
     block_dim_x = min(((seq_len + 31) / 32) * 32, 1024);
     masked_softmax_kernel<T><<<grid_dim_x, block_dim_x, 0, stream>>>((T*)qk_buf, padding_len, head_num, seq_len);
@@ -235,7 +238,7 @@ void launch_softmax_kernel(void *qk_buf, void* position_bias, const int64_t *pad
         bert_softmax_kernel<T><<<grid_dim_x, block_dim_x, 0, stream>>>((T*)qk_buf, padding_len, head_num, seq_len);
       } else {
         block_dim_x = SOFTMAX_BLOCK_SIZE;
-        bert_softmax_kernel_v2<T, SOFTMAX_BLOCK_SIZE><<<grid_dim_x, block_dim_x, 0, stream>>>((T *)qk_buf, padding_len, head_num, seq_len);
+        bert_softmax_kernel_v2<T, SOFTMAX_BLOCK_SIZE><<<grid_dim_x, block_dim_x, smem_size, stream>>>((T *)qk_buf, padding_len, head_num, seq_len);
       }
     } else {
       if (seq_len <= 128) {
@@ -243,7 +246,7 @@ void launch_softmax_kernel(void *qk_buf, void* position_bias, const int64_t *pad
         t5_softmax_kernel<T><<<grid_dim_x, block_dim_x, 0, stream>>>((T *)qk_buf, (T*)position_bias, padding_len, head_num, seq_len);
       } else {
         block_dim_x = SOFTMAX_BLOCK_SIZE;
-        t5_softmax_kernel_v2<T, SOFTMAX_BLOCK_SIZE><<<grid_dim_x, block_dim_x, 0, stream>>>((T *)qk_buf, (T*)position_bias, padding_len, head_num, seq_len);
+        t5_softmax_kernel_v2<T, SOFTMAX_BLOCK_SIZE><<<grid_dim_x, block_dim_x, smem_size, stream>>>((T *)qk_buf, (T*)position_bias, padding_len, head_num, seq_len);
       }
     }
   }
