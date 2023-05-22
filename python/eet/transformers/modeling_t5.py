@@ -509,6 +509,7 @@ class EETT5Model():
                                                                    lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
+        activation_fn = cfg.feed_forward_proj
         if cfg.feed_forward_proj == "gated-gelu":
             activation_fn = "gelu_new"
         if hasattr(cfg, "n_positions"):
