@@ -1,6 +1,7 @@
 Mappings = {
     "roberta": "transformers_bert_mapping",
     "bert": "transformers_bert_mapping",
+    "ernie": "transformers_bert_mapping",
     "vit": "transformers_vit_mapping",
     "albert": "transformers_albert_mapping",
     "gpt2": "transformers_gpt2_mapping",

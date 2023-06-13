@@ -8,3 +8,4 @@ from .modeling_distilbert import *
 from .modeling_albert import *
 from .modeling_t5 import *
 from .modeling_bart import *
+from .modeling_ernie import *
