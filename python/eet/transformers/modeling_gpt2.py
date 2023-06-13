@@ -196,7 +196,15 @@ class EETGPT2Model():
         activation_fn = cfg.activation_function
         batch_size = max_batch
         full_seq_len = full_seq_len
-        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, 0, 0, cfg.n_layer, cfg.n_positions, full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(dtype=data_type,
+                             batch_size=batch_size,
+                             head_num=cfg.n_head,
+                             hidden_units=cfg.n_embd,
+                             layer_num=cfg.n_layer,
+                             max_seq_len=cfg.n_positions,
+                             max_full_seq_len=full_seq_len,
+                             activation_fn=activation_fn,
+                             cuda_device=device)
         layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['ln_f.weight'], layernorm_dict['ln_f.bias'], data_type)
         embedding = EETGPT2Embedding.from_torch(meta_des, embedding_dict, data_type)
         # embedding = None
@@ -215,7 +223,6 @@ class EETGPT2Model():
         cfg = torch_model.config
 
         for k, v in torch_model.state_dict().items():
-            k = k[BEGIN_OF_PARAM:]
             if 'e.' in k:
                 embedding_dict[k] = v
             if 'h.' in k:
@@ -234,7 +241,15 @@ class EETGPT2Model():
         activation_fn = cfg.activation_function
         batch_size = max_batch
         full_seq_len = full_seq_len
-        meta_des = meta_desc(batch_size, cfg.n_head, cfg.n_embd, 0, 0, cfg.n_layer, cfg.n_positions, full_seq_len, data_type, device, False, activation_fn)
+        meta_des = meta_desc(dtype=data_type,
+                             batch_size=batch_size,
+                             head_num=cfg.n_head,
+                             hidden_units=cfg.n_embd,
+                             layer_num=cfg.n_layer,
+                             max_seq_len=cfg.n_positions,
+                             max_full_seq_len=full_seq_len,
+                             activation_fn=activation_fn,
+                             cuda_device=device)
         layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['ln_f.weight'], layernorm_dict['ln_f.bias'], data_type)
         embedding = EETGPT2Embedding.from_torch(meta_des, embedding_dict, data_type)
         # embedding = None

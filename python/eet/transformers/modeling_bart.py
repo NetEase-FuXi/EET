@@ -190,12 +190,24 @@ class EETBartModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.activation_function
         batch_size = max_batch
-        encoder_config = meta_desc(batch_size, cfg.encoder_attention_heads, cfg.d_model, 0, 0, cfg.encoder_layers,
-                                   cfg.max_position_embeddings, full_seq_len, data_type, device, False,
-                                   activation_fn)
-        decoder_config = meta_desc(batch_size, cfg.decoder_attention_heads, cfg.d_model, 0, 0, cfg.decoder_layers,
-                                   cfg.max_position_embeddings, full_seq_len, data_type, device, False,
-                                   activation_fn)
+        encoder_config = meta_desc(dtype=data_type,
+                                   batch_size=batch_size,
+                                   head_num=cfg.encoder_attention_heads,
+                                   hidden_units=cfg.d_model,
+                                   layer_num=cfg.encoder_layers,
+                                   max_seq_len=cfg.max_position_embeddings,
+                                   max_full_seq_len=full_seq_len,
+                                   activation_fn=activation_fn,
+                                   cuda_device=device)
+        decoder_config = meta_desc(dtype=data_type,
+                                   batch_size=batch_size,
+                                   head_num=cfg.decoder_attention_heads,
+                                   hidden_units=cfg.d_model,
+                                   layer_num=cfg.decoder_layers,
+                                   max_seq_len=cfg.max_position_embeddings,
+                                   max_full_seq_len=full_seq_len,
+                                   activation_fn=activation_fn,
+                                   cuda_device=device)
 
         encoder_embedding = EETBartEmbedding.from_torch(encoder_config, encoder_embedding_dict, data_type=data_type, name='encoder_out_cache')
         encoder = EETEncoder.from_torch(encoder_config, encoder_layer_model_dict, cfg.encoder_layers, data_type=data_type, bias=True)

@@ -142,9 +142,14 @@ class EETBertModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, 0, 0, cfg.num_hidden_layers,
-                           cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False,
-                           activation_fn)
+        config = meta_desc(dtype=data_type,
+                           batch_size=batch_size,
+                           head_num=cfg.num_attention_heads,
+                           hidden_units=cfg.hidden_size,
+                           layer_num=cfg.num_hidden_layers,
+                           max_seq_len=cfg.max_position_embeddings,
+                           activation_fn=activation_fn,
+                           cuda_device=device)
 
         embedding = EETBertEmbedding.from_torch(config, embedding_dict, data_type)
         # embedding = None
@@ -181,9 +186,14 @@ class EETBertModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.hidden_act
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.num_attention_heads, cfg.hidden_size, 0, 0, cfg.num_hidden_layers,
-                           cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False,
-                           activation_fn)
+        config = meta_desc(dtype=data_type,
+                           batch_size=batch_size,
+                           head_num=cfg.num_attention_heads,
+                           hidden_units=cfg.hidden_size,
+                           layer_num=cfg.num_hidden_layers,
+                           max_seq_len=cfg.max_position_embeddings,
+                           activation_fn=activation_fn,
+                           cuda_device=device)
 
         embedding = EETBertEmbedding.from_torch(config, embedding_dict, data_type)
         # embedding = None

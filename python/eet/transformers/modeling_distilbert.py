@@ -246,9 +246,14 @@ class EETDistilBertModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.activation
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.n_heads, cfg.dim, 0, 0, cfg.n_layers,
-                           cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False,
-                           activation_fn)
+        config = meta_desc(dtype=data_type,
+                           batch_size=batch_size,
+                           head_num=cfg.n_heads,
+                           hidden_units=cfg.dim,
+                           layer_num=cfg.n_layers,
+                           max_seq_len=cfg.max_position_embeddings,
+                           activation_fn=activation_fn,
+                           cuda_device=device)
 
         embedding = EETDistilBertEmbedding.from_torch(config, embedding_dict, data_type)
         # embedding = None
@@ -282,9 +287,14 @@ class EETDistilBertModel():
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         activation_fn = cfg.activation
         batch_size = max_batch
-        config = meta_desc(batch_size, cfg.n_heads, cfg.dim, 0, 0, cfg.n_layers,
-                           cfg.max_position_embeddings, cfg.max_position_embeddings, data_type, device, False,
-                           activation_fn)
+        config = meta_desc(dtype=data_type,
+                           batch_size=batch_size,
+                           head_num=cfg.n_heads,
+                           hidden_units=cfg.dim,
+                           layer_num=cfg.n_layers,
+                           max_seq_len=cfg.max_position_embeddings,
+                           activation_fn=activation_fn,
+                           cuda_device=device)
 
         embedding = EETDistilBertEmbedding.from_torch(config, embedding_dict, data_type)
         # embedding = None

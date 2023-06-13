@@ -460,13 +460,29 @@ class EETT5Model():
         if hasattr(cfg, "n_positions"):
             max_prompt_seq_len = cfg.n_positions
         batch_size = max_batch
-        encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.d_kv, cfg.d_ff, cfg.num_layers,
-                                   max_prompt_seq_len, max_full_seq_len, data_type, device, False,
-                                   activation_fn)
-        decoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.d_kv, cfg.d_ff, cfg.num_decoder_layers,
-                                   max_prompt_seq_len, max_full_seq_len, data_type, device, False,
-                                   activation_fn)
 
+        encoder_config = meta_desc(dtype=data_type,
+                                   batch_size=batch_size,
+                                   head_num=cfg.num_heads,
+                                   hidden_units=cfg.d_model,
+                                   layer_num=cfg.num_layers,
+                                   max_seq_len=max_prompt_seq_len,
+                                   max_full_seq_len=max_full_seq_len,
+                                   activation_fn=activation_fn,
+                                   d_kv=cfg.d_kv,
+                                   d_ff=cfg.d_ff,
+                                   cuda_device=device)
+        decoder_config = meta_desc(dtype=data_type,
+                                   batch_size=batch_size,
+                                   head_num=cfg.num_heads,
+                                   hidden_units=cfg.d_model,
+                                   layer_num=cfg.num_decoder_layers,
+                                   max_seq_len=max_prompt_seq_len,
+                                   max_full_seq_len=max_full_seq_len,
+                                   activation_fn=activation_fn,
+                                   d_kv=cfg.d_kv,
+                                   d_ff=cfg.d_ff,
+                                   cuda_device=device)
         torch_model.to(data_type)
 
         shared = torch_model.shared.cuda()
@@ -515,12 +531,29 @@ class EETT5Model():
         if hasattr(cfg, "n_positions"):
             max_prompt_seq_len = cfg.n_positions
         batch_size = max_batch
-        encoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.d_kv, cfg.d_ff, cfg.num_layers,
-                                   max_prompt_seq_len, max_full_seq_len, data_type, device, False,
-                                   activation_fn)
-        decoder_config = meta_desc(batch_size, cfg.num_heads, cfg.d_model, cfg.d_kv, cfg.d_ff, cfg.num_decoder_layers,
-                                   max_prompt_seq_len, max_full_seq_len, data_type, device, False,
-                                   activation_fn)
+
+        encoder_config = meta_desc(dtype=data_type,
+                                   batch_size=batch_size,
+                                   head_num=cfg.num_heads,
+                                   hidden_units=cfg.d_model,
+                                   layer_num=cfg.num_layers,
+                                   max_seq_len=max_prompt_seq_len,
+                                   max_full_seq_len=max_full_seq_len,
+                                   activation_fn=activation_fn,
+                                   d_kv=cfg.d_kv,
+                                   d_ff=cfg.d_ff,
+                                   cuda_device=device)
+        decoder_config = meta_desc(dtype=data_type,
+                                   batch_size=batch_size,
+                                   head_num=cfg.num_heads,
+                                   hidden_units=cfg.d_model,
+                                   layer_num=cfg.num_decoder_layers,
+                                   max_seq_len=max_prompt_seq_len,
+                                   max_full_seq_len=max_full_seq_len,
+                                   activation_fn=activation_fn,
+                                   d_kv=cfg.d_kv,
+                                   d_ff=cfg.d_ff,
+                                   cuda_device=device)
 
         torch_model.to(data_type)
 

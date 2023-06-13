@@ -284,10 +284,24 @@ class EETCLIPModel():
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         batch_size = max_batch
-        text_config = meta_desc(batch_size, text_cfg.num_attention_heads, text_cfg.hidden_size, 0, 0,
-                                text_cfg.num_hidden_layers, text_cfg.hidden_size, text_cfg.hidden_size, data_type, device, False, text_cfg.hidden_act)
-        vision_config = meta_desc(batch_size, vision_cfg.num_attention_heads, vision_cfg.hidden_size, 0, 0,
-                                  vision_cfg.num_hidden_layers, vision_cfg.hidden_size, vision_cfg.hidden_size, data_type, device, False, vision_cfg.hidden_act)
+        text_config = meta_desc(dtype=data_type,
+                                batch_size=batch_size,
+                                head_num=text_cfg.num_attention_heads,
+                                hidden_units=text_cfg.hidden_size,
+                                layer_num=text_cfg.num_hidden_layers,
+                                max_seq_len=text_cfg.max_position_embeddings,
+                                activation_fn=text_cfg.hidden_act,
+                                cuda_device=device,
+                                layernorm_eps=text_cfg.layer_norm_eps)
+        vision_config = meta_desc(dtype=data_type,
+                                batch_size=batch_size,
+                                head_num=vision_cfg.num_attention_heads,
+                                hidden_units=vision_cfg.hidden_size,
+                                layer_num=vision_cfg.num_hidden_layers,
+                                max_seq_len=vision_cfg.hidden_size,
+                                activation_fn=vision_cfg.hidden_act,
+                                cuda_device=device,
+                                layernorm_eps=text_cfg.layer_norm_eps)
 
         # vision model        
         vision_model = EETCLIPVisionTransformer.from_torch(vision_config, vision_cfg, model_dict['vision_model'], data_type)

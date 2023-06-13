@@ -1,0 +1,13 @@
+__pycache__
+example/python/test/
+example/cpp/test/
+python/EET.egg-info/
+build/
+.vscode
+*.o
+*.so
+*.nsys-rep
+*.qdrep
+*.sqlite
+*.pyc
+*.log
