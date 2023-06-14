@@ -248,10 +248,13 @@ namespace eet{
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;
 
-            if (with_bias_) {
-                RUN_KERNEL(layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_bias_,layernorm_query.data_ptr(), m, n, desc_.stream);
-            } else {
-                RUN_KERNEL(T5layernorm,desc_.dtype_,input_tensor.data_ptr(),layernorm_weights_,layernorm_query.data_ptr(), m, n, desc_.stream);
+            if (with_bias_)
+            {
+                RUN_KERNEL(layernorm, desc_.dtype_, input_tensor.data_ptr(), layernorm_weights_, layernorm_bias_, layernorm_query.data_ptr(), m, n, desc_.layernorm_eps_, desc_.stream);
+            }
+            else
+            {
+                RUN_KERNEL(T5layernorm, desc_.dtype_, input_tensor.data_ptr(), layernorm_weights_, layernorm_query.data_ptr(), m, n, desc_.layernorm_eps_, desc_.stream);
             }
 #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
@@ -392,7 +395,7 @@ namespace eet{
                     RUN_KERNEL(add_bias_input_layernorm_kernel,desc_.dtype_,
                                         res.data_ptr(),input.data_ptr(), 
                                         output_bias_,layernorm_weights_,
-                                        layernorm_bias_,m , n, desc_.stream);
+                                        layernorm_bias_, m , n, desc_.layernorm_eps_, desc_.stream);
                 }
                 else
                 {

@@ -10,7 +10,7 @@
 
 template <typename T>
 __global__ 
-void add_bias_input_layernorm(T* out, const T* input, const T* bias, const T* gamma, const T* beta, int m, int n)
+void add_bias_input_layernorm(T* out, const T* input, const T* bias, const T* gamma, const T* beta, int m, int n, const float layernorm_eps)
 {
   int tid = threadIdx.x;
 
@@ -29,7 +29,7 @@ void add_bias_input_layernorm(T* out, const T* input, const T* bias, const T* ga
 
   variance = blockReduceSum<float>((local_out - s_mean) * (local_out - s_mean));
   if(threadIdx.x == 0)
-    s_variance = variance / n + 1e-6f;
+    s_variance = variance / n + layernorm_eps;
   __syncthreads();
 
   out[blockIdx.x * n + tid] = 
@@ -38,7 +38,7 @@ void add_bias_input_layernorm(T* out, const T* input, const T* bias, const T* ga
 
 template <>
 __global__ 
-void add_bias_input_layernorm(half* out, const half* input, const half* bias, const half* gamma, const half* beta, int m, int n)
+void add_bias_input_layernorm(half* out, const half* input, const half* bias, const half* gamma, const half* beta, int m, int n, const float layernorm_eps)
 {
 
   int tid = threadIdx.x;
@@ -69,7 +69,7 @@ void add_bias_input_layernorm(half* out, const half* input, const half* bias, co
   variance += (local_out_fp2.y - s_mean) * (local_out_fp2.y - s_mean);
   variance = blockReduceSum<float>(variance);
   if(threadIdx.x == 0)
-    s_variance = rsqrtf(variance / n + 1e-6f);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
   __syncthreads();
 
   float2 gamma_val = __half22float2(__ldg(&gamma_ptr[tid]));
@@ -81,7 +81,7 @@ void add_bias_input_layernorm(half* out, const half* input, const half* bias, co
 
 template <typename T>
 __global__ 
-void add_input_T5layernorm(T* out, const T* input, const T* gamma, int m, int n)
+void add_input_T5layernorm(T* out, const T* input, const T* gamma, int m, int n, const float layernorm_eps)
 {
   int tid = threadIdx.x;
 
@@ -93,7 +93,7 @@ void add_input_T5layernorm(T* out, const T* input, const T* gamma, int m, int n)
 
   variance = blockReduceSum<float>(local_out * local_out);
   if(threadIdx.x == 0)
-    s_variance = variance / n + 1e-6f;
+    s_variance = variance / n + layernorm_eps;
   __syncthreads();
 
   out[blockIdx.x * n + tid] = 
@@ -102,7 +102,7 @@ void add_input_T5layernorm(T* out, const T* input, const T* gamma, int m, int n)
 
 template <>
 __global__ 
-void add_input_T5layernorm(half* out, const half* input, const half* gamma, int m, int n)
+void add_input_T5layernorm(half* out, const half* input, const half* gamma, int m, int n, const float layernorm_eps)
 {
   int tid = threadIdx.x;
   __shared__ float s_variance;
@@ -120,7 +120,7 @@ void add_input_T5layernorm(half* out, const half* input, const half* gamma, int 
   variance += local_out_fp2.y * local_out_fp2.y;
   variance = blockReduceSum<float>(variance);
   if(threadIdx.x == 0)
-    s_variance = rsqrtf(variance / n + 1e-6f);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
   __syncthreads();
 
   float2 gamma_val = __half22float2(__ldg(&gamma_ptr[tid]));
@@ -132,7 +132,7 @@ void add_input_T5layernorm(half* out, const half* input, const half* gamma, int 
 
 template <typename T>
 __global__ void add_bias_input_layernorm_v2(T *out, const T *__restrict input, const T *__restrict bias,
-                                            const T *__restrict gamma, const T *__restrict beta, int n)
+                                            const T *__restrict gamma, const T *__restrict beta, int n, const float layernorm_eps)
 {
   const int ite = 4;
   const int tid = threadIdx.x;
@@ -169,7 +169,7 @@ __global__ void add_bias_input_layernorm_v2(T *out, const T *__restrict input, c
 
   variance = blockReduceSum<float>(var);
   if (tid == 0)
-    s_variance = rsqrtf(variance / n + 1e-6f);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
   __syncthreads();
 
 #pragma unroll
@@ -183,7 +183,7 @@ __global__ void add_bias_input_layernorm_v2(T *out, const T *__restrict input, c
 
 template <>
 __global__ void add_bias_input_layernorm_v2(half *out, const half *__restrict input, const half *__restrict bias,
-                                            const half *__restrict gamma, const half *__restrict beta, int n)
+                                            const half *__restrict gamma, const half *__restrict beta, int n, const float layernorm_eps)
 {
   const int ite = 4;
   const int tid = threadIdx.x;
@@ -229,7 +229,7 @@ __global__ void add_bias_input_layernorm_v2(half *out, const half *__restrict in
 
   variance = blockReduceSum<float>(var);
   if (threadIdx.x == 0)
-    s_variance = rsqrtf(variance / n + 1e-6f);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
   __syncthreads();
 
   half2 s_var_2 = __float2half2_rn(s_variance);
@@ -243,7 +243,7 @@ __global__ void add_bias_input_layernorm_v2(half *out, const half *__restrict in
 }
 
 template <typename T>
-__global__ void add_input_T5layernorm_v2(T *out, const T *__restrict input, const T *__restrict gamma, int n)
+__global__ void add_input_T5layernorm_v2(T *out, const T *__restrict input, const T *__restrict gamma, int n, const float layernorm_eps)
 {
   const int ite = 4;
   const int tid = threadIdx.x;
@@ -271,7 +271,7 @@ __global__ void add_input_T5layernorm_v2(T *out, const T *__restrict input, cons
 
   variance = blockReduceSum<float>(var);
   if (tid == 0)
-    s_variance = rsqrtf(variance / n + 1e-6f);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
   __syncthreads();
 
 #pragma unroll
@@ -284,7 +284,7 @@ __global__ void add_input_T5layernorm_v2(T *out, const T *__restrict input, cons
 }
 
 template <>
-__global__ void add_input_T5layernorm_v2(half *out, const half *__restrict input, const half *__restrict gamma, int n)
+__global__ void add_input_T5layernorm_v2(half *out, const half *__restrict input, const half *__restrict gamma, int n, const float layernorm_eps)
 {
   const int ite = 4;
   const int tid = threadIdx.x;
@@ -317,7 +317,7 @@ __global__ void add_input_T5layernorm_v2(half *out, const half *__restrict input
 
   variance = blockReduceSum<float>(var);
   if (threadIdx.x == 0)
-    s_variance = rsqrtf(variance / n + 1e-6f);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
   __syncthreads();
 
   half2 s_var_2 = __float2half2_rn(s_variance);
@@ -335,7 +335,7 @@ __global__ void decoder_norm1_kernel_opt(const float *__restrict input,
                                          const float *__restrict gamma,
                                          const float *__restrict beta,
                                          float *output,
-                                         int m, int n)
+                                         int m, int n, const float layernorm_eps)
 {
   int tid = threadIdx.x;
 
@@ -367,7 +367,7 @@ __global__ void decoder_norm1_kernel_opt(const float *__restrict input,
   variance = blockReduceSum_opt<float, item_per_thread>(tmp);
 
   if (threadIdx.x == 0)
-    s_variance = rsqrtf(variance / n + 1e-6);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
 
   __syncthreads();
 
@@ -386,7 +386,7 @@ __global__ void decoder_norm1_kernel_opt(const half *__restrict input,
                                          const half *__restrict gamma,
                                          const half *__restrict beta,
                                          half *output,
-                                         int m, int n)
+                                         int m, int n, const float layernorm_eps)
 {
   const int tid = threadIdx.x;
   __shared__ float s_mean;
@@ -429,7 +429,7 @@ __global__ void decoder_norm1_kernel_opt(const half *__restrict input,
 
   variance = blockReduceSum_opt<float, item_per_thread>(tmp);
   if (tid == 0)
-    s_variance = rsqrtf(variance / n + 1e-6);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
   __syncthreads();
 
   for (int i = 0; i < item_per_thread; i++)
@@ -449,7 +449,7 @@ template <int item_per_thread>
 __global__ void T5norm1_kernel_opt(const float *__restrict input,
                                    const float *__restrict gamma,
                                    float *output,
-                                   int m, int n)
+                                   int m, int n, const float layernorm_eps)
 {
   int tid = threadIdx.x;
 
@@ -473,7 +473,7 @@ __global__ void T5norm1_kernel_opt(const float *__restrict input,
   variance = blockReduceSum_opt<float, item_per_thread>(tmp);
 
   if (threadIdx.x == 0)
-    s_variance = rsqrtf(variance / n + 1e-6);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
 
   __syncthreads();
 
@@ -491,7 +491,7 @@ template <int item_per_thread>
 __global__ void T5norm1_kernel_opt(const half *__restrict input,
                                    const half *__restrict gamma,
                                    half *output,
-                                   int m, int n)
+                                   int m, int n, const float layernorm_eps)
 {
   const int tid = threadIdx.x;
   __shared__ float s_variance;
@@ -515,7 +515,7 @@ __global__ void T5norm1_kernel_opt(const half *__restrict input,
 
   variance = blockReduceSum_opt<float, item_per_thread>(tmp);
   if (tid == 0)
-    s_variance = rsqrtf(variance / n + 1e-6);
+    s_variance = rsqrtf(variance / n + layernorm_eps);
   __syncthreads();
 
   for (int i = 0; i < item_per_thread; i++)
@@ -533,7 +533,7 @@ __global__ void T5norm1_kernel_opt(const half *__restrict input,
 template <typename T>
 void layernorm(const void *input, const void *gamma,
                const void *beta, void *output,
-               const int &m, const int &n,
+               const int &m, const int &n, const float layernorm_eps,
                const cudaStream_t stream)
 {
   dim3 grid(m);
@@ -545,31 +545,31 @@ void layernorm(const void *input, const void *gamma,
   {
     block.x = ceil(n / (32.0 * 1)) * 32;         // item_per_thread = 1
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    decoder_norm1_kernel_opt<1><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)beta, (T*)output, m, n);
+    decoder_norm1_kernel_opt<1><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)beta, (T*)output, m, n, layernorm_eps);
   }
   else if (n <= 2048)
   {
     block.x = ceil(n / (32.0 * 2)) * 32;         // item_per_thread = 2
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    decoder_norm1_kernel_opt<2><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)beta, (T*)output, m, n);
+    decoder_norm1_kernel_opt<2><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)beta, (T*)output, m, n, layernorm_eps);
   }
   else if (n <= 4096)
   {
     block.x = ceil(n / (32.0 * 4)) * 32;         // item_per_thread = 4
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    decoder_norm1_kernel_opt<4><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)beta, (T*)output, m, n);
+    decoder_norm1_kernel_opt<4><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)beta, (T*)output, m, n, layernorm_eps);
   }
   else if (n <= 8192)
   {
     block.x = ceil(n / (32.0 * 8)) * 32;         // item_per_thread = 8
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    decoder_norm1_kernel_opt<8><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)beta, (T*)output, m, n);
+    decoder_norm1_kernel_opt<8><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)beta, (T*)output, m, n, layernorm_eps);
   }
   else if (n <= 16384)
   {
     block.x = ceil(n / (32.0 * 16)) * 32;        // item_per_thread = 16
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    decoder_norm1_kernel_opt<16><<<grid, block, 0, stream>>>((T*)input,(T*)gamma, (T*)beta,(T*) output, m, n);
+    decoder_norm1_kernel_opt<16><<<grid, block, 0, stream>>>((T*)input,(T*)gamma, (T*)beta,(T*) output, m, n, layernorm_eps);
   }
   else
   {
@@ -579,7 +579,7 @@ void layernorm(const void *input, const void *gamma,
 
 template <typename T>
 void T5layernorm(const void *input, const void *gamma,
-                 void *output, const int &m, const int &n,
+                 void *output, const int &m, const int &n, const float layernorm_eps,
                  const cudaStream_t stream)
 {
   dim3 grid(m);
@@ -592,31 +592,31 @@ void T5layernorm(const void *input, const void *gamma,
   {
     block.x = ceil(n / (32.0 * 1)) * 32;         // item_per_thread = 1
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    T5norm1_kernel_opt<1><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)output, m, n);
+    T5norm1_kernel_opt<1><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)output, m, n, layernorm_eps);
   }
   else if (n <= 2048)
   {
     block.x = ceil(n / (32.0 * 2)) * 32;         // item_per_thread = 2
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    T5norm1_kernel_opt<2><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)output, m, n);
+    T5norm1_kernel_opt<2><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)output, m, n, layernorm_eps);
   }
   else if (n <= 4096)
   {
     block.x = ceil(n / (32.0 * 4)) * 32;         // item_per_thread = 4
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    T5norm1_kernel_opt<4><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)output, m, n);
+    T5norm1_kernel_opt<4><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)output, m, n, layernorm_eps);
   }
   else if (n <= 8192)
   {
     block.x = ceil(n / (32.0 * 8)) * 32;         // item_per_thread = 8
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    T5norm1_kernel_opt<8><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)output, m, n);
+    T5norm1_kernel_opt<8><<<grid, block, 0, stream>>>((T*)input, (T*)gamma, (T*)output, m, n, layernorm_eps);
   }
   else if (n <= 16384)
   {
     block.x = ceil(n / (32.0 * 16)) * 32;        // item_per_thread = 16
     block.x = block.x / (4 / sizeof(T)); // if using half, only need half of block.x
-    T5norm1_kernel_opt<16><<<grid, block, 0, stream>>>((T*)input,(T*)gamma, (T*)output, m, n);
+    T5norm1_kernel_opt<16><<<grid, block, 0, stream>>>((T*)input,(T*)gamma, (T*)output, m, n, layernorm_eps);
   }
   else
   {
@@ -627,7 +627,7 @@ void T5layernorm(const void *input, const void *gamma,
 template <class T>
 void add_bias_input_layernorm_kernel(void *output, const void *input,
                                      const void *bias, const void *gamma,
-                                     const void *beta, const int &m, int &n,
+                                     const void *beta, const int &m, int &n, const float layernorm_eps,
                                      const cudaStream_t stream)
 {
   if (sizeof(T) == sizeof(float))
@@ -637,14 +637,14 @@ void add_bias_input_layernorm_kernel(void *output, const void *input,
     assert(n <= 1024);
     if (bias != nullptr) {
       if (n == 768 || n == 1024)
-        add_bias_input_layernorm_v2<<<grid, n / 4, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, n);
+        add_bias_input_layernorm_v2<<<grid, n / 4, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, n, layernorm_eps);
       else
-        add_bias_input_layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, m, n);
+        add_bias_input_layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, m, n, layernorm_eps);
     } else {
       if (n == 768 || n == 1024)
-        add_input_T5layernorm_v2<<<grid, n / 4, 0, stream>>>((T*)output, (T*)input, (T*)gamma, n);
+        add_input_T5layernorm_v2<<<grid, n / 4, 0, stream>>>((T*)output, (T*)input, (T*)gamma, n, layernorm_eps);
       else
-        add_input_T5layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)gamma, m, n);      
+        add_input_T5layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)gamma, m, n, layernorm_eps);
     }
   }
   else
@@ -655,34 +655,34 @@ void add_bias_input_layernorm_kernel(void *output, const void *input,
 
     if (bias != nullptr) {
       if (m >= 512 && (n == 768 || n == 1024))
-        add_bias_input_layernorm_v2<<<grid, n / 8, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, n);
+        add_bias_input_layernorm_v2<<<grid, n / 8, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, n, layernorm_eps);
       else
-        add_bias_input_layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, m, n);
+        add_bias_input_layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, m, n, layernorm_eps);
     } else {
       if (m >= 512 && (n == 768 || n == 1024))
-        add_input_T5layernorm_v2<<<grid, n / 8, 0, stream>>>((T*)output, (T*)input, (T*)gamma, n);
+        add_input_T5layernorm_v2<<<grid, n / 8, 0, stream>>>((T*)output, (T*)input, (T*)gamma, n, layernorm_eps);
       else
-        add_input_T5layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)gamma, m, n);
+        add_input_T5layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)gamma, m, n, layernorm_eps);
     }
   }
 }
 
 template void add_bias_input_layernorm_kernel<float>(void *output, const void *input,
                                                      const void *bias, const void *gamma,
-                                                     const void *beta, const int &m, int &n,
+                                                     const void *beta, const int &m, int &n, const float layernorm_eps,
                                                      const cudaStream_t stream);
 
 template void add_bias_input_layernorm_kernel<half>(void *output, const void *input,
                                                     const void *bias, const void *gamma,
-                                                    const void *beta, const int &m, int &n,
+                                                    const void *beta, const int &m, int &n, const float layernorm_eps,
                                                     const cudaStream_t stream);
 
 template void layernorm<float>(const void *input, const void *gamma,
-                               const void *beta, void *output, const int &m, const int &n, const cudaStream_t stream);
+                               const void *beta, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
 
 template void layernorm<half>(const void *input, const void *gamma,
-                              const void *beta, void *output, const int &m, const int &n, const cudaStream_t stream);
+                              const void *beta, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
 
-template void T5layernorm<float>(const void *input, const void *gamma, void *output, const int &m, const int &n, const cudaStream_t stream);
+template void T5layernorm<float>(const void *input, const void *gamma, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
 
-template void T5layernorm<half>(const void *input, const void *gamma, void *output, const int &m, const int &n, const cudaStream_t stream);
+template void T5layernorm<half>(const void *input, const void *gamma, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
