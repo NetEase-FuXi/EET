@@ -1,4 +1,4 @@
-#include "op/t5ffn.hpp"
+#include "op/gated_ffn.hpp"
 #include "core/add_bias.cuh"
 #include "core/layer_norm.cuh"
 #include "core/gpt2_self_softmax.cuh"
@@ -8,7 +8,7 @@ namespace eet
 {
     namespace op
     {
-        T5FeedForwardNetwork::T5FeedForwardNetwork(MetaDesc desc,
+        GatedFeedForwardNetwork::GatedFeedForwardNetwork(MetaDesc desc,
                             const torch::Tensor& Intermediate_0_weights,
                             const torch::Tensor& Intermediate_0_bias,
                             const torch::Tensor& Intermediate_1_weights,
@@ -56,8 +56,8 @@ namespace eet
                 d_ff_ = desc_.d_ff_;
             }
             MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, ffn_cache_name_);
-            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "t5ffn_buffer1");
-            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "t5ffn_buffer2");
+            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "gated_ffn_buffer1");
+            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "gated_ffn_buffer2");
             switch (desc_.dtype_)
             {
             case torch::kFloat32:
@@ -84,11 +84,11 @@ namespace eet
             }
         }
 
-        torch::Tensor T5FeedForwardNetwork::forward(torch::Tensor &input,
+        torch::Tensor GatedFeedForwardNetwork::forward(torch::Tensor &input,
                                                     bool pre_layernorm,
                                                     bool add_residual)
         {
-            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as T5FeedForwardNetwork's dtype");
+            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as GatedFeedForwardNetwork's dtype");
             cur_batch_size_ = input.sizes()[0];
             cur_seq_len_ = input.sizes()[1];
 
@@ -120,7 +120,7 @@ namespace eet
         }
 
         // layerNorm
-        void T5FeedForwardNetwork::layer_norm(const torch::Tensor& input_tensor, Buffer& layernorm_tensor)
+        void GatedFeedForwardNetwork::layer_norm(const torch::Tensor& input_tensor, Buffer& layernorm_tensor)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;
@@ -139,7 +139,7 @@ namespace eet
 #endif
         }
 
-        void T5FeedForwardNetwork::fc1_mul(void* input, Buffer &ffn_inner)
+        void GatedFeedForwardNetwork::fc1_mul(void* input, Buffer &ffn_inner)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = desc_.hidden_units_ ;
@@ -162,7 +162,7 @@ namespace eet
 #endif
         }
 
-        void T5FeedForwardNetwork::add_bias_act(Buffer& ffn_inner)
+        void GatedFeedForwardNetwork::add_bias_act(Buffer& ffn_inner)
         {
             int m = cur_batch_size_ * cur_seq_len_;
             int n = d_ff_;
@@ -175,7 +175,7 @@ namespace eet
 #endif
         }
 
-        void T5FeedForwardNetwork::gated_gelu(Buffer& inner_gelu, Buffer& inner_linear)
+        void GatedFeedForwardNetwork::gated_gelu(Buffer& inner_gelu, Buffer& inner_linear)
         {
             int m = cur_batch_size_ * cur_seq_len_;
             int n = d_ff_;
@@ -188,7 +188,7 @@ namespace eet
 #endif
         }
 
-        void T5FeedForwardNetwork::fc2_mul(void* input, Buffer &ffn_inner)
+        void GatedFeedForwardNetwork::fc2_mul(void* input, Buffer &ffn_inner)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = desc_.hidden_units_ ;
@@ -211,7 +211,7 @@ namespace eet
 #endif
         }
 
-        void T5FeedForwardNetwork::fc3_mul(const Buffer& ffn_inner, Buffer& output)
+        void GatedFeedForwardNetwork::fc3_mul(const Buffer& ffn_inner, Buffer& output)
         { 
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_ ;
@@ -235,7 +235,7 @@ namespace eet
 #endif
         }
 
-        void T5FeedForwardNetwork::add_input_bias_layernorm(Buffer& output,torch::Tensor& input,bool pre_layernorm, bool add_residual)
+        void GatedFeedForwardNetwork::add_input_bias_layernorm(Buffer& output,torch::Tensor& input,bool pre_layernorm, bool add_residual)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_ ;

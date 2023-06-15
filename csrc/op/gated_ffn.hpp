@@ -1,5 +1,5 @@
-#ifndef _OP_T5FFN_HPP_
-#define _OP_T5FFN_HPP_
+#ifndef _OP_GATEDFFN_HPP_
+#define _OP_GATEDFFN_HPP_
 
 #include "op/common.hpp"
 #include "op/meta_desc.hpp"
@@ -8,9 +8,9 @@
 namespace eet{
     namespace op{
 
-        class T5FeedForwardNetwork : public OpBase{
+        class GatedFeedForwardNetwork : public OpBase{
         public:
-            T5FeedForwardNetwork(MetaDesc desc,
+            GatedFeedForwardNetwork(MetaDesc desc,
                             const torch::Tensor& Intermediate_0_weights,
                             const torch::Tensor& Intermediate_0_bias,
                             const torch::Tensor& Intermediate_1_weights,
@@ -25,7 +25,7 @@ namespace eet{
                                     bool pre_layernorm,
                                     bool add_residual);
 
-            ~T5FeedForwardNetwork(){
+            ~GatedFeedForwardNetwork(){
             };
             
         private:

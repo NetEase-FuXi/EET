@@ -1,6 +1,6 @@
 #include <torch/extension.h>
 #include "op/ffn.hpp"
-#include "op/t5ffn.hpp"
+#include "op/gated_ffn.hpp"
 #include "op/embedding.hpp"
 #include "op/layer_norm.hpp"
 #include "op/multi_head_attention.hpp"
@@ -96,14 +96,14 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
                       const std::string &>())
         .def("forward", &eet::op::FeedForwardNetwork::forward, "FeedForwardNetwork forward");
 
-    py::class_<eet::op::T5FeedForwardNetwork>(m, "T5FeedForwardNetwork")
+    py::class_<eet::op::GatedFeedForwardNetwork>(m, "GatedFeedForwardNetwork")
         .def(py::init<eet::MetaDesc,
                       const torch::Tensor &, const torch::Tensor &,
                       const torch::Tensor &, const torch::Tensor &,
                       const torch::Tensor &, const torch::Tensor &,
                       const torch::Tensor &, const torch::Tensor &,
                       const std::string &>())
-        .def("forward", &eet::op::T5FeedForwardNetwork::forward, "T5FeedForwardNetwork forward");
+        .def("forward", &eet::op::GatedFeedForwardNetwork::forward, "GatedFeedForwardNetwork forward");
 
     py::class_<eet::op::Embedding>(m, "Embedding")
         .def(py::init<eet::MetaDesc, const torch::Tensor &, const torch::Tensor &,
