@@ -4,8 +4,8 @@ LABEL maintainer="eet 2022"
 
 COPY . /workspace/EET
 
-RUN pip install transformers
-RUN pip install fairseq
+RUN pip install transformers==4.22.0
+RUN pip install fairseq==0.10.0
 
 WORKDIR /workspace/EET
 
