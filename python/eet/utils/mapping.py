@@ -2,6 +2,7 @@ Mappings = {
     "roberta": "transformers_bert_mapping",
     "bert": "transformers_bert_mapping",
     "ernie": "transformers_bert_mapping",
+    "megatronbert": "transformers_megatron_bert_mapping",
     "vit": "transformers_vit_mapping",
     "albert": "transformers_albert_mapping",
     "gpt2": "transformers_gpt2_mapping",
@@ -54,6 +55,29 @@ transformers_bert_mapping = {
         }
     },
 }
+
+
+transformers_megatron_bert_mapping = {
+    "encoder": {"__name__":"encoder",
+        "layer": {"__name__":"layer",
+            "$": {"__name__":"$",
+                "attention": {"__name__":"self_attn",
+                    "self.query": {"__name__":"q_proj"},
+                    "self.key": {"__name__":"k_proj"},
+                    "self.value": {"__name__":"v_proj"},
+                    "output.dense": {"__name__":"out_proj"},
+                    "ln": {"__name__":"layernorm"},
+                },
+                "ln": {"__name__":"ffn.layernorm"},
+                "intermediate.dense": {"__name__":"ffn.intermediate"},
+                "output": {"__name__":"ffn",
+                            "dense": {"__name__":"output"},
+                },       
+            }
+        }
+    },
+}
+
 
 transformers_gpt2_mapping = {
     "h": {"__name__":"layer",
