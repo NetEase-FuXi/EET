@@ -8,6 +8,8 @@ build/
 *.so
 *.nsys-rep
 *.qdrep
+*.ncu-rep
+*.qdstrm
 *.sqlite
 *.pyc
 *.log
