@@ -25,7 +25,7 @@ namespace eet
             }
             else
             {
-                RUN_KERNEL(T5layernorm, desc_.dtype_, input_tensor.data_ptr(), layernorm_weights_, output_.data_ptr(), m, n, desc_.layernorm_eps_, desc_.stream);
+                RUN_KERNEL(RMSnorm, desc_.dtype_, input_tensor.data_ptr(), layernorm_weights_, output_.data_ptr(), m, n, desc_.layernorm_eps_, desc_.stream);
             }
             auto res = torch::from_blob(output_.data_ptr(), input_tensor.sizes(), input_tensor.strides(), desc_.options_);
             return std::move(res);

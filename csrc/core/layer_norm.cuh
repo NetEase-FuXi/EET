@@ -10,6 +10,6 @@ void layernorm(const void *input, const void *gamma,
                const cudaStream_t stream);
 
 template <typename T>
-void T5layernorm(const void *input, const void *gamma,
+void RMSnorm(const void *input, const void *gamma,
                  void *output, const int &m, const int &n, const float layernorm_eps,
                  const cudaStream_t stream);

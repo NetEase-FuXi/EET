@@ -81,7 +81,7 @@ void add_bias_input_layernorm(half* out, const half* input, const half* bias, co
 
 template <typename T>
 __global__ 
-void add_input_T5layernorm(T* out, const T* input, const T* gamma, int m, int n, const float layernorm_eps)
+void add_input_RMSnorm(T* out, const T* input, const T* gamma, int m, int n, const float layernorm_eps)
 {
   int tid = threadIdx.x;
 
@@ -102,7 +102,7 @@ void add_input_T5layernorm(T* out, const T* input, const T* gamma, int m, int n,
 
 template <>
 __global__ 
-void add_input_T5layernorm(half* out, const half* input, const half* gamma, int m, int n, const float layernorm_eps)
+void add_input_RMSnorm(half* out, const half* input, const half* gamma, int m, int n, const float layernorm_eps)
 {
   int tid = threadIdx.x;
   __shared__ float s_variance;
@@ -243,7 +243,7 @@ __global__ void add_bias_input_layernorm_v2(half *out, const half *__restrict in
 }
 
 template <typename T>
-__global__ void add_input_T5layernorm_v2(T *out, const T *__restrict input, const T *__restrict gamma, int n, const float layernorm_eps)
+__global__ void add_input_RMSnorm_v2(T *out, const T *__restrict input, const T *__restrict gamma, int n, const float layernorm_eps)
 {
   const int ite = 4;
   const int tid = threadIdx.x;
@@ -284,7 +284,7 @@ __global__ void add_input_T5layernorm_v2(T *out, const T *__restrict input, cons
 }
 
 template <>
-__global__ void add_input_T5layernorm_v2(half *out, const half *__restrict input, const half *__restrict gamma, int n, const float layernorm_eps)
+__global__ void add_input_RMSnorm_v2(half *out, const half *__restrict input, const half *__restrict gamma, int n, const float layernorm_eps)
 {
   const int ite = 4;
   const int tid = threadIdx.x;
@@ -578,7 +578,7 @@ void layernorm(const void *input, const void *gamma,
 }
 
 template <typename T>
-void T5layernorm(const void *input, const void *gamma,
+void RMSnorm(const void *input, const void *gamma,
                  void *output, const int &m, const int &n, const float layernorm_eps,
                  const cudaStream_t stream)
 {
@@ -642,9 +642,9 @@ void add_bias_input_layernorm_kernel(void *output, const void *input,
         add_bias_input_layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, m, n, layernorm_eps);
     } else {
       if (n == 768 || n == 1024)
-        add_input_T5layernorm_v2<<<grid, n / 4, 0, stream>>>((T*)output, (T*)input, (T*)gamma, n, layernorm_eps);
+        add_input_RMSnorm_v2<<<grid, n / 4, 0, stream>>>((T*)output, (T*)input, (T*)gamma, n, layernorm_eps);
       else
-        add_input_T5layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)gamma, m, n, layernorm_eps);
+        add_input_RMSnorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)gamma, m, n, layernorm_eps);
     }
   }
   else
@@ -660,9 +660,9 @@ void add_bias_input_layernorm_kernel(void *output, const void *input,
         add_bias_input_layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)bias, (T*)gamma, (T*)beta, m, n, layernorm_eps);
     } else {
       if (m >= 512 && (n == 768 || n == 1024))
-        add_input_T5layernorm_v2<<<grid, n / 8, 0, stream>>>((T*)output, (T*)input, (T*)gamma, n, layernorm_eps);
+        add_input_RMSnorm_v2<<<grid, n / 8, 0, stream>>>((T*)output, (T*)input, (T*)gamma, n, layernorm_eps);
       else
-        add_input_T5layernorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)gamma, m, n, layernorm_eps);
+        add_input_RMSnorm<<<grid, block, 0, stream>>>((T*)output, (T*)input, (T*)gamma, m, n, layernorm_eps);
     }
   }
 }
@@ -683,6 +683,6 @@ template void layernorm<float>(const void *input, const void *gamma,
 template void layernorm<half>(const void *input, const void *gamma,
                               const void *beta, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
 
-template void T5layernorm<float>(const void *input, const void *gamma, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
+template void RMSnorm<float>(const void *input, const void *gamma, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
 
-template void T5layernorm<half>(const void *input, const void *gamma, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
+template void RMSnorm<half>(const void *input, const void *gamma, void *output, const int &m, const int &n, const float layernorm_eps, const cudaStream_t stream);
