@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
+#include <cuda.h>
+#include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
 #define FINAL_MASK 0xffffffff
@@ -153,16 +155,75 @@ int target_index(int id1, int id2, int id3, int id4, int dim_1, int dim_2, int d
   return id1 * (dim_2 * dim_3 * dim_4) + id3 * (dim_2 * dim_4) + id2 * dim_4 + id4;
 }
 
+// TODO fix target_index
+__inline__ __device__
+int target_index1(int id1, int id2, int id3, int id4, int dim_1, int dim_2, int dim_3, int dim_4)
+{
+  return id1 * (dim_2 * dim_3 * dim_4) + id2 * (dim_3 * dim_4) + id3 * dim_4 + id4;
+}
+
+inline __device__ float2 rotary_embedding_coefficient(const int zid, const int rot_embed_dim, const float t_step)
+{
+    const float inv_freq = t_step / pow(10000.0f, zid / (float)rot_embed_dim);
+    return {cos(inv_freq), sin(inv_freq)};
+}
+
+inline __device__ float2 rotary_embedding_transform(const float2 v, const float2 coef)
+{
+    float2 rot_v;
+    rot_v.x = coef.x * v.x - coef.y * v.y;
+    rot_v.y = coef.x * v.y + coef.y * v.x;
+    return rot_v;
+}
+
+inline __device__ half2 rotary_embedding_transform(const half2 v, const float2 coef)
+{
+    float2 fv     = __half22float2(v);
+    float2 rot_fv = rotary_embedding_transform(fv, coef);
+    return 	__float22half2_rn(rot_fv);
+}
+
+inline __device__ void apply_rotary_embedding(half2& q, half2& k, int tid, int embed_dim, int t_step)
+{
+    if (2 * tid >= embed_dim) {
+        return;
+    }
+    half2 temp = q;
+    const auto coef = rotary_embedding_coefficient(2 * tid, embed_dim, t_step);
+    q               = rotary_embedding_transform(temp, coef);
+    printf("tid: %d, q: %f, %f, q_embed: %f, %f, coef: %f, %f,\n", tid, __half2float(temp.x), __half2float(temp.y), __half2float(q.x), __half2float(q.y), coef.x, coef.y);
+    k               = rotary_embedding_transform(k, coef);
+}
+
+inline __device__ void apply_rotary_embedding(half& q1, half& q2, half& k1, half& k2, int tid, int embed_dim, int t_step)
+{
+    if (2 * tid >= embed_dim) {
+        return;
+    }
+    float q1f = __half2float(q1);
+    float q2f = __half2float(q2);
+    float k1f = __half2float(k1);
+    float k2f = __half2float(k2);
+    const auto coef = rotary_embedding_coefficient(2 * tid, embed_dim, t_step);
+    q1 = __float2half(q1f * coef.x - q2f * coef.y);
+    q2 = __float2half(q2f * coef.x + q1f * coef.y);
+    k1 = __float2half(k1f * coef.x - k2f * coef.y);
+    k2 = __float2half(k2f * coef.x + k1f * coef.y);
+    // if (tid == 0 || t_step == 0)
+    //   printf("tid: %d, q: %f, %f, q_embed: %f, %f, coef: %f, %f,\n", tid, q1f, q2f, __half2float(q1), __half2float(q2), coef.x, coef.y);
+}
 
 
-// __inline__ void sequence_kernel(int64_t* data_ptr, int64_t size) {
-//   thrust::device_ptr<int64_t> data_dev_ptr = thrust::device_pointer_cast(data_ptr);
-//   thrust::sequence(thrust::device, data_dev_ptr, data_dev_ptr + size);
-// }
+inline __device__ void apply_rotary_embedding(float& q1, float& q2, float& k1, float& k2, int tid, int embed_dim, int t_step)
+{
+    if (2 * tid >= embed_dim) {
+        return;
+    }
 
-
-// __inline__ void fill_kernel(int64_t* data_ptr, int64_t size, int64_t val) {
-//   thrust::device_ptr<int64_t> data_dev_ptr = thrust::device_pointer_cast(data_ptr);
-//   thrust::fill(thrust::device, data_dev_ptr, data_dev_ptr + size, val);
-// }
+    const auto coef = rotary_embedding_coefficient(2 * tid, embed_dim, t_step);
+    q1 = q1 * coef.x - q2 * coef.y;
+    q2 = q2 * coef.x + q1 * coef.y;
+    k1 = k1 * coef.x - k2 * coef.y;
+    k2 = k2 * coef.x + k1 * coef.y;
+}
 
