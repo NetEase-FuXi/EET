@@ -133,6 +133,34 @@ void copyKV_transpose_cross_kernel(void* d_K_buf, void* d_V_buf,void* K_buf,
             mem_seq_len, batch_size, head_num);
 }
 
+template<typename  T>
+__global__
+void reorderKV(T* __restrict k_cache, T* __restrict v_cache, T* __restrict k_buf, T* __restrict v_buf, const int64_t *reorder_index, 
+               int size_per_head, int step, int batch, int head_num) {
+    int batch_id = blockIdx.x / (head_num * step);
+    int seq_id = blockIdx.x % step;
+    int head_id = (blockIdx.x - batch_id * head_num * step) / step;
+    int cache_id = batch_id;
+    if (reorder_index != nullptr) {
+      cache_id = reorder_index[batch_id];
+    }
+
+    int src_idx = seq_id * batch * head_num * size_per_head + cache_id * head_num * size_per_head + head_id * size_per_head + threadIdx.x;
+    int dest_idx = seq_id * batch * head_num * size_per_head + batch_id * head_num * size_per_head + head_id * size_per_head + threadIdx.x;
+
+    k_cache[dest_idx] = k_buf[src_idx];
+    v_cache[dest_idx] = v_buf[src_idx];
+}
+
+template <typename T>
+void reorderKV_kernel(void* K_cache, void* V_cache, void *K_buf, void *V_buf, const int64_t *reorder_index, const int &batch_size, const int &seq_len,
+                      const int &head_num, const int &size_per_head)
+{
+  dim3 grid(batch_size * head_num * seq_len);
+  dim3 block(size_per_head);
+  reorderKV<T><<<grid, block>>>((T*)K_cache, (T*)V_cache, (T*)K_buf, (T*)V_buf, reorder_index, size_per_head, seq_len, batch_size, head_num);
+}
+
 
 template void transpose_kernel<float>(void* transpose_dst, void* dst, const int& batch_size, const int& seq_len,
                                       const int& head_num, const int& size_per_head, const cudaStream_t stream);
@@ -148,3 +176,8 @@ template void copyKV_transpose_cross_kernel<float>(void* d_K_buf, void* d_V_buf,
                                       const int& head_num, const int& size_per_head);
 template void copyKV_transpose_cross_kernel<half>(void* d_K_buf, void* d_V_buf,void* K_buf, void* V_buf,const int& batch_size, const int& seq_len,
                                       const int& head_num, const int& size_per_head);
+
+template void reorderKV_kernel<float>(void* K_cache, void* V_cache, void *K_buf, void *V_buf, const int64_t *reorder_index, const int &batch_size, 
+                                      const int &seq_len, const int &head_num, const int &size_per_head);
+template void reorderKV_kernel<half>(void* K_cache, void* V_cache, void *K_buf, void *V_buf, const int64_t *reorder_index, const int &batch_size, 
+                                     const int &seq_len, const int &head_num, const int &size_per_head);

@@ -9,3 +9,7 @@ void copyKV_transpose_kernel(void* d_K_buf, void* d_V_buf,void* K_buf, void* V_b
 template <typename T>
 void copyKV_transpose_cross_kernel(void* d_K_buf, void* d_V_buf,void* K_buf, void* V_buf,const int& batch_size, const int& seq_len,
                                       const int& head_num, const int& size_per_head);
+
+template <typename T>
+void reorderKV_kernel(void *K_cache, void *V_cache, void* K_buf, void* V_buf, const int64_t *reorder_index, const int &batch_size, const int &seq_len,
+                      const int &head_num, const int &size_per_head);
