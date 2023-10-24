@@ -12,6 +12,7 @@
 #include "t5ffn.hpp"
 #include "layer_norm.hpp"
 #include "masked_multi_head_attention.hpp"
+#include "masked_multi_head_attention_int8.hpp"
 #include "meta_desc.hpp"
 #include "mmanager.hpp"
 #include "multi_head_attention.hpp"

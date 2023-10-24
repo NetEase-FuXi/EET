@@ -6,6 +6,8 @@
 #include "op/multi_head_attention.hpp"
 #include "op/cross_multi_head_attention.hpp"
 #include "op/masked_multi_head_attention.hpp"
+#include "op/masked_multi_head_attention_int8.hpp"
+#include "cutlass_kernels/fpA_intB_gemm_wrapper.h"
 
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
@@ -42,6 +44,21 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
                       const torch::Tensor &, const torch::Tensor &,
                       const torch::Tensor &, const torch::Tensor &>())
         .def("forward", &eet::op::MaskedMultiHeadAttention::forward, "MaskedMultiHeadAttention forward",
+             py::arg("input"),
+             py::arg("pre_padding_len"),
+             py::arg("reorder_state"),
+             py::arg("pre_layernorm"),
+             py::arg("add_residual"),
+             py::arg("first_pass"),
+             py::arg("relative_attention_bias") = torch::empty(0));
+
+    py::class_<eet::op::MaskedMultiHeadAttentionInt8>(m, "MaskedMultiHeadAttentionInt8")
+        .def(py::init<eet::MetaDesc, const torch::Tensor &, const torch::Tensor &,
+                      const torch::Tensor &, const torch::Tensor &,
+                      const torch::Tensor &, const torch::Tensor &,
+                      const torch::Tensor &, const torch::Tensor &,
+                      const torch::Tensor &, const torch::Tensor &>())
+        .def("forward", &eet::op::MaskedMultiHeadAttentionInt8::forward, "MaskedMultiHeadAttentionInt8 forward",
              py::arg("input"),
              py::arg("pre_padding_len"),
              py::arg("reorder_state"),
@@ -99,4 +116,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
         .def(py::init<eet::MetaDesc, const torch::Tensor &, const torch::Tensor &>())
         .def("layer_norm", &eet::op::LayerNorm::layer_norm, "layer_norm");
     // .def("AddBiasLayerNorm", &eet::op::layer_norm::AddBiasLayerNorm, "AddBiasLayerNorm");
+
+    m.def("preprocess_weights", &preprocess_weights_cuda, "transform int8 weights for cutlass",
+          py::arg("origin_weight"),
+          py::arg("is_int4") = false);
+
+    m.def("quant_weights", &symmetric_quantize_last_axis_of_tensor, "quantize weight",
+            py::arg("origin_weight"),
+            py::arg("quant_type"),
+            py::arg("return_unprocessed_quantized_tensor") = false);
 }

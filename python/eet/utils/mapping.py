@@ -9,6 +9,7 @@ Mappings = {
     "clip": "transformers_clip_mapping",
     "bart": "transformers_bart_mapping",
     "t5": "transformers_t5_mapping",
+    "baichuan": "transformers_baichuan_mapping",
 }
 
 transformers_albert_mapping = {
@@ -247,7 +248,26 @@ transformers_t5_mapping = {
                 "layer.2.layer_norm": {"__name__":"ffn.layernorm"},
             }
         }
-    },    
+    },
+}
+
+transformers_baichuan_mapping = {
+    "layers": {
+        "__name__":"layer",
+        "$": {
+            "__name__":"$",
+            "self_attn": {
+                "__name__":"self_attn",
+                "W_pack": {"__name__":"qkv_proj"},
+                "o_proj": {"__name__":"out_proj"},
+            },
+            "input_layernorm": {"__name__":"self_attn.layernorm"},
+            "mlp.gate_proj": {"__name__":"ffn.intermediate_0"},
+            "mlp.up_proj": {"__name__":"ffn.intermediate_1"},
+            "mlp.down_proj": {"__name__":"ffn.output"},
+            "post_attention_layernorm": {"__name__":"ffn.layernorm"},
+        }
+    }
 }
 
 def convert_name(org_key, model_name, verbose=False):
