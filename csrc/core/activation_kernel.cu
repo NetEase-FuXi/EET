@@ -92,6 +92,39 @@ void gated_gelu<half>(half* inner_gelu, half* inner_linear, int m, int n)
 
 template <typename T>
 __global__
+void gated_silu(T* inner_silu, T* inner_linear, int m, int n)
+{
+  int idx = n * blockIdx.x + blockIdx.y * blockDim.x + threadIdx.x;
+
+  if (idx < m * n){
+    T in1 = inner_silu[idx];
+    T in2 = inner_linear[idx];
+    inner_silu[idx] = in2 * in1 / (1.0 + exp(-in1));
+  }
+}
+
+template <>
+__global__
+void gated_silu<half>(half* inner_silu, half* inner_linear, int m, int n)
+{
+  const half2 half_one2 = __floats2half2_rn(1.0f, 1.0f);
+  half2 * inner_silu_ptr = (half2 *)inner_silu;
+  half2 * inner_linear_ptr = (half2 *)inner_linear;
+
+  int idx = n * blockIdx.x + blockIdx.y * blockDim.x + threadIdx.x;
+
+  if (idx < m * n){
+    half2 in1 = inner_silu_ptr[idx];
+    half2 in2 = inner_linear_ptr[idx];
+    // inner_silu_ptr[idx] = in2 * in1 / (half_one2 + h2exp(-in1));
+    float x = exp(-__half2float(in1.x));
+    float y = exp(-__half2float(in1.y));
+    inner_silu_ptr[idx] = in2 * in1 / (half_one2 + make_half2(x, y));
+  }
+}
+
+template <typename T>
+__global__
 void add_bias_quick_gelu(T* out, const T* bias, int m, int n) 
 {
   int idx = n * blockIdx.x + blockIdx.y * blockDim.x + threadIdx.x;
@@ -240,7 +273,7 @@ void add_bias_act_kernel(void* ffn_inner, const void* bias, int m, int n ,const 
 }
 
 template<typename T>
-void gated_gelu_kernel(void* inner_gelu, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream)
+void gated_act_kernel(void* inner_act, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream)
 {
   if (sizeof(T) == sizeof(half)){
 
@@ -264,7 +297,13 @@ void gated_gelu_kernel(void* inner_gelu, void* inner_linear, int m, int n , cons
   
 
     block.x /= 2;
-    gated_gelu<T><<<grid, block, 0, stream>>>((T *)inner_gelu, (T *)inner_linear, m, n / 2);
+    if (act_type == 1) {
+      gated_gelu<T><<<grid, block, 0, stream>>>((T *)inner_act, (T *)inner_linear, m, n / 2);
+    } else if (act_type == 3) {
+      gated_silu<T><<<grid, block, 0, stream>>>((T *)inner_act, (T *)inner_linear, m, n / 2);
+    } else {
+      std::cerr << "unsupported activation " << std::endl;
+    }
 
   } else {
 
@@ -288,11 +327,17 @@ void gated_gelu_kernel(void* inner_gelu, void* inner_linear, int m, int n , cons
     dim3 grid(m, fold_coeff);
     dim3 block(n / fold_coeff);
 
-    gated_gelu<T><<<grid, block, 0, stream>>>((T *)inner_gelu, (T *)inner_linear, m, n);
+    if (act_type == 1) {
+      gated_gelu<T><<<grid, block, 0, stream>>>((T *)inner_act, (T *)inner_linear, m, n);
+    } else if (act_type == 3) {
+      gated_silu<T><<<grid, block, 0, stream>>>((T *)inner_act, (T *)inner_linear, m, n);
+    } else {
+      std::cerr << "unsupported activation " << std::endl;
+    }    
   }
 }
 
 template void add_bias_act_kernel<float>(void* ffn_inner, const void* bias, const int m, const int n, const int act_type, const cudaStream_t stream);
 template void add_bias_act_kernel<half>(void* ffn_inner, const void* bias, const int m, const int n, const int act_type, const cudaStream_t stream);
-template void gated_gelu_kernel<float>(void* inner_gelu, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream);
-template void gated_gelu_kernel<half>(void* inner_gelu, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream);
+template void gated_act_kernel<float>(void* inner_act, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream);
+template void gated_act_kernel<half>(void* inner_act, void* inner_linear, int m, int n , const int act_type ,const cudaStream_t stream);

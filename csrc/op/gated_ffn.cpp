@@ -180,7 +180,7 @@ namespace eet
             int m = cur_batch_size_ * cur_seq_len_;
             int n = d_ff_;
             
-            RUN_KERNEL(gated_gelu_kernel, desc_.dtype_, inner_gelu.data_ptr(), inner_linear.data_ptr(), m, n, act_type_ ,desc_.stream)
+            RUN_KERNEL(gated_act_kernel, desc_.dtype_, inner_gelu.data_ptr(), inner_linear.data_ptr(), m, n, act_type_ ,desc_.stream)
             
 #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
