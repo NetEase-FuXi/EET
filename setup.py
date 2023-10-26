@@ -68,9 +68,10 @@ setup(
                                          '-U__CUDA_NO_HALF_OPERATORS__',
                                          '-U__CUDA_NO_HALF_CONVERSIONS__',
                                          '-U__CUDA_NO_HALF2_OPERATORS__']},
-            define_macros=[('VERSION_INFO', __version__),
-                           #    ('_DEBUG_MODE_', None),
-                           ]
+            define_macros=[
+                ('VERSION_INFO', __version__),
+                # ('_DEBUG_MODE_', None),
+            ]
         )
     ],
     cmdclass={

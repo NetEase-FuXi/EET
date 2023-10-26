@@ -3,7 +3,9 @@ example/python/test/
 example/cpp/test/
 python/EET.egg-info/
 build/
+dist/
 .vscode
+*.egg
 *.o
 *.so
 *.nsys-rep

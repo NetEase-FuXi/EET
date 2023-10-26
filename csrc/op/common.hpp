@@ -2,6 +2,7 @@
 #define _OP_COMMON_HPP_
 
 #include <vector>
+#include <string>
 #include <torch/extension.h>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -68,5 +69,20 @@ void check(T result, char const *const func, const char *const file, int const l
   } else {                                                    \
     FUNCTION<half>(__VA_ARGS__);                              \
   }                                                           \
+
+template <typename T>
+void print_to_screen(T* device_ptr, const int size, const std::string& name)
+{
+  printf(" ==========================[ %s ]\n", name.c_str());
+  half* host_ptr = (half*)malloc(sizeof(half) * size);
+  check_cuda_error(cudaMemcpy(host_ptr, device_ptr, sizeof(half) * size, cudaMemcpyDeviceToHost));
+  for(int i = 0; i < size; ++i) {
+    std::cout << __half2float(host_ptr[i]) << " ";
+    if (i % 6 == 5)
+      printf("\n");
+  }
+  printf("\n");
+  free(host_ptr);
+}
 
 #endif
