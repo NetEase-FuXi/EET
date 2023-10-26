@@ -148,6 +148,24 @@ T blockReduceMax_opt(T* val)
     return l2_val;
 }
 
+// Vec_n_t
+template<typename T, int N>
+struct GetVecType {
+  using type = typename std::aligned_storage<N * sizeof(T), N * sizeof(T)>::type;
+};
+
+template<typename T, int N>
+using VecType = typename GetVecType<T, N>::type;
+
+template<typename T, int N>
+union Vec_n_t {
+  static_assert(sizeof(VecType<T, N>) == sizeof(T) * N, "");
+  __device__ Vec_n_t() {
+    // do nothing
+  }
+  VecType<T, N> storage;
+  T elem[N];
+};
 
 __inline__ __device__
 int target_index(int id1, int id2, int id3, int id4, int dim_1, int dim_2, int dim_3, int dim_4)
@@ -191,7 +209,7 @@ inline __device__ void apply_rotary_embedding(half2& q, half2& k, int tid, int e
     half2 temp = q;
     const auto coef = rotary_embedding_coefficient(2 * tid, embed_dim, t_step);
     q               = rotary_embedding_transform(temp, coef);
-    printf("tid: %d, q: %f, %f, q_embed: %f, %f, coef: %f, %f,\n", tid, __half2float(temp.x), __half2float(temp.y), __half2float(q.x), __half2float(q.y), coef.x, coef.y);
+    // printf("tid: %d, q: %f, %f, q_embed: %f, %f, coef: %f, %f,\n", tid, __half2float(temp.x), __half2float(temp.y), __half2float(q.x), __half2float(q.y), coef.x, coef.y);
     k               = rotary_embedding_transform(k, coef);
 }
 
