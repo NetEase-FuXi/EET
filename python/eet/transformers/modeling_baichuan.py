@@ -272,6 +272,8 @@ class EETBaichuanModel():
         attention_mask=None,
         reorder_state=None,
     ):
+        if first_pass:
+            self.past_kv_length = 0
         input_shape = input_ids.size()
         assert input_shape[0] <= self.max_batch, "[EET][ERROR] batch size must less than max_batch {}, but get batch {}".format(self.max_batch, input_shape[0])
         assert input_shape[1] <= self.max_prompt_len, "[EET][ERROR] input_ids length must less than max_prompt_len {}, but get prompt_len {}".format(self.max_prompt_len, input_shape[1])
