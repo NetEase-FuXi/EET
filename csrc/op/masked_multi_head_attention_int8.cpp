@@ -128,9 +128,12 @@ namespace eet{
 
             q_buf.free();
 
+            // relative attention bias
+            void* relative_attention_bias_ = relative_attention_bias.data_ptr();
+
             // softmax
             const int64_t *padding_len = pre_padding_length.data_ptr<int64_t>();
-            qk_softmax(qk_buf, padding_len);
+            qk_softmax(qk_buf, relative_attention_bias_, padding_len);
 
             // transpose k\v cache
             kv_transpose(k_cache_, v_cache_, k_buf, v_buf);
@@ -195,14 +198,6 @@ namespace eet{
                 qkv_weights_mul_weight_only_int8(input.data_ptr(), qkv_buffer);
             }
 
-            // qkv transpose
-            Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false, "q_inc");
-            Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false, "q_inc");
-            Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                                    inner_dim_, desc_.dtype_, desc_.options_, false, "q_inc");
-
             // TODO rotary
             qkv_buffer.free();
             // masked_attention_dispatch
@@ -210,15 +205,13 @@ namespace eet{
                 desc_.batch_size_ * cur_seq_len_ * inner_dim_, desc_.dtype_, desc_.options_, false, "context_buf");
             const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
             const int64_t *reorder_index = reorder_state.data_ptr<int64_t>();
+            void* relative_attention_bias_ = relative_attention_bias.data_ptr();
 
             if (reorder_index != nullptr) {
                 reorder_cache(k_cache_, v_cache_, k_cache_, v_cache_, reorder_index);     //TODO 不能保证读写读顺序
             }
 
-            masked_attention(q_buf, k_buf, v_buf, context_buf, padding_len, nullptr);
-            q_buf.free();
-            k_buf.free();
-            v_buf.free();
+            fused_masked_attention(qkv_buffer, context_buf, padding_len, nullptr, relative_attention_bias_);
             
             // attention output
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * cur_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "self_mask_attn_cache");
@@ -256,9 +249,6 @@ namespace eet{
             const int m = cur_batch_size_ * cur_seq_len_;
             const int k = desc_.hidden_units_;
             const int n = 3 * inner_dim_;
-
-            // print_to_screen((half*)weight_buf.data_ptr(),32);
-            // print_to_screen((half*)input,32);
 
             check_cuda_error(cublasGemmEx(desc_.cublasHandle,
                 CUBLAS_OP_N, CUBLAS_OP_N,
@@ -339,11 +329,11 @@ namespace eet{
 #endif
         }
 
-        void MaskedMultiHeadAttentionInt8::qk_softmax(Buffer& qk_buf,const int64_t *padding_len){
+        void MaskedMultiHeadAttentionInt8::qk_softmax(Buffer& qk_buf, void* relative_attention_bias, const int64_t *padding_len){
             // float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
 
-            RUN_KERNEL(softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), padding_len,  cur_batch_size_,
-                    desc_.head_num_,cur_seq_len_, desc_.stream);
+            RUN_KERNEL(launch_masked_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), relative_attention_bias, padding_len, cur_batch_size_,
+                    desc_.head_num_, cur_seq_len_, desc_.stream);
 #ifdef _DEBUG_MODE_
     cudaDeviceSynchronize();
     check_cuda_error(cudaGetLastError());

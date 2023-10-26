@@ -1394,7 +1394,8 @@ void fused_masked_attention_dispatch(
           assert(false);
       }
     } else {
-      T scalar = (T)(1.0f);
+      // T scalar = (T)(1.0f); // TODO T5 is different
+      T scalar = (T)(1.f / sqrtf(size_per_head * 1.0f));
       switch (cond)
       {
         case 32:
