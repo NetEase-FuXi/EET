@@ -1,5 +1,5 @@
-#ifndef _OP_MASKED_MULTI_HEAD_ATTENTION_INT8_HPP_
-#define _OP_MASKED_MULTI_HEAD_ATTENTION_INT8_HPP_
+#ifndef _OP_BAICHUAN_MMHA_HPP_
+#define _OP_BAICHUAN_MMHA_HPP_
 
 #include "op/common.hpp"
 #include "op/mmanager.hpp"
@@ -8,9 +8,9 @@
 namespace eet{
     namespace op{
 
-        class MaskedMultiHeadAttentionInt8 : public OpBase{
+        class BaichuanMmha : public OpBase{
         public:
-            MaskedMultiHeadAttentionInt8(MetaDesc desc,
+            BaichuanMmha(MetaDesc desc,
                                     const torch::Tensor& QKV_weights,
                                     const torch::Tensor& QKV_scale,
                                     const torch::Tensor& Q_bias,
@@ -45,7 +45,7 @@ namespace eet{
                                     bool add_residual,
                                     const torch::Tensor &relative_attention_bias = torch::empty(0));
 
-            ~MaskedMultiHeadAttentionInt8(){
+            ~BaichuanMmha(){
                 // check_cuda_error(cudaFree(&fused_qkv_ptr_));
             };
             
@@ -55,8 +55,7 @@ namespace eet{
                                     Buffer& layernorm_query);
 
             void qkv_weights_mul(void* input, 
-                                Buffer& qkv_buffer,
-                                Buffer& weight_buf);
+                                Buffer& qkv_buffer);
 
             void qkv_weights_mul_weight_only_int8(void* input, 
                                 Buffer& qkv_buffer);

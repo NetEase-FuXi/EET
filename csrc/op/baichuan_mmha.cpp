@@ -1,4 +1,4 @@
-#include "op/masked_multi_head_attention_int8.hpp"
+#include "op/baichuan_mmha.hpp"
 #include "core/add_bias.cuh"
 #include "core/transpose.cuh"
 #include "core/layer_norm.cuh"
@@ -10,7 +10,7 @@
 
 namespace eet{
     namespace op{
-        MaskedMultiHeadAttentionInt8::MaskedMultiHeadAttentionInt8(MetaDesc desc,
+        BaichuanMmha::BaichuanMmha(MetaDesc desc,
                                     const torch::Tensor& QKV_weights,
                                     const torch::Tensor& QKV_scale,
                                     const torch::Tensor& Q_bias,
@@ -47,7 +47,7 @@ namespace eet{
             v_cache_ = torch::zeros_like(k_cache_);
             MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "self_mask_attn_cache");
 
-            assert((desc_.dtype_ == torch::kFloat16) && "MaskedMultiHeadAttentionInt8 only support fp16");
+            assert((desc_.dtype_ == torch::kFloat16) && "BaichuanMmha only support fp16");
 
             qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT;
             q_k_algo_ = CUBLAS_GEMM_DEFAULT;
@@ -60,7 +60,7 @@ namespace eet{
             *((half *)atten_scaler_) = sqrt(1.0f / size_per_head_);     // TODO: T5 is different
         }
 
-        torch::Tensor MaskedMultiHeadAttentionInt8::forward(torch::Tensor& input,
+        torch::Tensor BaichuanMmha::forward(torch::Tensor& input,
                                     const torch::Tensor& pre_padding_len,
                                     const torch::Tensor& reorder_state,
                                     bool pre_layernorm,
@@ -78,13 +78,13 @@ namespace eet{
         }
 
         // full decoder
-        torch::Tensor MaskedMultiHeadAttentionInt8::forward_full(torch::Tensor &input,
+        torch::Tensor BaichuanMmha::forward_full(torch::Tensor &input,
                                                              const torch::Tensor &pre_padding_length,
                                                              bool pre_layernorm,
                                                              bool add_residual,
                                                              const torch::Tensor &relative_attention_bias)
         {
-            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttentionInt8's dtype");
+            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as BaichuanMmha's dtype");
             step_ = 1;
             cur_batch_size_ = input.sizes()[0];
             first_batch_size_ = cur_batch_size_;
@@ -94,22 +94,18 @@ namespace eet{
 
             Buffer& qkv_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ * inner_dim_ * 3, desc_.dtype_, desc_.options_, false, "qkv_full");
             
-            if(pre_layernorm)
-            {
-                // pre_layerNorm
-                Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ * 
+
+            // pre_layerNorm
+            Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ * 
                                                     desc_.hidden_units_, desc_.dtype_, desc_.options_, false, "layernorm");
-
-                layer_norm(input, layernormed_query);
-
-                // fused gemm with dequant
+            layer_norm(input, layernormed_query);
+            // fused gemm with dequant
+            if (desc_.is_int8_) {
                 qkv_weights_mul_weight_only_int8(layernormed_query.data_ptr(), qkv_buffer);
-
-                layernormed_query.free();
+            } else {
+                qkv_weights_mul(layernormed_query.data_ptr(), qkv_buffer);
             }
-            else{
-                qkv_weights_mul_weight_only_int8(input.data_ptr(), qkv_buffer);
-            }  
+            layernormed_query.free();
 
             // qkv transpose
             Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
@@ -167,14 +163,14 @@ namespace eet{
         }
 
         // incremental decoder
-        torch::Tensor MaskedMultiHeadAttentionInt8::forward_inc(torch::Tensor &input,
+        torch::Tensor BaichuanMmha::forward_inc(torch::Tensor &input,
                                                             const torch::Tensor &pre_padding_len,
                                                             const torch::Tensor &reorder_state,
                                                             bool pre_layernorm,
                                                             bool add_residual,
                                                             const torch::Tensor &relative_attention_bias)
         {
-            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as MaskedMultiHeadAttentionInt8's dtype");
+            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as BaichuanMmha's dtype");
             step_ += 1;
             assert(step_ <= desc_.max_full_seq_len_ && "Exceed the maximum step length");
             cur_batch_size_ = input.sizes()[0];
@@ -183,20 +179,17 @@ namespace eet{
             Buffer& qkv_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
                                     inner_dim_ * 3, desc_.dtype_, desc_.options_, false, "qkv_inc");
 
-            if(pre_layernorm)
-            {
-                // pre_layerNorm
-                Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
-                        desc_.hidden_units_, desc_.dtype_, desc_.options_, false, "layernorm_inc");
-                layer_norm(input, layernormed_query);
 
+            // pre_layerNorm
+            Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                    desc_.hidden_units_, desc_.dtype_, desc_.options_, false, "layernorm_inc");
+            layer_norm(input, layernormed_query);
+            if (desc_.is_int8_) {
                 qkv_weights_mul_weight_only_int8(layernormed_query.data_ptr(), qkv_buffer);
-                layernormed_query.free();
+            } else {
+                qkv_weights_mul(layernormed_query.data_ptr(), qkv_buffer);
             }
-            else{
-                // qkv * weights
-                qkv_weights_mul_weight_only_int8(input.data_ptr(), qkv_buffer);
-            }
+            layernormed_query.free();
 
             // TODO rotary
             qkv_buffer.free();
@@ -223,7 +216,7 @@ namespace eet{
         }
 
         // layerNorm
-        void MaskedMultiHeadAttentionInt8::layer_norm(const torch::Tensor& input_tensor, Buffer& layernorm_query)
+        void BaichuanMmha::layer_norm(const torch::Tensor& input_tensor, Buffer& layernorm_query)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int n = desc_.hidden_units_;
@@ -243,23 +236,23 @@ namespace eet{
         }
 
 
-        void MaskedMultiHeadAttentionInt8::qkv_weights_mul(void* input, 
-                                    Buffer& qkv_buffer,
-                                    Buffer& weight_buf){
-            const int m = cur_batch_size_ * cur_seq_len_;
-            const int k = desc_.hidden_units_;
-            const int n = 3 * inner_dim_;
+        void BaichuanMmha::qkv_weights_mul(void* input, 
+                                    Buffer& qkv_buffer){
+                const int m = cur_batch_size_ * cur_seq_len_;
+                const int k = desc_.hidden_units_;
+                const int n = 3 * inner_dim_;
 
-            check_cuda_error(cublasGemmEx(desc_.cublasHandle,
-                CUBLAS_OP_N, CUBLAS_OP_N,
-                n, m, k,
-                alpha_,
-                weight_buf.data_ptr(), desc_.dataType_ , n,
-                input, desc_.dataType_ , k,
-                beta_,
-                qkv_buffer.data_ptr(), desc_.dataType_ , n,
-                desc_.computeType_,
-                qkv_weights_algo_));
+                check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                    CUBLAS_OP_N, CUBLAS_OP_N,
+                    n, m, k,
+                    alpha_,
+                    qkv_weights_, desc_.dataType_ , n,
+                    input, desc_.dataType_ , k,
+                    beta_,
+                    qkv_buffer.data_ptr(), desc_.dataType_ , n,
+                    desc_.computeType_,
+                    qkv_weights_algo_));
+
 
 #ifdef _DEBUG_MODE_
         cudaDeviceSynchronize();
@@ -267,7 +260,7 @@ namespace eet{
 #endif
         }
 
-        void MaskedMultiHeadAttentionInt8::qkv_weights_mul_weight_only_int8(void *input,
+        void BaichuanMmha::qkv_weights_mul_weight_only_int8(void *input,
                                                                         Buffer &qkv_buffer)
         {
             int m = cur_batch_size_ * cur_seq_len_;
@@ -294,7 +287,7 @@ namespace eet{
 #endif
         }
 
-        void MaskedMultiHeadAttentionInt8::qkv_add_bias(const Buffer &qkv_buffer,
+        void BaichuanMmha::qkv_add_bias(const Buffer &qkv_buffer,
                                                        Buffer &q_buf,
                                                        Buffer &k_buf,
                                                        Buffer &v_buf)
@@ -309,7 +302,7 @@ namespace eet{
         }
 
 
-        void MaskedMultiHeadAttentionInt8::q_k_mul(const Buffer& q_buf, const Buffer& k_buf,
+        void BaichuanMmha::q_k_mul(const Buffer& q_buf, const Buffer& k_buf,
                                                 Buffer& qk_buf){
             check_cuda_error(cublasGemmStridedBatchedEx(desc_.cublasHandle,
                 CUBLAS_OP_T, CUBLAS_OP_N,
@@ -329,7 +322,7 @@ namespace eet{
 #endif
         }
 
-        void MaskedMultiHeadAttentionInt8::qk_softmax(Buffer& qk_buf, void* relative_attention_bias, const int64_t *padding_len){
+        void BaichuanMmha::qk_softmax(Buffer& qk_buf, void* relative_attention_bias, const int64_t *padding_len){
             // float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
 
             RUN_KERNEL(launch_masked_softmax_kernel, desc_.dtype_, qk_buf.data_ptr(), relative_attention_bias, padding_len, cur_batch_size_,
@@ -340,7 +333,7 @@ namespace eet{
 #endif 
         }
 
-        void MaskedMultiHeadAttentionInt8::attn_v_mul(const Buffer& qk_buf,
+        void BaichuanMmha::attn_v_mul(const Buffer& qk_buf,
                                              const Buffer& v_buf,
                                              Buffer& transpose_dst){
             check_cuda_error(cublasGemmStridedBatchedEx(desc_.cublasHandle,
@@ -361,7 +354,7 @@ namespace eet{
 #endif
         }
 
-        void MaskedMultiHeadAttentionInt8::transpose(const Buffer& transpose_dst, Buffer&  dst){
+        void BaichuanMmha::transpose(const Buffer& transpose_dst, Buffer&  dst){
             RUN_KERNEL(transpose_kernel,desc_.dtype_,transpose_dst.data_ptr(),dst.data_ptr(), cur_batch_size_, cur_seq_len_,
                     desc_.head_num_, size_per_head_, desc_.stream);
 
@@ -372,58 +365,50 @@ namespace eet{
         }
 
 
-        void MaskedMultiHeadAttentionInt8::project(const Buffer &dst, Buffer &res, torch::Tensor &input, bool pre_layernorm, bool add_residual)
+        void BaichuanMmha::project(const Buffer &dst, Buffer &res, torch::Tensor &input, bool pre_layernorm, bool add_residual)
         {
             const int m = cur_batch_size_ * cur_seq_len_;
             int k = inner_dim_;
             int n = desc_.hidden_units_;
 
-            fastertransformer::gemm_fp16_int_bias_act(
-                reinterpret_cast<fastertransformer::half *>(dst.data_ptr()),
-                reinterpret_cast<const uint8_t*>(output_weights_),
-                reinterpret_cast<fastertransformer::half *>(output_scale_),
-                nullptr,
-                reinterpret_cast<fastertransformer::half *>(res.data_ptr()),
-                std::nullopt,
-                m, n, k,
-                0,
-                nullptr,
-                0,
-                desc_.stream
-                );
-
-            if(add_residual)
-            {   
-                if(!pre_layernorm)
-                {   
-                    // add_bias + add_residual + layer_norm
-                    RUN_KERNEL(add_bias_input_layernorm_kernel,desc_.dtype_,
-                                        res.data_ptr(),input.data_ptr(), 
-                                        output_bias_,layernorm_weights_,
-                                        layernorm_bias_, m , n, desc_.layernorm_eps_, desc_.stream);
-                }
-                else
-                {
-                    // add_bias + add_residual
-                    RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(),output_bias_,
-                           m , n, desc_.stream);
-                }
-            }
-            else
+            if (desc_.is_int8_)
             {
-                if (with_bias_) {
-                    // only add bias
-                    RUN_KERNEL(add_bias_kernel, desc_.dtype_, res.data_ptr(), output_bias_,
-                               m, n, desc_.stream);
-                }
+                fastertransformer::gemm_fp16_int_bias_act(
+                    reinterpret_cast<fastertransformer::half *>(dst.data_ptr()),
+                    reinterpret_cast<const uint8_t *>(output_weights_),
+                    reinterpret_cast<fastertransformer::half *>(output_scale_),
+                    nullptr,
+                    reinterpret_cast<fastertransformer::half *>(res.data_ptr()),
+                    std::nullopt,
+                    m, n, k,
+                    0,
+                    nullptr,
+                    0,
+                    desc_.stream);
+            } else {
+                check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                                              CUBLAS_OP_N, CUBLAS_OP_N,
+                                              n, m, k,
+                                              alpha_,
+                                              output_weights_, desc_.dataType_, n,
+                                              dst.data_ptr(), desc_.dataType_, k,
+                                              beta_,
+                                              res.data_ptr(), desc_.dataType_, n,
+                                              desc_.computeType_,
+                                              qkv_weights_algo_));
             }
+
+                // add_bias + add_residual
+                RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(), output_bias_,
+                           m, n, desc_.stream);
+
             #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());
             #endif
-        }
+            }
 
-        void MaskedMultiHeadAttentionInt8::kv_transpose(torch::Tensor& d_K_buf, torch::Tensor& d_V_buf,Buffer& K_buf,Buffer& V_buf)
+        void BaichuanMmha::kv_transpose(torch::Tensor& d_K_buf, torch::Tensor& d_V_buf,Buffer& K_buf,Buffer& V_buf)
          {
             RUN_KERNEL(copyKV_transpose_kernel,desc_.dtype_,d_K_buf.data_ptr(), d_V_buf.data_ptr(),K_buf.data_ptr(), V_buf.data_ptr(),cur_batch_size_, cur_seq_len_,
                    desc_.head_num_, size_per_head_);
@@ -433,7 +418,7 @@ namespace eet{
             #endif
          }
 
-        void MaskedMultiHeadAttentionInt8::fused_masked_attention(const Buffer &qkv_buffer,
+        void BaichuanMmha::fused_masked_attention(const Buffer &qkv_buffer,
                                                                Buffer &context_buf,
                                                                const int64_t *padding_len,
                                                                const int64_t *reorder_index,
@@ -447,7 +432,7 @@ namespace eet{
             #endif
          }
 
-        void MaskedMultiHeadAttentionInt8::reorder_cache(torch::Tensor &K_cache, torch::Tensor &V_cache, Buffer &K_buf, Buffer &V_buf, const int64_t *reorder_index)
+        void BaichuanMmha::reorder_cache(torch::Tensor &K_cache, torch::Tensor &V_cache, Buffer &K_buf, Buffer &V_buf, const int64_t *reorder_index)
          {
             RUN_KERNEL(reorderKV_kernel, desc_.dtype_, K_cache.data_ptr(), V_cache.data_ptr(), K_buf.data_ptr(), V_buf.data_ptr(), reorder_index, first_batch_size_, step_, desc_.head_num_, size_per_head_);
 #ifdef _DEBUG_MODE_
@@ -456,7 +441,7 @@ namespace eet{
 #endif
          }
 
-        void MaskedMultiHeadAttentionInt8::reorder_cache(torch::Tensor &K_cache, torch::Tensor &V_cache, torch::Tensor &K_buf, torch::Tensor &V_buf, const int64_t *reorder_index)
+        void BaichuanMmha::reorder_cache(torch::Tensor &K_cache, torch::Tensor &V_cache, torch::Tensor &K_buf, torch::Tensor &V_buf, const int64_t *reorder_index)
          {
             RUN_KERNEL(reorderKV_kernel, desc_.dtype_, K_cache.data_ptr(), V_cache.data_ptr(), K_buf.data_ptr(), V_buf.data_ptr(), reorder_index, first_batch_size_, step_, desc_.head_num_, size_per_head_);
 #ifdef _DEBUG_MODE_
@@ -466,7 +451,7 @@ namespace eet{
          }
 
 
-        void MaskedMultiHeadAttentionInt8::masked_attention(const Buffer &q_buf,
+        void BaichuanMmha::masked_attention(const Buffer &q_buf,
                                                         const Buffer &k_buf,
                                                         const Buffer &v_buf,
                                                         Buffer &context_buf,

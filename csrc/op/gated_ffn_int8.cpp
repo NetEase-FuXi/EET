@@ -70,7 +70,7 @@ namespace eet
             // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "gated_ffn_buffer1");
             // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "gated_ffn_buffer2");
             
-            assert((desc_.dtype_ == torch::kFloat16) && "MaskedMultiHeadAttentionInt8 only support fp16");
+            assert((desc_.dtype_ == torch::kFloat16) && "GatedFeedForwardNetworkInt8 only support fp16");
 
             fc1_algo_ = CUBLAS_GEMM_DEFAULT;
             fc2_algo_ = CUBLAS_GEMM_DEFAULT;

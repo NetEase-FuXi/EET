@@ -7,7 +7,7 @@
 #include "op/multi_head_attention.hpp"
 #include "op/cross_multi_head_attention.hpp"
 #include "op/masked_multi_head_attention.hpp"
-#include "op/masked_multi_head_attention_int8.hpp"
+#include "op/baichuan_mmha.hpp"
 #include "cutlass_kernels/fpA_intB_gemm_wrapper.h"
 
 #define STRINGIFY(x) #x
@@ -24,7 +24,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 
     py::class_<eet::MetaDesc>(m, "MetaDesc")
         .def(py::init<const py::object &, const int &, const int &, const int &, const int &, const int &, const int &,
-                      const std::string &, const int &, const int &, const std::string &, const bool &, const float &>(),
+                      const std::string &, const int &, const int &, const std::string &, const bool &, const float &, const bool &>(),
              py::arg("dtype"),
              py::arg("batch_size"),
              py::arg("head_num"),
@@ -37,7 +37,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
              py::arg("d_ff") = 0,
              py::arg("cuda_device") = "cuda:0",
              py::arg("requires_grad") = false,
-             py::arg("layernorm_eps") = 1e-6);
+             py::arg("layernorm_eps") = 1e-6,
+             py::arg("is_int8") = false);
 
     py::class_<eet::op::MaskedMultiHeadAttention>(m, "MaskedMultiHeadAttention")
         .def(py::init<eet::MetaDesc, const torch::Tensor &, const torch::Tensor &,
@@ -53,13 +54,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
              py::arg("first_pass"),
              py::arg("relative_attention_bias") = torch::empty(0));
 
-    py::class_<eet::op::MaskedMultiHeadAttentionInt8>(m, "MaskedMultiHeadAttentionInt8")
+    py::class_<eet::op::BaichuanMmha>(m, "BaichuanMmha")
         .def(py::init<eet::MetaDesc, const torch::Tensor &, const torch::Tensor &,
                       const torch::Tensor &, const torch::Tensor &,
                       const torch::Tensor &, const torch::Tensor &,
                       const torch::Tensor &, const torch::Tensor &,
                       const torch::Tensor &, const torch::Tensor &>())
-        .def("forward", &eet::op::MaskedMultiHeadAttentionInt8::forward, "MaskedMultiHeadAttentionInt8 forward",
+        .def("forward", &eet::op::BaichuanMmha::forward, "BaichuanMmha forward",
              py::arg("input"),
              py::arg("pre_padding_len"),
              py::arg("reorder_state"),

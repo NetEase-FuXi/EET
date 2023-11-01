@@ -20,7 +20,8 @@ class MetaDesc{
                  const int &d_ff,
                  const std::string &cuda_device = "cuda:0",
                  const bool &requires_grad = false,
-                 const float &layernorm_eps = 1e-6) : batch_size_(batch_size),
+                 const float &layernorm_eps = 1e-6,
+                 const bool &is_int8 = false) : batch_size_(batch_size),
                                                       head_num_(head_num),
                                                       hidden_units_(hidden_units),
                                                       d_kv_(d_kv),
@@ -29,7 +30,8 @@ class MetaDesc{
                                                       max_seq_len_(max_seq_len),           // prompt seq_len
                                                       max_full_seq_len_(max_full_seq_len), // max generated seq_len
                                                       activation_fn_(activation_fn),
-                                                      layernorm_eps_(layernorm_eps)
+                                                      layernorm_eps_(layernorm_eps),
+                                                      is_int8_(is_int8)
         {
             dtype_ = torch::python::detail::py_object_to_dtype(dtype);
 
@@ -71,6 +73,7 @@ class MetaDesc{
     int max_full_seq_len_;
     int layer_num_;
     float layernorm_eps_;
+    bool is_int8_;
     std::string activation_fn_;
     torch::TensorOptions options_;
     cudaDataType_t dataType_;           // cuda dtype
