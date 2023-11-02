@@ -25,7 +25,7 @@ from transformers.modeling_outputs import (
 from transformers.generation import GenerationConfig
 from transformers.generation.logits_process import LogitsProcessor
 from transformers.generation.utils import LogitsProcessorList, StoppingCriteriaList, GenerationConfig, ModelOutput
-
+from transformers import AutoModelForCausalLM
 
 from eet.transformers.encoder_decoder import *
 from eet.utils.mapping import convert_name
@@ -440,7 +440,7 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
 
 
     @staticmethod
-    def from_pretrained(int8_ckpt_path, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model"):
+    def from_pretrained(pt_or_path, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model"):
         """from pretrained."""
         torch.set_grad_enabled(False)
         # cfg = torch_model.config
@@ -448,14 +448,12 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
         model_dict = {}
         baichuan_dict = {}
         lm_head_dict = {}
-
-        if isinstance(int8_ckpt_path, str):
-            with open(int8_ckpt_path, "rb") as f:
+        if data_type == torch.int8:
+            with open(pt_or_path, "rb") as f:
                 model_dict = torch.load(f, map_location=torch.device("cpu"))
-        elif isinstance(int8_ckpt_path, dict):
-            model_dict = int8_ckpt_path
         else:
-            raise ValueError("[EET][ERROR] int8_ckpt_path must be a dict or a string, but get {}".format(type(int8_ckpt_path)))
+            ts_model = AutoModelForCausalLM.from_pretrained(pt_or_path, trust_remote_code=True, torch_dtype=data_type)
+            model_dict = convert_baichuan_weights(ts_model.state_dict(), data_type=data_type)
 
         for k, v in model_dict.items():
             if 'lm_head' in k:
