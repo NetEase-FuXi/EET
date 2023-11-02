@@ -30,7 +30,11 @@ namespace eet
         ffn_cache_name_(ffn_cache_name)
         {   
             // Currently only supports gelu and relu
-            if (desc_.activation_fn_ == "quick_gelu")
+            if (desc_.activation_fn_ == "silu")
+            {
+                act_type_ = 3;
+            }
+            else if (desc_.activation_fn_ == "quick_gelu")
             {
                 act_type_ = 2;
             }

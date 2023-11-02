@@ -34,6 +34,7 @@ from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from EET import MetaDesc as meta_desc
 from EET import Embedding as eet_embedding
 from EET import GatedFeedForwardNetworkInt8 as eet_gated_ffn
+from EET import GatedFeedForwardNetwork as eet_gated_ffn_fp16
 from EET import BaichuanMmha as eet_masked_attention
 # from FPA_INTB import preprocess_weights as preprocess_weights
 from EET import preprocess_weights as preprocess_weights
@@ -115,6 +116,7 @@ class EETBaichuanSelfMaskedAttention():
  
 class EETGatedFeedForward():
     def __init__(self, config, model_dict, layer_id, data_type=torch.float32, name="out_cache", is_int8=False):
+        self.is_int8 = is_int8
         self.intermediate_0_bias = torch.empty(0)
         self.intermediate_1_bias = torch.empty(0)
         self.output_bias = torch.empty(0)
@@ -129,8 +131,12 @@ class EETGatedFeedForward():
 
         self.layernorm_weights = model_dict['layer.' + str(layer_id) + '.ffn.layernorm.weight'].cuda().type(data_type)
 
-        self.ffn = eet_gated_ffn(config, self.intermediate_0_weights, self.intermediate_0_scale, self.intermediate_0_bias, self.intermediate_1_weights,
-                                 self.intermediate_1_scale, self.intermediate_1_bias, self.output_weights, self.output_scale, self.output_bias, self.layernorm_weights, self.layernorm_bias, name)
+        if self.is_int8:
+            self.ffn = eet_gated_ffn(config, self.intermediate_0_weights, self.intermediate_0_scale, self.intermediate_0_bias, self.intermediate_1_weights,
+                                    self.intermediate_1_scale, self.intermediate_1_bias, self.output_weights, self.output_scale, self.output_bias, self.layernorm_weights, self.layernorm_bias, name)
+        else:
+            self.ffn = eet_gated_ffn_fp16(config, self.intermediate_0_weights, self.intermediate_0_bias, self.intermediate_1_weights, self.intermediate_1_bias, self.output_weights, self.output_bias,
+                                          self.layernorm_weights, self.layernorm_bias, name)
 
     def __call__(
         self,
