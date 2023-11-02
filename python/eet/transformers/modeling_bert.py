@@ -96,7 +96,7 @@ class EETBertModel():
         '''
         input_shape = input_ids.size()
 
-        position_ids = self.position_ids[:, :input_shape[1]]
+        position_ids = self.position_ids[:, :input_shape[1]] if position_ids is None else position_ids
 
         if token_type_ids is None:
             token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
