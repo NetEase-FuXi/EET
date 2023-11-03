@@ -35,7 +35,8 @@ from EET import MetaDesc as meta_desc
 from EET import Embedding as eet_embedding
 from EET import GatedFeedForwardNetworkInt8 as eet_gated_ffn
 from EET import GatedFeedForwardNetwork as eet_gated_ffn_fp16
-from EET import BaichuanMmha as eet_masked_attention
+from EET import BaichuanMmha as eet_baichuan_attention
+from EET import LlamaMmha as eet_llama_attention
 # from FPA_INTB import preprocess_weights as preprocess_weights
 from EET import preprocess_weights as preprocess_weights
 from EET import quant_weights as quant_and_preprocess_weights
@@ -93,8 +94,10 @@ class EETBaichuanSelfMaskedAttention():
         self.qkv_scale = model_dict['layer.' + str(layer_id) + '.self_attn.qkv_proj.scale'].half().cuda() if is_int8 else torch.empty(0)
         self.out_scale = model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.scale'].half().cuda() if is_int8 else torch.empty(0)
 
-        self.attention = eet_masked_attention(config, self.qkv_weights,self.qkv_scale, self.q_bias, self.k_bias,
-                                              self.v_bias, self.out_weights,self.out_scale, self.out_bias, self.layernorm_weights, self.layernorm_bias)
+        # self.attention = eet_baichuan_attention(config, self.qkv_weights,self.qkv_scale, self.q_bias, self.k_bias,
+        #                                     self.v_bias, self.out_weights,self.out_scale, self.out_bias, self.layernorm_weights, self.layernorm_bias)
+        self.attention = eet_llama_attention(config, self.qkv_weights,self.qkv_scale, self.q_bias, self.k_bias,
+                                                self.v_bias, self.out_weights,self.out_scale, self.out_bias, self.layernorm_weights, self.layernorm_bias)
 
     def __call__(
         self,

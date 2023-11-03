@@ -11,3 +11,4 @@ from .modeling_t5 import *
 from .modeling_bart import *
 from .modeling_ernie import *
 from .modeling_baichuan import *
+from .modeling_llama import *

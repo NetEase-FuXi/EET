@@ -3,6 +3,7 @@
 #include "core/layer_norm.cuh"
 #include "core/gpt2_self_softmax.cuh"
 #include "core/activation_kernel.cuh"
+#include "core/dq_weight.cuh"
 #include "cutlass_kernels/fpA_intB_gemm.h"
 
 namespace eet
@@ -69,16 +70,30 @@ namespace eet
             MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, ffn_cache_name_);
             // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "gated_ffn_buffer1");
             // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * d_ff_, desc_.dtype_, desc_.options_, "gated_ffn_buffer2");
-            
-            assert((desc_.dtype_ == torch::kFloat16) && "GatedFeedForwardNetworkInt8 only support fp16");
-
-            fc1_algo_ = CUBLAS_GEMM_DEFAULT;
-            fc2_algo_ = CUBLAS_GEMM_DEFAULT;
-            fc3_algo_ = CUBLAS_GEMM_DEFAULT;
-            alpha_ = new half();
-            beta_ = new half();
-            *((half *)alpha_) = (half)1.0f;
-            *((half *)beta_) = (half)0.0f;
+            switch (desc_.dtype_)
+            {
+            case torch::kFloat32:
+                fc1_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc2_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc3_algo_ = CUBLAS_GEMM_DEFAULT;
+                alpha_ = new float();
+                beta_ = new float();
+                *((float *)alpha_) = 1.0f;
+                *((float *)beta_) = 0.0f;
+                break;
+            case torch::kFloat16:
+                fc1_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc2_algo_ = CUBLAS_GEMM_DEFAULT;
+                fc3_algo_ = CUBLAS_GEMM_DEFAULT;
+                alpha_ = new half();
+                beta_ = new half();
+                *((half *)alpha_) = (half)1.0f;
+                *((half *)beta_) = (half)0.0f;
+                break;
+            //TODO
+            case torch::kInt8:
+                break;
+            }
         }
 
         torch::Tensor GatedFeedForwardNetworkInt8::forward(torch::Tensor &input,
@@ -137,6 +152,17 @@ namespace eet
 #endif
         }
 
+        void GatedFeedForwardNetworkInt8::dequant1(Buffer& weight_buffer)
+        {
+            int width = desc_.d_ff_;
+            int height = desc_.hidden_units_;
+            dequant_weight(intermediate_0_weights_,weight_buffer.data_ptr(),intermediate_0_scale_, width,height, desc_.stream);
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
         void GatedFeedForwardNetworkInt8::add_bias_act(Buffer& ffn_inner)
         {
             int m = cur_batch_size_ * cur_seq_len_;
@@ -157,6 +183,28 @@ namespace eet
             
             RUN_KERNEL(gated_act_kernel, desc_.dtype_, inner_act.data_ptr(), inner_linear.data_ptr(), m, n, act_type_ ,desc_.stream)
             
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void GatedFeedForwardNetworkInt8::dequant2(Buffer& weight_buffer)
+        {
+            int width = desc_.d_ff_;
+            int height = desc_.hidden_units_;
+            dequant_weight(intermediate_1_weights_,weight_buffer.data_ptr(),intermediate_1_scale_, width,height, desc_.stream);
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void GatedFeedForwardNetworkInt8::dequant3(Buffer& weight_buffer)
+        {
+            int width = desc_.hidden_units_;
+            int height = desc_.d_ff_;
+            dequant_weight(output_weights_,weight_buffer.data_ptr(),output_scale_, width,height, desc_.stream);
 #ifdef _DEBUG_MODE_
             cudaDeviceSynchronize();
             check_cuda_error(cudaGetLastError());

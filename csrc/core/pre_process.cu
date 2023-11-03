@@ -5,6 +5,7 @@
 #include <thrust/reduce.h>
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 
 __global__
 void gen_mask_offset(const int64_t *every_seq_len, const int current_batch_num, int64_t *dest) {

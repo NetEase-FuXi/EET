@@ -8,6 +8,7 @@
 #include "op/cross_multi_head_attention.hpp"
 #include "op/masked_multi_head_attention.hpp"
 #include "op/baichuan_mmha.hpp"
+#include "op/llama_mmha.hpp"
 #include "cutlass_kernels/fpA_intB_gemm_wrapper.h"
 
 #define STRINGIFY(x) #x
@@ -68,6 +69,21 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
              py::arg("add_residual"),
              py::arg("first_pass"),
              py::arg("relative_attention_bias") = torch::empty(0));
+    
+    py::class_<eet::op::LlamaMmha>(m, "LlamaMmha")
+        .def(py::init<eet::MetaDesc, const torch::Tensor &, const torch::Tensor &,
+                      const torch::Tensor &, const torch::Tensor &,
+                      const torch::Tensor &, const torch::Tensor &,
+                      const torch::Tensor &, const torch::Tensor &,
+                      const torch::Tensor &, const torch::Tensor &>())
+        .def("forward", &eet::op::LlamaMmha::forward, "LlamaMmha forward",
+              py::arg("input"),
+              py::arg("pre_padding_len"),
+              py::arg("reorder_state"),
+              py::arg("pre_layernorm"),
+              py::arg("add_residual"),
+              py::arg("first_pass"),
+              py::arg("relative_attention_bias") = torch::empty(0));
 
     py::class_<eet::op::CrossMultiHeadAttention>(m, "CrossMultiHeadAttention")
         .def(py::init<eet::MetaDesc, const torch::Tensor &, const torch::Tensor &,

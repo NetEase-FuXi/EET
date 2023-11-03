@@ -10,6 +10,7 @@ Mappings = {
     "bart": "transformers_bart_mapping",
     "t5": "transformers_t5_mapping",
     "baichuan": "transformers_baichuan_mapping",
+    "llama": "transformers_llama_mapping",
 }
 
 transformers_albert_mapping = {
@@ -259,6 +260,28 @@ transformers_baichuan_mapping = {
             "self_attn": {
                 "__name__":"self_attn",
                 "W_pack": {"__name__":"qkv_proj"},
+                "o_proj": {"__name__":"out_proj"},
+            },
+            "input_layernorm": {"__name__":"self_attn.layernorm"},
+            "mlp.gate_proj": {"__name__":"ffn.intermediate_0"},
+            "mlp.up_proj": {"__name__":"ffn.intermediate_1"},
+            "mlp.down_proj": {"__name__":"ffn.output"},
+            "post_attention_layernorm": {"__name__":"ffn.layernorm"},
+        }
+    }
+}
+
+transformers_llama_mapping = {
+    "layers": {
+        "__name__":"layer",
+        "$": {
+            "__name__":"$",
+            "self_attn": {
+                "__name__":"self_attn",
+                "rotary_emb.inv_freq": {"__name__":"rotary_emb.inv_freq"},
+                "q_proj": {"__name__":"q_proj"},
+                "k_proj": {"__name__":"k_proj"},
+                "v_proj": {"__name__":"v_proj"},
                 "o_proj": {"__name__":"out_proj"},
             },
             "input_layernorm": {"__name__":"self_attn.layernorm"},

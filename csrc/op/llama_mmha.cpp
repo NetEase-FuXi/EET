@@ -1,0 +1,532 @@
+#include "op/llama_mmha.hpp"
+#include "core/add_bias.cuh"
+#include "core/transpose.cuh"
+#include "core/layer_norm.cuh"
+#include "core/pre_process.cuh"
+#include "core/self_add_bias.cuh"
+#include "core/attention_dispatch.cuh"
+#include "core/gpt2_self_softmax.cuh"
+#include "core/dq_weight.cuh"
+#include "cutlass_kernels/fpA_intB_gemm.h"
+
+// for gpt
+namespace eet{
+    namespace op{
+        LlamaMmha::LlamaMmha(MetaDesc desc,
+                             const torch::Tensor& QKV_weights,
+                             const torch::Tensor& QKV_scale,
+                             const torch::Tensor& Q_bias,
+                             const torch::Tensor& K_bias,
+                             const torch::Tensor& V_bias,
+                             const torch::Tensor& Output_weights,
+                             const torch::Tensor& Output_scale,
+                             const torch::Tensor& Output_bias,
+                             const torch::Tensor& layernorm_weights,
+                             const torch::Tensor& layernorm_bias):
+            desc_(desc),
+            step_(1),
+            qkv_weights_(QKV_weights.data_ptr()),
+            qkv_scale_(QKV_scale.data_ptr()),
+            q_bias_(Q_bias.data_ptr()),
+            k_bias_(K_bias.data_ptr()),
+            v_bias_(V_bias.data_ptr()),
+            output_weights_(Output_weights.data_ptr()),
+            output_scale_(Output_scale.data_ptr()),
+            output_bias_(Output_bias.data_ptr()),
+            layernorm_weights_(layernorm_weights.data_ptr()),
+            layernorm_bias_(layernorm_bias.data_ptr())
+        {
+            if (desc_.d_kv_ == 0) {
+                size_per_head_ = desc_.hidden_units_ / desc_.head_num_;
+                inner_dim_ = desc_.hidden_units_;
+            } else {
+                size_per_head_ = desc_.d_kv_;
+                inner_dim_ = size_per_head_ * desc_.head_num_;
+            }
+
+            with_bias_ = q_bias_ != nullptr ? true : false;
+            k_cache_ = torch::zeros({desc_.batch_size_ * desc_.max_full_seq_len_ * inner_dim_}, desc_.options_);          // each layer has kv cache
+            v_cache_ = torch::zeros_like(k_cache_);
+            MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "self_mask_attn_cache");
+            // MManager::get_instance().get_cache(desc_.hidden_units_ * desc_.hidden_units_ * 3, desc_.dtype_, desc_.options_, "weight_cache");
+            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * inner_dim_ * 3, desc_.dtype_, desc_.options_, "qkv_full");
+            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "layernorm");
+            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * inner_dim_, desc_.dtype_, desc_.options_, "q_buf");
+            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * inner_dim_, desc_.dtype_, desc_.options_, "k_buf");
+            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.max_seq_len_ * inner_dim_, desc_.dtype_, desc_.options_, "v_buf");
+            // MManager::get_instance().allocate_buffer(desc_.batch_size_ * desc_.head_num_ * desc_.max_seq_len_ * desc_.max_seq_len_, desc_.dtype_, desc_.options_, "qk_buf");
+
+            switch (desc_.dtype_)
+            {
+            case torch::kFloat32:
+                qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT;
+                q_k_algo_ = CUBLAS_GEMM_DEFAULT;
+                attn_v_algo_ = CUBLAS_GEMM_DEFAULT;
+                alpha_ = new float();
+                beta_ = new float();
+                atten_scaler_ = new float();
+                *((float *)alpha_) = 1.0f;
+                *((float *)beta_) = 0.0f;
+                if (with_bias_) {
+                    *((float *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                } else {
+                    *((float *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                }                
+                break;
+            case torch::kFloat16:
+                qkv_weights_algo_ = CUBLAS_GEMM_DEFAULT;
+                q_k_algo_ = CUBLAS_GEMM_DEFAULT;
+                attn_v_algo_ = CUBLAS_GEMM_DEFAULT;
+                alpha_ = new half();
+                beta_ = new half();
+                atten_scaler_ = new half();
+                *((half *)alpha_) = 1.0f;
+                *((half *)beta_) = 0.0f;
+                if (with_bias_) {
+                    *((half *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                } else {
+                    *((half *)atten_scaler_) = sqrt(1.0f / size_per_head_);
+                }
+                break;
+            //TODO
+            case torch::kInt8:
+                break;
+            }
+        }
+
+        torch::Tensor LlamaMmha::forward(torch::Tensor& input,
+                                         const torch::Tensor& pre_padding_len,
+                                         const torch::Tensor& reorder_state,
+                                         bool pre_layernorm,
+                                         bool add_residual,
+                                         bool first_pass,
+                                         const torch::Tensor &relative_attention_bias){
+            if(first_pass)
+            {
+                return forward_full(input, pre_padding_len, pre_layernorm, add_residual, relative_attention_bias);
+            }
+            else
+            {
+                return forward_inc(input, pre_padding_len, reorder_state, pre_layernorm, add_residual, relative_attention_bias);
+            }
+        }
+
+        // full decoder
+        torch::Tensor LlamaMmha::forward_full(torch::Tensor &input,
+                                              const torch::Tensor &pre_padding_length,
+                                              bool pre_layernorm,
+                                              bool add_residual,
+                                              const torch::Tensor &relative_attention_bias)
+        {
+            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as LlamaMmha's dtype");
+            step_ = 1;
+            cur_batch_size_ = input.sizes()[0];
+            first_batch_size_ = cur_batch_size_;
+            cur_seq_len_ = input.sizes()[1];
+            assert((cur_seq_len_ <= desc_.max_full_seq_len_)&& "cur_seq_len must be less than or equal to max_full_seq_len_");
+            assert((cur_batch_size_ <= desc_.batch_size_)&& "cur_batch_size_ must be less than or equal to max_batch_size_");
+
+            Buffer& qkv_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ * inner_dim_ * 3, desc_.dtype_, desc_.options_, false, "qkv_full");
+            
+           
+            // pre_layerNorm
+            Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ * 
+                                                desc_.hidden_units_, desc_.dtype_, desc_.options_, false, "layernorm");
+
+            layer_norm(input, layernormed_query);
+
+            // fused gemm with dequant
+            if (desc_.is_int8_) {
+                qkv_weights_mul_weight_only_int8(layernormed_query.data_ptr(), qkv_buffer);
+            } else {
+                qkv_weights_mul(layernormed_query.data_ptr(), qkv_buffer);
+            }
+
+            layernormed_query.free();
+            
+            // print_to_screen((half*)qkv_buffer.data_ptr(),32);
+
+            // qkv transpose & qk rotary embedding
+            Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false, "q_buf");
+            Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false, "k_buf");
+            Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false, "v_buf");
+            fused_RoPE_transpose(qkv_buffer, q_buf, k_buf, v_buf, -1);
+
+            qkv_buffer.free();
+
+            // q * k
+            Buffer& qk_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.head_num_ *
+                                        desc_.max_seq_len_ * desc_.max_seq_len_, desc_.dtype_, desc_.options_, false, "qk_buf");
+            q_k_mul(q_buf, k_buf, qk_buf);
+
+            q_buf.free();
+
+            // softmax
+            const int64_t *padding_len = pre_padding_length.data_ptr<int64_t>();
+            qk_softmax(qk_buf, padding_len);
+
+            // transpose k\v cache
+            kv_transpose(k_cache_, v_cache_, k_buf, v_buf);
+            k_buf.free();
+
+            // attn * v
+            Buffer& transpose_dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false, "transpose_dst");
+            attn_v_mul(qk_buf, v_buf, transpose_dst);
+            qk_buf.free();
+            v_buf.free();
+
+            // transpose
+            Buffer& dst = MManager::get_instance().get_buffer(desc_.batch_size_ * desc_.max_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false, "dst");
+
+            transpose(transpose_dst, dst);
+            transpose_dst.free();
+
+            // project
+            Buffer &output = MManager::get_instance().get_cache(desc_.batch_size_ * desc_.max_seq_len_ * 
+                                       desc_.hidden_units_, desc_.dtype_, desc_.options_, "self_mask_attn_cache");
+
+            project(dst, output, input, pre_layernorm, add_residual);
+
+            dst.free();
+            step_ = cur_seq_len_;
+            // output_ = output_[input.sizes()];
+            auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
+            return std::move(res);
+        }
+
+        // incremental decoder
+        torch::Tensor LlamaMmha::forward_inc(torch::Tensor &input,
+                                             const torch::Tensor &pre_padding_len,
+                                             const torch::Tensor &reorder_state,
+                                             bool pre_layernorm,
+                                             bool add_residual,
+                                             const torch::Tensor &relative_attention_bias)
+        {
+            assert((input.dtype() == desc_.dtype_) && "input's dtype is not the same as LlamaMmha's dtype");
+            step_ += 1;
+            assert(step_ <= desc_.max_full_seq_len_ && "Exceed the maximum step length");
+            cur_batch_size_ = input.sizes()[0];
+            cur_seq_len_ = input.sizes()[1];
+            assert(cur_seq_len_ == 1);
+            Buffer& qkv_buffer = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                                    inner_dim_ * 3, desc_.dtype_, desc_.options_, false, "qkv_inc");
+
+
+            // pre_layerNorm
+            Buffer& layernormed_query = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                    desc_.hidden_units_, desc_.dtype_, desc_.options_, false, "layernorm_inc");
+            layer_norm(input, layernormed_query);
+
+            if (desc_.is_int8_) {
+                qkv_weights_mul_weight_only_int8(layernormed_query.data_ptr(), qkv_buffer);
+            } else {
+                qkv_weights_mul(layernormed_query.data_ptr(), qkv_buffer);
+            }
+            layernormed_query.free();
+
+
+            // print_to_screen((half*)qkv_buffer.data_ptr(),8);
+
+            // qkv transpose & qk rotary embedding
+            Buffer& q_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false, "q_inc");
+            Buffer& k_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false, "q_inc");
+            Buffer& v_buf = MManager::get_instance().get_buffer(desc_.batch_size_ * cur_seq_len_ *
+                                    inner_dim_, desc_.dtype_, desc_.options_, false, "q_inc");
+            fused_RoPE_transpose(qkv_buffer, q_buf, k_buf, v_buf, step_ - 1);
+
+            qkv_buffer.free();
+            // masked_attention_dispatch
+            Buffer &context_buf = MManager::get_instance().get_buffer(
+                desc_.batch_size_ * cur_seq_len_ * inner_dim_, desc_.dtype_, desc_.options_, false, "context_buf");
+            const int64_t *padding_len = pre_padding_len.data_ptr<int64_t>();
+            const int64_t *reorder_index = reorder_state.data_ptr<int64_t>();
+
+            if (reorder_index != nullptr) {
+                reorder_cache(k_cache_, v_cache_, k_cache_, v_cache_, reorder_index);     //TODO 不能保证读写读顺序
+            }
+
+            masked_attention(q_buf, k_buf, v_buf, context_buf, padding_len, nullptr);
+            q_buf.free();
+            k_buf.free();
+            v_buf.free();
+            
+            // attention output
+            Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * cur_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "self_mask_attn_cache");
+
+            project(context_buf, output, input, pre_layernorm, add_residual);
+            context_buf.free();
+            auto res = torch::from_blob(output.data_ptr(), input.sizes(), input.strides(), desc_.options_);
+            return std::move(res);
+        }
+
+        // layerNorm
+        void LlamaMmha::layer_norm(const torch::Tensor& input_tensor, Buffer& layernorm_query)
+        {
+            const int m = cur_batch_size_ * cur_seq_len_;
+            int n = desc_.hidden_units_;
+
+            if (with_bias_)
+            {
+                RUN_KERNEL(layernorm, desc_.dtype_, input_tensor.data_ptr(), layernorm_weights_, layernorm_bias_, layernorm_query.data_ptr(), m, n, desc_.layernorm_eps_, desc_.stream);
+            }
+            else
+            {
+                RUN_KERNEL(RMSnorm, desc_.dtype_, input_tensor.data_ptr(), layernorm_weights_, layernorm_query.data_ptr(), m, n, desc_.layernorm_eps_, desc_.stream);
+            }
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void LlamaMmha::qkv_weights_mul(void* input, 
+                                    Buffer& qkv_buffer){
+                const int m = cur_batch_size_ * cur_seq_len_;
+                const int k = desc_.hidden_units_;
+                const int n = 3 * inner_dim_;
+
+                check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                    CUBLAS_OP_N, CUBLAS_OP_N,
+                    n, m, k,
+                    alpha_,
+                    qkv_weights_, desc_.dataType_ , n,
+                    input, desc_.dataType_ , k,
+                    beta_,
+                    qkv_buffer.data_ptr(), desc_.dataType_ , n,
+                    desc_.computeType_,
+                    qkv_weights_algo_));
+
+
+#ifdef _DEBUG_MODE_
+        cudaDeviceSynchronize();
+        check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+
+        void LlamaMmha::qkv_weights_mul_weight_only_int8(void *input, Buffer &qkv_buffer)
+        {
+            int m = cur_batch_size_ * cur_seq_len_;
+            int k = desc_.hidden_units_;
+            int n = 3 * inner_dim_;
+
+            fastertransformer::gemm_fp16_int_bias_act(
+                reinterpret_cast<fastertransformer::half *>(input),
+                reinterpret_cast<const uint8_t*>(qkv_weights_),
+                reinterpret_cast<fastertransformer::half *>(qkv_scale_),
+                nullptr,
+                reinterpret_cast<fastertransformer::half *>(qkv_buffer.data_ptr()),
+                std::nullopt,
+                m, n, k,
+                0,
+                nullptr,
+                0,
+                desc_.stream
+                );
+
+#ifdef _DEBUG_MODE_
+                cudaDeviceSynchronize();
+        check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void LlamaMmha::fused_RoPE_transpose(const Buffer &qkv_buffer,
+                                             Buffer &q_buf,
+                                             Buffer &k_buf,
+                                             Buffer &v_buf,
+                                             int time_step)
+        {
+            RUN_KERNEL(fused_QKV_bias_rotary_kernel,desc_.dtype_,qkv_buffer.data_ptr(),q_bias_,
+                       k_bias_, v_bias_, q_buf.data_ptr(), k_buf.data_ptr(), v_buf.data_ptr(),
+                       cur_batch_size_, cur_seq_len_, desc_.head_num_, size_per_head_, time_step, desc_.stream);
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void LlamaMmha::q_k_mul(const Buffer& q_buf,
+                                const Buffer& k_buf,
+                                Buffer& qk_buf){
+            check_cuda_error(cublasGemmStridedBatchedEx(desc_.cublasHandle,
+                CUBLAS_OP_T, CUBLAS_OP_N,
+                cur_seq_len_, cur_seq_len_, size_per_head_,
+                atten_scaler_,
+                k_buf.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
+                q_buf.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
+                beta_,
+                qk_buf.data_ptr(), desc_.dataType_ , cur_seq_len_, cur_seq_len_ * cur_seq_len_,
+                cur_batch_size_ * desc_.head_num_,
+                desc_.computeType_,
+                q_k_algo_));
+
+#ifdef _DEBUG_MODE_
+    cudaDeviceSynchronize();
+    check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void LlamaMmha::add_relative_attn_bias(Buffer &qk_buf, void *relative_attention_bias)
+        {
+            RUN_KERNEL(add_relative_attn_bias_kernel, desc_.dtype_, qk_buf.data_ptr(), relative_attention_bias,
+                       cur_batch_size_, desc_.head_num_, cur_seq_len_, desc_.stream);
+
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void LlamaMmha::qk_softmax(Buffer& qk_buf,const int64_t *padding_len){
+            // float scalar = 1 / sqrtf(size_per_head_ * 1.0f);
+
+            RUN_KERNEL(softmax_kernel,desc_.dtype_,qk_buf.data_ptr(), padding_len,  cur_batch_size_,
+                    desc_.head_num_,cur_seq_len_, desc_.stream);
+#ifdef _DEBUG_MODE_
+    cudaDeviceSynchronize();
+    check_cuda_error(cudaGetLastError());
+#endif 
+        }
+
+        void LlamaMmha::attn_v_mul(const Buffer& qk_buf,
+                                   const Buffer& v_buf,
+                                   Buffer& transpose_dst){
+            check_cuda_error(cublasGemmStridedBatchedEx(desc_.cublasHandle,
+                    CUBLAS_OP_N, CUBLAS_OP_N,
+                    size_per_head_, cur_seq_len_, cur_seq_len_,
+                    alpha_,
+                    v_buf.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
+                    qk_buf.data_ptr(), desc_.dataType_ , cur_seq_len_, cur_seq_len_ * cur_seq_len_,
+                    beta_,
+                    transpose_dst.data_ptr(), desc_.dataType_ , size_per_head_, cur_seq_len_ * size_per_head_,
+                    cur_batch_size_ * desc_.head_num_,
+                    desc_.computeType_,
+                    attn_v_algo_));
+
+#ifdef _DEBUG_MODE_
+    cudaDeviceSynchronize();
+    check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void LlamaMmha::transpose(const Buffer& transpose_dst, Buffer&  dst){
+            RUN_KERNEL(transpose_kernel,desc_.dtype_,transpose_dst.data_ptr(),dst.data_ptr(), cur_batch_size_, cur_seq_len_,
+                    desc_.head_num_, size_per_head_, desc_.stream);
+
+            #ifdef _DEBUG_MODE_
+                cudaDeviceSynchronize();
+                check_cuda_error(cudaGetLastError());
+            #endif
+        }
+
+        void LlamaMmha::project(const Buffer &dst, Buffer &res, torch::Tensor &input, bool pre_layernorm, bool add_residual)
+        {
+            const int m = cur_batch_size_ * cur_seq_len_;
+            int k = inner_dim_;
+            int n = desc_.hidden_units_;
+
+            if (desc_.is_int8_)
+            {
+                fastertransformer::gemm_fp16_int_bias_act(
+                    reinterpret_cast<fastertransformer::half *>(dst.data_ptr()),
+                    reinterpret_cast<const uint8_t *>(output_weights_),
+                    reinterpret_cast<fastertransformer::half *>(output_scale_),
+                    nullptr,
+                    reinterpret_cast<fastertransformer::half *>(res.data_ptr()),
+                    std::nullopt,
+                    m, n, k,
+                    0,
+                    nullptr,
+                    0,
+                    desc_.stream);
+            } else {
+                check_cuda_error(cublasGemmEx(desc_.cublasHandle,
+                                              CUBLAS_OP_N, CUBLAS_OP_N,
+                                              n, m, k,
+                                              alpha_,
+                                              output_weights_, desc_.dataType_, n,
+                                              dst.data_ptr(), desc_.dataType_, k,
+                                              beta_,
+                                              res.data_ptr(), desc_.dataType_, n,
+                                              desc_.computeType_,
+                                              qkv_weights_algo_));
+            }
+
+            // add_bias + add_residual
+            RUN_KERNEL(add_bias_input_kernel, desc_.dtype_, res.data_ptr(), input.data_ptr(), output_bias_,
+                           m, n, desc_.stream);
+            
+            #ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+            #endif
+        }
+
+        void LlamaMmha::kv_transpose(torch::Tensor& d_K_buf, torch::Tensor& d_V_buf,Buffer& K_buf,Buffer& V_buf)
+        {
+            RUN_KERNEL(copyKV_transpose_kernel,desc_.dtype_,d_K_buf.data_ptr(), d_V_buf.data_ptr(),K_buf.data_ptr(), V_buf.data_ptr(),cur_batch_size_, cur_seq_len_,
+                   desc_.head_num_, size_per_head_);
+            #ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+            #endif
+        }
+
+        void LlamaMmha::fused_masked_attention(const Buffer &qkv_buffer,
+                                               Buffer &context_buf,
+                                               const int64_t *padding_len,
+                                               const int64_t *reorder_index,
+                                               const void *relative_attention_bias_)
+        {
+            RUN_KERNEL(fused_masked_attention_dispatch,desc_.dtype_,qkv_buffer.data_ptr(), q_bias_,k_cache_.data_ptr(),k_bias_,v_cache_.data_ptr(),v_bias_,
+                        context_buf.data_ptr(),cur_batch_size_,first_batch_size_,desc_.head_num_,size_per_head_,step_, desc_.stream, padding_len,reorder_index, relative_attention_bias_);
+            #ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+            #endif
+        }
+
+        void LlamaMmha::reorder_cache(torch::Tensor &K_cache, torch::Tensor &V_cache, Buffer &K_buf, Buffer &V_buf, const int64_t *reorder_index)
+        {
+            RUN_KERNEL(reorderKV_kernel, desc_.dtype_, K_cache.data_ptr(), V_cache.data_ptr(), K_buf.data_ptr(), V_buf.data_ptr(), reorder_index, first_batch_size_, step_, desc_.head_num_, size_per_head_);
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+        void LlamaMmha::reorder_cache(torch::Tensor &K_cache, torch::Tensor &V_cache, torch::Tensor &K_buf, torch::Tensor &V_buf, const int64_t *reorder_index)
+        {
+            RUN_KERNEL(reorderKV_kernel, desc_.dtype_, K_cache.data_ptr(), V_cache.data_ptr(), K_buf.data_ptr(), V_buf.data_ptr(), reorder_index, first_batch_size_, step_, desc_.head_num_, size_per_head_);
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+
+        void LlamaMmha::masked_attention(const Buffer &q_buf,
+                                         const Buffer &k_buf,
+                                         const Buffer &v_buf,
+                                         Buffer &context_buf,
+                                         const int64_t *padding_len,
+                                         const int64_t *reorder_index)
+        {
+            RUN_KERNEL(masked_attention_dispatch, desc_.dtype_, k_buf.data_ptr(), v_buf.data_ptr(), 
+                       q_buf.data_ptr(), k_cache_.data_ptr(), v_cache_.data_ptr(),
+                       context_buf.data_ptr(), cur_batch_size_, first_batch_size_, desc_.head_num_, size_per_head_, step_, desc_.stream, padding_len, reorder_index);
+#ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+#endif
+        }
+
+    }
+}
