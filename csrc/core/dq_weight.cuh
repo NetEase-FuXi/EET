@@ -1,1 +1,0 @@
-void dequant_weight(void *weight,void *dqweight,void *scale,int width, int height, const cudaStream_t stream);

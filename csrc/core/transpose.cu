@@ -30,7 +30,7 @@ void transpose(half* src, half* dst,
   int seq_id = (tid % (seq_len * size_per_head)) / size_per_head;
   int id = tid % size_per_head;
 
-  int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
+  int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
   half2* src_ptr = (half2*)src;
   half2* dst_ptr = (half2*)dst;
 

@@ -34,12 +34,6 @@ namespace eet{
         private:
             void layer_norm(const torch::Tensor& input_tensor, Buffer& layernorm_tensor);
 
-            void dequant1(Buffer& weight_buffer);
-
-            void dequant2(Buffer& weight_buffer);
-            
-            void dequant3(Buffer& weight_buffer);
-
             void fc1_mul(void* input,  Buffer& ffn_inner, Buffer& weight_buf);
 
             void fc2_mul(void* input,  Buffer& ffn_inner, Buffer& weight_buf);

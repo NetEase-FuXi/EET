@@ -1,4 +1,5 @@
 #include "core/cross_add_bias.cuh"
+#include "common.cuh"
 #include <assert.h>
 
 template<typename T>
@@ -74,12 +75,6 @@ void Q_transpose_opt(T *Q, T *q_buf_, const int batch_size, const int seq_len, c
 }
 
 
-__inline__ __device__
-int target_index(int id1, int id2, int id3, int id4, int dim_1, int dim_2, int dim_3, int dim_4)
-{
-  return id1 * (dim_2 * dim_3 * dim_4) + id3 * (dim_2 * dim_4) + id2 * dim_4 + id4;
-}
-
 template<>
 __global__
 void add_Q_bias_opt<half>(half* Q, const half* bias_Q, half* q_buf_, const int batch_size, const int seq_len, const int head_num, const int size_per_head)
@@ -89,7 +84,7 @@ void add_Q_bias_opt<half>(half* Q, const half* bias_Q, half* q_buf_, const int b
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
 
     int bias_id = threadIdx.x + blockDim.x * blockIdx.y;
 
@@ -108,7 +103,7 @@ void Q_transpose_opt<half>(half* Q, half* q_buf_, const int batch_size, const in
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
 
     half2* src_ptr = (half2*)Q;
     half2* dst_ptr = (half2*)q_buf_;
@@ -217,7 +212,7 @@ void add_KV_bias_opt<half>(half* K, const half* bias_K, half* V, const half* bia
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
 
     int bias_id = threadIdx.x + blockDim.x * blockIdx.y;
 
@@ -241,7 +236,7 @@ void KV_transpose_opt<half>(half* K, half* V, half* k_buf_, half* v_buf_, const 
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
 
     half2* src_ptr = (half2*)K;
     half2* dst_ptr = (half2*)k_buf_;
@@ -317,7 +312,7 @@ void add_QKV_bias_opt_cross<half>(half* input, const half* bias_buf, half* outpu
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
 
     int bias_id = threadIdx.x + blockDim.x * blockIdx.y;
 
@@ -370,7 +365,7 @@ void QKV_transpose_opt_cross<half>(half* input, half* output, const int batch_si
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
 
     half2* src_ptr = (half2*)input;
     half2* dst_ptr = (half2*)output;

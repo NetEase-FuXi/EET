@@ -170,13 +170,6 @@ union Vec_n_t {
 __inline__ __device__
 int target_index(int id1, int id2, int id3, int id4, int dim_1, int dim_2, int dim_3, int dim_4)
 {
-  return id1 * (dim_2 * dim_3 * dim_4) + id3 * (dim_2 * dim_4) + id2 * dim_4 + id4;
-}
-
-// TODO fix target_index
-__inline__ __device__
-int target_index1(int id1, int id2, int id3, int id4, int dim_1, int dim_2, int dim_3, int dim_4)
-{
   return id1 * (dim_2 * dim_3 * dim_4) + id2 * (dim_3 * dim_4) + id3 * dim_4 + id4;
 }
 

@@ -6,7 +6,6 @@
 #include "core/self_add_bias.cuh"
 #include "core/attention_dispatch.cuh"
 #include "core/gpt2_self_softmax.cuh"
-#include "core/dq_weight.cuh"
 #include "cutlass_kernels/fpA_intB_gemm.h"
 
 // for gpt

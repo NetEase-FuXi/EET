@@ -71,7 +71,7 @@ void add_QKV_bias_opt<half>( half* Q, const half* bias_Q, half* K, const half* b
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
 
     int bias_id = threadIdx.x + blockDim.x * blockIdx.y;
 
@@ -252,7 +252,7 @@ void fused_add_QKV_bias( half* QKV, const half* bias_Q, const half* bias_K, cons
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
     
     int bias_id = threadIdx.x + blockDim.x * blockIdx.y;
 
@@ -283,7 +283,7 @@ void fused_QKV_transpose(half *QKV, half *q_buf_, half *k_buf_, half *v_buf_, co
     int seq_id = (tid % (head_num * seq_len * size_per_head)) / (head_num * size_per_head);
     int head_id = (tid % (head_num * size_per_head)) / size_per_head;
     int id = tid % size_per_head;
-    int target_id = target_index(batch_id, seq_id, head_id, id, batch_size, seq_len, head_num, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, id, batch_size, head_num, seq_len, size_per_head);
 
     int q_tid = tid + 2 * batch_id * size_per_head * head_num * seq_len + 2 * seq_id * size_per_head * head_num;
     int k_tid = tid + 2 * batch_id * size_per_head * head_num * seq_len + size_per_head * head_num + 2 * seq_id * size_per_head * head_num;
@@ -384,7 +384,7 @@ void fused_QKV_neox_rotary_transpose(half *QKV, half *q_buf_, half *k_buf_, half
     int k_tid = batch_id * seq_len * head_num * size_per_head * 3 + seq_id * head_num * size_per_head * 3 + head_num * size_per_head + hidden_id;
     int v_tid = batch_id * seq_len * head_num * size_per_head * 3 + seq_id * head_num * size_per_head * 3 + head_num * size_per_head * 2 + hidden_id;
 
-    int target_id = target_index1(batch_id, head_id, seq_id, tid, batch_size, head_num, seq_len, size_per_head);
+    int target_id = target_index(batch_id, head_id, seq_id, tid, batch_size, head_num, seq_len, size_per_head);
     half q1 = __ldg(&QKV[q_tid]);
     half q2 = __ldg(&QKV[q_tid + offset]);
     half k1 = __ldg(&QKV[k_tid]);
@@ -421,7 +421,7 @@ void fused_QKV_rotary_transpose(half *QKV, half *q_buf_, half *k_buf_, half *v_b
     int k_tid = batch_id * seq_len * head_num * offset * 3 + seq_id * head_num * offset * 3 + head_num * offset + hidden_id;
     int v_tid = batch_id * seq_len * head_num * offset * 3 + seq_id * head_num * offset * 3 + head_num * offset * 2 + hidden_id;
 
-    int target_id = target_index1(batch_id, head_id, seq_id, tid, batch_size, head_num, seq_len, offset);
+    int target_id = target_index(batch_id, head_id, seq_id, tid, batch_size, head_num, seq_len, offset);
 
     half2 *src_ptr = (half2 *)QKV;
     half2 q_embed = __ldg(&src_ptr[q_tid]);

@@ -3,7 +3,6 @@
 #include "core/layer_norm.cuh"
 #include "core/gpt2_self_softmax.cuh"
 #include "core/activation_kernel.cuh"
-#include "core/dq_weight.cuh"
 #include "cutlass_kernels/fpA_intB_gemm.h"
 
 namespace eet
@@ -152,16 +151,6 @@ namespace eet
 #endif
         }
 
-        void GatedFeedForwardNetworkInt8::dequant1(Buffer& weight_buffer)
-        {
-            int width = desc_.d_ff_;
-            int height = desc_.hidden_units_;
-            dequant_weight(intermediate_0_weights_,weight_buffer.data_ptr(),intermediate_0_scale_, width,height, desc_.stream);
-#ifdef _DEBUG_MODE_
-            cudaDeviceSynchronize();
-            check_cuda_error(cudaGetLastError());
-#endif
-        }
 
         void GatedFeedForwardNetworkInt8::add_bias_act(Buffer& ffn_inner)
         {
@@ -189,27 +178,6 @@ namespace eet
 #endif
         }
 
-        void GatedFeedForwardNetworkInt8::dequant2(Buffer& weight_buffer)
-        {
-            int width = desc_.d_ff_;
-            int height = desc_.hidden_units_;
-            dequant_weight(intermediate_1_weights_,weight_buffer.data_ptr(),intermediate_1_scale_, width,height, desc_.stream);
-#ifdef _DEBUG_MODE_
-            cudaDeviceSynchronize();
-            check_cuda_error(cudaGetLastError());
-#endif
-        }
-
-        void GatedFeedForwardNetworkInt8::dequant3(Buffer& weight_buffer)
-        {
-            int width = desc_.hidden_units_;
-            int height = desc_.d_ff_;
-            dequant_weight(output_weights_,weight_buffer.data_ptr(),output_scale_, width,height, desc_.stream);
-#ifdef _DEBUG_MODE_
-            cudaDeviceSynchronize();
-            check_cuda_error(cudaGetLastError());
-#endif
-        }
 
         void GatedFeedForwardNetworkInt8::fc1_mul(void* input, Buffer &ffn_inner, Buffer& weight_buf)
         {
