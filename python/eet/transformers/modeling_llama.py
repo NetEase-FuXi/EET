@@ -93,7 +93,7 @@ class EETLlamaSelfMaskedAttention():
         self.out_scale.copy_(out_scale.half().cuda().detach())
 
     @staticmethod
-    def from_torch(config, model_dict, layer_id, data_type=torch.float32, bias=True, is_int8=True):
+    def from_eet(config, model_dict, layer_id, data_type=torch.float32, bias=True, is_int8=True):
         attention = EETLlamaSelfMaskedAttention(config, model_dict, layer_id, data_type=data_type, bias=bias, is_int8=is_int8)
         return attention
 
@@ -148,7 +148,7 @@ class EETGatedFeedForward():
         self.output_scale.copy_(output_scale.half().cuda().detach())
 
     @staticmethod
-    def from_torch(config, model_dict, layer_id, data_type=torch.float32, bias=True, name="out_cache", is_int8=False):
+    def from_eet(config, model_dict, layer_id, data_type=torch.float32, bias=True, name="out_cache", is_int8=False):
         feedforward = EETGatedFeedForward(config, model_dict, layer_id, data_type=data_type, bias=bias, name=name, is_int8=is_int8)
         return feedforward
 
@@ -192,9 +192,9 @@ class EETLlamaDecoderLayer():
         self.feedforward.update(model_dict, layer_id, data_type)
 
     @staticmethod
-    def from_torch(config, model_dict, layer_id, data_type=torch.float32, bias=True, is_int8=True):
-        attention = EETLlamaSelfMaskedAttention.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, is_int8=is_int8)
-        feedforward = EETGatedFeedForward.from_torch(config, model_dict, layer_id, data_type=data_type, bias=bias, name="decoder_out_cache", is_int8=is_int8)
+    def from_eet(config, model_dict, layer_id, data_type=torch.float32, bias=True, is_int8=True):
+        attention = EETLlamaSelfMaskedAttention.from_eet(config, model_dict, layer_id, data_type=data_type, bias=bias, is_int8=is_int8)
+        feedforward = EETGatedFeedForward.from_eet(config, model_dict, layer_id, data_type=data_type, bias=bias, name="decoder_out_cache", is_int8=is_int8)
 
         layer = EETLlamaDecoderLayer(config, attention, feedforward)
         return layer
@@ -232,13 +232,13 @@ class EETLlamaDecoder():
             self.layers[i].update(layer_model_dict[str(i)], i, data_type=data_type)
 
     @staticmethod
-    def from_torch(config, layer_model_dict, layer_num, data_type=torch.float32, bias=True, is_int8=True):
+    def from_eet(config, layer_model_dict, layer_num, data_type=torch.float32, bias=True, is_int8=True):
         """from torch."""
         DecoderLayers = []
         for i in tqdm(range(layer_num), desc="[EET][INFO] loading weight..."):
             DecoderLayers.extend(
                 [
-                    EETLlamaDecoderLayer.from_torch(config, layer_model_dict[str(i)], i, data_type=data_type, bias=bias, is_int8=is_int8)
+                    EETLlamaDecoderLayer.from_eet(config, layer_model_dict[str(i)], i, data_type=data_type, bias=bias, is_int8=is_int8)
                 ]
             )
 
@@ -326,7 +326,7 @@ class EETLlamaModel():
         self.layer_norm.update(layernorm_dict, data_type)
 
     @staticmethod
-    def from_torch(llama_dict, cfg, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float16, device_id=0):
+    def from_eet(llama_dict, cfg, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float16, device_id=0):
         """from torch."""
         torch.set_grad_enabled(False)
         embedding_dict = {}
@@ -369,7 +369,7 @@ class EETLlamaModel():
         embedding = nn.Embedding(cfg.vocab_size, cfg.hidden_size, cfg.pad_token_id)
         embedding.load_state_dict(embedding_dict)
         embedding = embedding.half().cuda()
-        decoder = EETLlamaDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
+        decoder = EETLlamaDecoder.from_eet(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
         layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['norm.weight'], None, data_type)
 
         eet_model = EETLlamaModel(cfg, decoder, layer_norm=layer_norm, embedding=embedding, max_batch=max_batch, max_prompt_len=max_prompt_seq_len)
@@ -427,7 +427,7 @@ class EETLlamaModel():
         embedding = nn.Embedding(cfg.vocab_size, cfg.hidden_size, cfg.pad_token_id)
         embedding.load_state_dict(embedding_dict)
         embedding = embedding.half().cuda()
-        decoder = EETLlamaDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
+        decoder = EETLlamaDecoder.from_eet(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
         layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['norm.weight'], None, data_type)
 
         eet_model = EETLlamaModel(cfg, decoder, layer_norm=layer_norm, embedding=embedding, max_batch=max_batch, max_prompt_len=max_prompt_seq_len)
@@ -518,7 +518,7 @@ class EETLlamaForCausalLM(GenerationMixin_EET):
         self.model.update(torch_model, data_type=data_type, model_attr=model_attr)
 
     @staticmethod
-    def from_torch(model_dict, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32):
+    def from_eet(model_dict, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32):
         """from torch."""
         torch.set_grad_enabled(False)
 
@@ -531,7 +531,7 @@ class EETLlamaForCausalLM(GenerationMixin_EET):
             else:
                 llama_dict[k] = v
 
-        llamamodel = EETLlamaModel.from_torch(llama_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
+        llamamodel = EETLlamaModel.from_eet(llama_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
                                               max_full_seq_len=max_full_seq_len, data_type=data_type)
         lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         lm_head.load_state_dict(lm_head_dict)
@@ -565,7 +565,7 @@ class EETLlamaForCausalLM(GenerationMixin_EET):
             else:
                 llama_dict[k] = v
 
-        llamamodel = EETLlamaModel.from_torch(llama_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
+        llamamodel = EETLlamaModel.from_eet(llama_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
                                               max_full_seq_len=max_full_seq_len, data_type=data_type)
         lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         lm_head.load_state_dict(lm_head_dict)
@@ -716,7 +716,7 @@ class EETRewardModel():
         torch.set_grad_enabled(False)
         config = torch_model.config
         model_dict = convert_llama_weights(torch_model.state_dict(), data_type=data_type)
-        llamamodel = EETLlamaModel.from_torch(model_dict, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
+        llamamodel = EETLlamaModel.from_eet(model_dict, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
                                               max_full_seq_len=max_full_seq_len, data_type=data_type, model_attr=model_attr, is_int8=is_int8)
 
         # torch_model.to(data_type)

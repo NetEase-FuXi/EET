@@ -114,7 +114,7 @@ class EETBaichuanSelfMaskedAttention():
         return self.attention.forward(hidden_states, pre_padding_len, reorder_state, pre_layernorm, add_residual, first_pass, relative_attention_bias)
 
     @staticmethod
-    def from_torch(config, model_dict, layer_id, data_type=torch.float32, is_int8=False, model_type="13b"):
+    def from_eet(config, model_dict, layer_id, data_type=torch.float32, is_int8=False, model_type="13b"):
         attention = EETBaichuanSelfMaskedAttention(config, model_dict, layer_id, data_type=data_type, is_int8=is_int8, model_type=model_type)
         return attention
 
@@ -152,7 +152,7 @@ class EETGatedFeedForward():
         return self.ffn.forward(hidden_states, pre_layernorm, add_residual)
 
     @staticmethod
-    def from_torch(config, model_dict, layer_id, data_type=torch.float32, name="out_cache", is_int8=False):
+    def from_eet(config, model_dict, layer_id, data_type=torch.float32, name="out_cache", is_int8=False):
         feedforward = EETGatedFeedForward(config, model_dict, layer_id, data_type=data_type, name=name, is_int8=is_int8)
         return feedforward
 
@@ -194,9 +194,9 @@ class EETBaichuanDecoderLayer():
         return out
 
     @staticmethod
-    def from_torch(config, model_dict, layer_id, data_type=torch.float32, is_int8=False, model_type="13b"):
-        attention = EETBaichuanSelfMaskedAttention.from_torch(config, model_dict, layer_id, data_type=data_type, is_int8=is_int8, model_type=model_type)
-        feedforward = EETGatedFeedForward.from_torch(config, model_dict, layer_id, data_type=data_type, name="decoder_out_cache", is_int8=is_int8)
+    def from_eet(config, model_dict, layer_id, data_type=torch.float32, is_int8=False, model_type="13b"):
+        attention = EETBaichuanSelfMaskedAttention.from_eet(config, model_dict, layer_id, data_type=data_type, is_int8=is_int8, model_type=model_type)
+        feedforward = EETGatedFeedForward.from_eet(config, model_dict, layer_id, data_type=data_type, name="decoder_out_cache", is_int8=is_int8)
 
         layer = EETBaichuanDecoderLayer(config, attention, feedforward)
         return layer
@@ -230,7 +230,7 @@ class EETBaichuanDecoder():
         return hidden_states
 
     @staticmethod
-    def from_torch(config, layer_model_dict, layer_num, data_type=torch.float32, is_int8=False):
+    def from_eet(config, layer_model_dict, layer_num, data_type=torch.float32, is_int8=False):
         """from torch."""
         model_type = "7b" if layer_num == 32 else "13b"
 
@@ -238,7 +238,7 @@ class EETBaichuanDecoder():
         for i in tqdm(range(layer_num), desc="[EET][INFO] loading weight..."):
             DecoderLayers.extend(
                 [
-                    EETBaichuanDecoderLayer.from_torch(config, layer_model_dict['layer.' + str(i)], i, data_type=data_type, is_int8=is_int8, model_type=model_type)
+                    EETBaichuanDecoderLayer.from_eet(config, layer_model_dict['layer.' + str(i)], i, data_type=data_type, is_int8=is_int8, model_type=model_type)
                 ]
             )
 
@@ -330,12 +330,12 @@ class EETBaichuanModel():
         return decoder_out
 
     @staticmethod
-    def from_torch(baichuan_dict, cfg, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float16, device_id=0):
+    def from_eet(baichuan_dict, cfg, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float16, device_id=0):
         """from torch."""
         torch.set_grad_enabled(False)
         embedding_dict = {}
         layernorm_dict = {}
-        decoder_dict = {}  
+        decoder_dict = {}
         is_int8 = True if data_type == torch.int8 else False
         data_type = torch.float16 if data_type == torch.int8 else data_type
 
@@ -374,7 +374,7 @@ class EETBaichuanModel():
         embedding = nn.Embedding(cfg.vocab_size, cfg.hidden_size, cfg.pad_token_id)
         embedding.load_state_dict(embedding_dict)
         embedding = embedding.half().cuda()
-        decoder = EETBaichuanDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
+        decoder = EETBaichuanDecoder.from_eet(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
         layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['norm.weight'], None, data_type)
 
         eet_model = EETBaichuanModel(cfg, decoder, layer_norm=layer_norm, embedding=embedding, max_batch=max_batch, max_prompt_len=max_prompt_seq_len, max_full_seq_len=max_full_seq_len)
@@ -384,33 +384,36 @@ class EETBaichuanModel():
     def from_pretrained(path_or_file, cfg, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float16, device_id=0):
         """from pretrained."""
         torch.set_grad_enabled(False)
-        baichuan_dict = {}
+        eet_baichuan_dict = {}
+        embedding_dict = {}
+        layernorm_dict = {}
+        eet_decoder_dict = {}
         if os.path.isfile(path_or_file):
             with open(path_or_file, "rb") as f:
-                baichuan_dict = torch.load(f, map_location=torch.device("cpu"))
+                eet_baichuan_dict = torch.load(f, map_location=torch.device("cpu"))
         elif os.path.isdir(path_or_file):
             ts_model = AutoModel.from_pretrained(path_or_file, trust_remote_code=True).half()
-            baichuan_dict = convert_baichuan_weights(ts_model.state_dict(), data_type=data_type)
+            eet_baichuan_dict = convert_baichuan_weights(ts_model.state_dict(), data_type=data_type)
         else:
             raise ValueError("[EET][ERROR] path_or_file must be a valid path or path to model file, but get {}".format(path_or_file))
 
         is_int8 = True if data_type == torch.int8 else False
         data_type = torch.float16 if data_type == torch.int8 else data_type
 
-        for k, v in baichuan_dict.items():
+        for k, v in eet_baichuan_dict.items():
             if 'embed_tokens.' in k:
                 k = k[k.find('weight'):]
                 embedding_dict[k] = v
             if 'layer.' in k:
-                decoder_dict[k] = v
+                eet_decoder_dict[k] = v
             if 'norm.' in k:
                 k = k[k.find('norm.'):]
                 layernorm_dict[k] = v
 
         from itertools import groupby
 
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(decoder_dict.items()),
-                                                           lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
+        eet_layer_model_dict = {k: dict(v) for k, v in groupby(list(eet_decoder_dict.items()),
+                                                               lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         batch_size = max_batch
@@ -432,7 +435,7 @@ class EETBaichuanModel():
         embedding = nn.Embedding(cfg.vocab_size, cfg.hidden_size, cfg.pad_token_id)
         embedding.load_state_dict(embedding_dict)
         embedding = embedding.half().cuda()
-        decoder = EETBaichuanDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
+        decoder = EETBaichuanDecoder.from_eet(meta_des, eet_layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
         layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['norm.weight'], None, data_type)
 
         eet_model = EETBaichuanModel(cfg, decoder, layer_norm=layer_norm, embedding=embedding, max_batch=max_batch, max_prompt_len=max_prompt_seq_len, max_full_seq_len=max_full_seq_len)
@@ -506,20 +509,20 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
         return model_inputs
 
     @staticmethod
-    def from_torch(model_dict, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model"):
+    def from_eet(model_dict, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model"):
         """from torch."""
         torch.set_grad_enabled(False)
 
-        baichuan_dict = {}
+        eet_baichuan_dict = {}
         lm_head_dict = {}
         for k, v in model_dict.items():
             if 'lm_head' in k:
                 k = k[k.find('weight'):]
                 lm_head_dict[k] = v
             else:
-                baichuan_dict[k] = v
+                eet_baichuan_dict[k] = v
 
-        baichuanmodel = EETBaichuanModel.from_torch(baichuan_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
+        baichuanmodel = EETBaichuanModel.from_eet(eet_baichuan_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
                                                    max_full_seq_len=max_full_seq_len, data_type=data_type)
 
         lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
@@ -537,7 +540,7 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
         # cfg = torch_model.config
 
         model_dict = {}
-        baichuan_dict = {}
+        eet_baichuan_dict = {}
         lm_head_dict = {}
         if os.path.isfile(path_or_file):
             with open(path_or_file, "rb") as f:
@@ -553,9 +556,9 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
                 k = k[k.find('weight'):]
                 lm_head_dict[k] = v
             else:
-                baichuan_dict[k] = v
+                eet_baichuan_dict[k] = v
 
-        baichuanmodel = EETBaichuanModel.from_torch(baichuan_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
+        baichuanmodel = EETBaichuanModel.from_eet(eet_baichuan_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
                                                    max_full_seq_len=max_full_seq_len, data_type=data_type)
 
         lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
@@ -567,7 +570,7 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
 
 
 def convert_baichuan_weights(model_dict, data_type=torch.int8, model_attr="model"):
-    baichuan_dict = {}
+    eet_baichuan_dict = {}
     prefix_len = len(model_attr)
 
     if data_type == torch.int8:
@@ -579,12 +582,12 @@ def convert_baichuan_weights(model_dict, data_type=torch.int8, model_attr="model
                 if '.weight' in k and v.dim() == 2:
                     unprocessed_weights = v.transpose(0, 1).contiguous()
                     processed_weights, processed_scale = quant_and_preprocess_weights(unprocessed_weights, torch.int8, False)
-                    baichuan_dict[k] = processed_weights                
-                    baichuan_dict[k.replace('.weight', '.scale')] = processed_scale
+                    eet_baichuan_dict[k] = processed_weights                
+                    eet_baichuan_dict[k.replace('.weight', '.scale')] = processed_scale
                 else:
-                    baichuan_dict[k] = v
+                    eet_baichuan_dict[k] = v
             else:
-                baichuan_dict[k] = v
+                eet_baichuan_dict[k] = v
     else:
         for k, v in tqdm(model_dict.items(), desc="[EET][INFO] fp model weight preprocessing..."):
             k = k[prefix_len+1:] if model_attr in k else k
@@ -594,7 +597,7 @@ def convert_baichuan_weights(model_dict, data_type=torch.int8, model_attr="model
                 if '.weight' in k and v.dim() == 2:
                     v = v.transpose(0, 1).contiguous()
 
-            baichuan_dict[k] = v.to(data_type)
+            eet_baichuan_dict[k] = v.to(data_type)
 
-    return baichuan_dict
+    return eet_baichuan_dict
 
