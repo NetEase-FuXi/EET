@@ -258,12 +258,14 @@ class EETBaichuanModel():
         self.max_batch = max_batch
         self.max_prompt_len = max_prompt_len
         self.past_kv_length = 0
-        # baichuan alibi mask
-        self.n_head = config.num_attention_heads
-        self.max_cache_pos = max_full_seq_len
-        self.first_run = True
-        self.alibi_mask = None
-        self.future_mask = torch.zeros(self.n_head, self.max_cache_pos, self.max_cache_pos)
+        if self.config.num_hidden_layers == 32:     # 7b
+            self.future_mask = torch.empty(0)
+        else:
+            # baichuan alibi mask
+            self.n_head = config.num_attention_heads
+            self.max_cache_pos = max_full_seq_len
+            self.first_run = True
+            self.future_mask = torch.zeros(self.n_head, self.max_cache_pos, self.max_cache_pos)
 
     def get_alibi_mask(self, tensor, seq_length_with_past):
         if self.first_run:
@@ -303,13 +305,16 @@ class EETBaichuanModel():
 
         embedding_out = self.embedding(input_ids)   # [batch, seq, hidden_size]
 
-        # baichuan alibi mask
-        self.past_kv_length += input_shape[1]
-        alibi_mask = self.get_alibi_mask(embedding_out, self.past_kv_length)
-        if not first_pass:
-            alibi_mask = alibi_mask[:, -1:, :].contiguous()
+        if self.config.num_hidden_layers == 32:     # 7b
+            alibi_mask = torch.empty(0)
         else:
-            alibi_mask = alibi_mask.contiguous()
+            # baichuan 13b alibi mask
+            self.past_kv_length += input_shape[1]
+            alibi_mask = self.get_alibi_mask(embedding_out, self.past_kv_length)
+            if not first_pass:
+                alibi_mask = alibi_mask[:, -1:, :].contiguous()
+            else:
+                alibi_mask = alibi_mask.contiguous()
 
         decoder_out = self.decoder(
             embedding_out,
@@ -473,11 +478,9 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
             loss_fct = CrossEntropyLoss()
             shift_logits = shift_logits.view(-1, self.config.vocab_size)
             shift_labels = shift_labels.view(-1)
-            softmax_normalizer = shift_logits.max(-1).values ** 2
-            z_loss = self.config.z_loss_weight * softmax_normalizer.mean()
             # Enable model parallelism
             shift_labels = shift_labels.to(shift_logits.device)
-            loss = loss_fct(shift_logits, shift_labels) + z_loss
+            loss = loss_fct(shift_logits, shift_labels)
 
         return CausalLMOutputWithPast(
             loss=loss,
