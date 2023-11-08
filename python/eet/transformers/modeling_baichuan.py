@@ -37,7 +37,7 @@ from EET import GatedFeedForwardNetworkInt8 as eet_gated_ffn
 from EET import GatedFeedForwardNetwork as eet_gated_ffn_fp16
 from EET import BaichuanMmha as eet_baichuan_13b_attention
 from EET import LlamaMmha as eet_baichuan_7b_attention
-# from FPA_INTB import preprocess_weights as preprocess_weights
+
 from EET import preprocess_weights as preprocess_weights
 from EET import quant_weights as quant_and_preprocess_weights
 
@@ -384,7 +384,7 @@ class EETBaichuanModel():
             with open(path_or_file, "rb") as f:
                 baichuan_dict = torch.load(f, map_location=torch.device("cpu"))
         elif os.path.isdir(path_or_file):
-            ts_model = AutoModel.from_pretrained(path_or_file, trust_remote_code=True, torch_dtype=data_type)
+            ts_model = AutoModel.from_pretrained(path_or_file, trust_remote_code=True).half()
             baichuan_dict = convert_baichuan_weights(ts_model.state_dict(), data_type=data_type)
         else:
             raise ValueError("[EET][ERROR] path_or_file must be a valid path or path to model file, but get {}".format(path_or_file))
@@ -506,7 +506,6 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
     def from_torch(model_dict, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model"):
         """from torch."""
         torch.set_grad_enabled(False)
-        # cfg = torch_model.config
 
         baichuan_dict = {}
         lm_head_dict = {}
@@ -541,7 +540,7 @@ class EETBaichuanForCausalLM(GenerationMixin_EET):
             with open(path_or_file, "rb") as f:
                 model_dict = torch.load(f, map_location=torch.device("cpu"))
         elif os.path.isdir(path_or_file):
-            ts_model = AutoModelForCausalLM.from_pretrained(path_or_file, trust_remote_code=True, torch_dtype=data_type)
+            ts_model = AutoModelForCausalLM.from_pretrained(path_or_file, trust_remote_code=True).half()
             model_dict = convert_baichuan_weights(ts_model.state_dict(), data_type=data_type)
         else:
             raise ValueError("[EET][ERROR] path_or_file must be a valid path or path to model file, but get {}".format(path_or_file))
@@ -574,13 +573,13 @@ def convert_baichuan_weights(model_dict, data_type=torch.int8, model_attr="model
             if 'layers.' in k:
                 k = convert_name(k, "baichuan")
                 k = k[k.find('layer.'):]
-                if 'layernorm' in k:
-                    baichuan_dict[k] = v
-                else:
+                if '.weight' in k and v.dim() == 2:
                     unprocessed_weights = v.transpose(0, 1).contiguous()
                     processed_weights, processed_scale = quant_and_preprocess_weights(unprocessed_weights, torch.int8, False)
                     baichuan_dict[k] = processed_weights                
                     baichuan_dict[k.replace('.weight', '.scale')] = processed_scale
+                else:
+                    baichuan_dict[k] = v
             else:
                 baichuan_dict[k] = v
     else:

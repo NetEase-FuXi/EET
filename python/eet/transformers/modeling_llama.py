@@ -3,6 +3,7 @@
 #
 """EET llama model. """
 
+import os
 import math
 import time
 import copy
@@ -25,7 +26,7 @@ from transformers.modeling_outputs import (
 from transformers.generation import GenerationConfig
 from transformers.generation.logits_process import LogitsProcessor
 from transformers.generation.utils import LogitsProcessorList, StoppingCriteriaList, GenerationConfig, ModelOutput
-
+from transformers import AutoModel, AutoModelForCausalLM
 
 from eet.transformers.encoder_decoder import *
 from eet.utils.mapping import convert_name
@@ -34,8 +35,9 @@ from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from EET import MetaDesc as meta_desc
 from EET import Embedding as eet_embedding
 from EET import GatedFeedForwardNetworkInt8 as eet_gated_ffn
+from EET import GatedFeedForwardNetwork as eet_gated_ffn_fp16
 from EET import LlamaMmha as eet_masked_attention
-# from FPA_INTB import preprocess_weights as preprocess_weights
+
 from EET import preprocess_weights as preprocess_weights
 from EET import quant_weights as quant_and_preprocess_weights
 
@@ -44,52 +46,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-__all__ = ['EETLlamaSelfMaskedAttention','EETGatedFeedForward', 'EETLlamaDecoderLayer', 'EETLlamaDecoder', 'EETLlamaModel','EETLlamaForCausalLM', 'EETRewardModel']
+__all__ = ['EETLlamaSelfMaskedAttention','EETGatedFeedForward', 'EETLlamaDecoderLayer', 'EETLlamaDecoder', 'EETLlamaModel','EETLlamaForCausalLM', 'EETRewardModel', 'convert_llama_weights']
 
 class EETLlamaSelfMaskedAttention():
     def __init__(self, config, model_dict, layer_id, data_type=torch.float32, bias=True, is_int8=True):
-        self.is_int8 = is_int8
+        self.q_bias = torch.empty(0)
+        self.k_bias = torch.empty(0)
+        self.v_bias = torch.empty(0)
+        self.layernorm_bias = torch.empty(0)
+        self.out_bias = torch.empty(0)
+
         self.layernorm_weights = model_dict['layer.' + str(layer_id) + '.self_attn.layernorm.weight'].cuda().type(data_type)
-        self.layernorm_bias = model_dict['layer.' + str(layer_id) + '.self_attn.layernorm.bias'].cuda().type(data_type) if bias else torch.empty(0)
-        emb_size = self.layernorm_weights.size()[-1]
-        self.q_bias = model_dict['layer.' + str(layer_id) + '.self_attn.q_proj.bias'].cuda().type(data_type) if bias else torch.empty(0)
-        self.k_bias = model_dict['layer.' + str(layer_id) + '.self_attn.k_proj.bias'].cuda().type(data_type) if bias else torch.empty(0)
-        self.v_bias = model_dict['layer.' + str(layer_id) + '.self_attn.v_proj.bias'].cuda().type(data_type) if bias else torch.empty(0)
-        self.out_bias = model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.bias'].cuda().type(data_type) if bias else torch.empty(0)
+        self.qkv_weights = model_dict['layer.' + str(layer_id) + '.self_attn.qkv_proj.weight'].cuda()
+        self.out_weights = model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.weight'].cuda()
 
-        if self.is_int8:
-            q_weights = model_dict['layer.' + str(layer_id) + '.self_attn.q_proj.weight']
-            k_weights = model_dict['layer.' + str(layer_id) + '.self_attn.k_proj.weight']
-            v_weights = model_dict['layer.' + str(layer_id) + '.self_attn.v_proj.weight']
-            q_SCB = model_dict['layer.' + str(layer_id) + '.self_attn.q_proj.SCB'].contiguous()
-            k_SCB = model_dict['layer.' + str(layer_id) + '.self_attn.k_proj.SCB'].contiguous()
-            v_SCB = model_dict['layer.' + str(layer_id) + '.self_attn.v_proj.SCB'].contiguous()
-            unprocessed_qkv_weights = torch.cat((q_weights, k_weights, v_weights), 0).transpose(0, 1).contiguous()
-            self.qkv_weights = preprocess_weights(unprocessed_qkv_weights).cuda()
-            qkv_scale_fp32 = torch.cat((q_SCB, k_SCB, v_SCB), 0).contiguous().to(torch.float32)
-            qkv_scale_fp32 = torch.div(qkv_scale_fp32, 127.0)
-            self.qkv_scale = qkv_scale_fp32.to(data_type).cuda()
-
-            unprocessed_out_weights = torch.t(model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.weight']).contiguous()
-            self.out_weights = preprocess_weights(unprocessed_out_weights).cuda()
-            out_SCB = torch.t(model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.SCB']).contiguous()
-            out_scale_fp32 = torch.div(out_SCB.to(torch.float32), 127.0)
-            self.out_scale = out_scale_fp32.to(data_type).cuda()
-
-        else:
-            q_weights = model_dict['layer.' + str(layer_id) + '.self_attn.q_proj.weight']
-            k_weights = model_dict['layer.' + str(layer_id) + '.self_attn.k_proj.weight']
-            v_weights = model_dict['layer.' + str(layer_id) + '.self_attn.v_proj.weight']
-            unprocessed_qkv_weights = torch.cat((q_weights, k_weights, v_weights), 0).transpose(0, 1).contiguous().cpu()
-            self.qkv_weights, self.qkv_scale = quant_and_preprocess_weights(unprocessed_qkv_weights, torch.int8, False)
-            self.qkv_weights = self.qkv_weights.cuda()
-            self.qkv_scale = self.qkv_scale.half().cuda()
-
-            unprocessed_out_weights = torch.t(model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.weight']).contiguous().cpu()
-            self.out_weights, self.out_scale = quant_and_preprocess_weights(unprocessed_out_weights, torch.int8, False)
-            self.out_weights = self.out_weights.cuda()
-            self.out_scale = self.out_scale.half().cuda()
-
+        self.qkv_scale = model_dict['layer.' + str(layer_id) + '.self_attn.qkv_proj.scale'].half().cuda() if is_int8 else torch.empty(0)
+        self.out_scale = model_dict['layer.' + str(layer_id) + '.self_attn.out_proj.scale'].half().cuda() if is_int8 else torch.empty(0)
         self.attention = eet_masked_attention(config, self.qkv_weights,self.qkv_scale, self.q_bias, self.k_bias,
                                               self.v_bias, self.out_weights,self.out_scale, self.out_bias, self.layernorm_weights, self.layernorm_bias)
 
@@ -129,49 +101,26 @@ class EETLlamaSelfMaskedAttention():
 class EETGatedFeedForward():
     def __init__(self, config, model_dict, layer_id, data_type=torch.float32, bias=False, name="out_cache", is_int8=False):
         self.is_int8 = is_int8
+        self.intermediate_0_bias = torch.empty(0)
+        self.intermediate_1_bias = torch.empty(0)
+        self.output_bias = torch.empty(0)
+        self.layernorm_bias = torch.empty(0)
+
+        self.intermediate_0_weights = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_0.weight'].cuda()
+        self.intermediate_0_scale = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_0.scale'].half().cuda() if is_int8 else torch.empty(0)
+        self.intermediate_1_weights = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_1.weight'].cuda()
+        self.intermediate_1_scale = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_1.scale'].half().cuda() if is_int8 else torch.empty(0)
+        self.output_weights = model_dict['layer.' + str(layer_id) + '.ffn.output.weight'].cuda()
+        self.output_scale = model_dict['layer.' + str(layer_id) + '.ffn.output.scale'].half().cuda() if is_int8 else torch.empty(0)
+
+        self.layernorm_weights = model_dict['layer.' + str(layer_id) + '.ffn.layernorm.weight'].cuda().type(data_type)
 
         if self.is_int8:
-            unprocessed_intermediate_0_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.intermediate_0.weight']).contiguous()
-            self.intermediate_0_weights = preprocess_weights(unprocessed_intermediate_0_weights).cuda()
-            intermediate_0_SCB = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_0.SCB'].contiguous()
-            intermediate_0_scale_fp32 = torch.div(intermediate_0_SCB.to(torch.float32), 127.0)
-            self.intermediate_0_scale = intermediate_0_scale_fp32.to(data_type).cuda()
-
-            unprocessed_intermediate_1_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.intermediate_1.weight']).contiguous()
-            self.intermediate_1_weights = preprocess_weights(unprocessed_intermediate_1_weights).cuda()
-            intermediate_1_SCB = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_1.SCB'].contiguous()
-            intermediate_1_scale_fp32 = torch.div(intermediate_1_SCB.to(torch.float32), 127.0)
-            self.intermediate_1_scale = intermediate_1_scale_fp32.to(data_type).cuda()
-        
-            unprocessed_output_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.output.weight']).contiguous()
-            self.output_weights = preprocess_weights(unprocessed_output_weights).cuda()
-            output_SCB = model_dict['layer.' + str(layer_id) + '.ffn.output.SCB'].contiguous().to(torch.float32)
-            output_scale_fp32 = torch.div(output_SCB.to(torch.float32), 127.0)
-            self.output_scale = output_scale_fp32.to(data_type).cuda()
+            self.ffn = eet_gated_ffn(config, self.intermediate_0_weights, self.intermediate_0_scale, self.intermediate_0_bias, self.intermediate_1_weights,
+                                    self.intermediate_1_scale, self.intermediate_1_bias, self.output_weights, self.output_scale, self.output_bias, self.layernorm_weights, self.layernorm_bias, name)
         else:
-            unprocessed_intermediate_0_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.intermediate_0.weight']).contiguous().cpu()
-            self.intermediate_0_weights, self.intermediate_0_scale = quant_and_preprocess_weights(unprocessed_intermediate_0_weights, torch.int8, False)
-            self.intermediate_0_weights = self.intermediate_0_weights.cuda()
-            self.intermediate_0_scale = self.intermediate_0_scale.half().cuda()
-
-            unprocessed_intermediate_1_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.intermediate_1.weight']).contiguous().cpu()
-            self.intermediate_1_weights, self.intermediate_1_scale = quant_and_preprocess_weights(unprocessed_intermediate_1_weights, torch.int8, False)
-            self.intermediate_1_weights = self.intermediate_1_weights.cuda()
-            self.intermediate_1_scale = self.intermediate_1_scale.half().cuda()
-
-            unprocessed_output_weights = torch.t(model_dict['layer.' + str(layer_id) + '.ffn.output.weight']).contiguous().cpu()
-            self.output_weights, self.output_scale = quant_and_preprocess_weights(unprocessed_output_weights, torch.int8, False)
-            self.output_weights = self.output_weights.cuda()
-            self.output_scale = self.output_scale.half().cuda()
-
-        self.intermediate_0_bias = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_0.bias'].cuda().type(data_type) if bias else torch.empty(0)
-        self.intermediate_1_bias = model_dict['layer.' + str(layer_id) + '.ffn.intermediate_1.bias'].cuda().type(data_type) if bias else torch.empty(0)
-        self.output_bias = model_dict['layer.' + str(layer_id) + '.ffn.output.bias'].cuda().type(data_type) if bias else torch.empty(0)
-        self.layernorm_weights = model_dict['layer.' + str(layer_id) + '.ffn.layernorm.weight'].cuda().type(data_type)
-        self.layernorm_bias = model_dict['layer.' + str(layer_id) + '.ffn.layernorm.bias'].cuda().type(data_type) if bias else torch.empty(0)
-
-        self.ffn = eet_gated_ffn(config, self.intermediate_0_weights, self.intermediate_0_scale, self.intermediate_0_bias, self.intermediate_1_weights,
-                                 self.intermediate_1_scale, self.intermediate_1_bias, self.output_weights, self.output_scale, self.output_bias, self.layernorm_weights, self.layernorm_bias, name)
+            self.ffn = eet_gated_ffn_fp16(config, self.intermediate_0_weights, self.intermediate_0_bias, self.intermediate_1_weights, self.intermediate_1_bias, self.output_weights, self.output_bias,
+                                          self.layernorm_weights, self.layernorm_bias, name)
 
     def __call__(
         self,
@@ -230,14 +179,12 @@ class EETLlamaDecoderLayer():
             add_residual=add_residual,
             first_pass=first_pass
         )
-        # print("eet self_attn_out: ", self_attn_out.shape, self_attn_out)
 
         out = self.feedforward(
             self_attn_out,
             pre_layernorm=normalize_before,
             add_residual=add_residual
         )
-        # print("eet ffn out: ", out, out.shape)
         return out
     
     def update(self, model_dict, layer_id, data_type=torch.float32):
@@ -277,21 +224,21 @@ class EETLlamaDecoder():
                 normalize_before=normalize_before,
                 add_residual=True
             )
-            # print(hidden_states[0][0][:100])
+
         return hidden_states
     
     def update(self, layer_model_dict, layer_num, data_type=torch.float32):
         for i in tqdm(range(layer_num), desc="[EET][INFO] model weight updating..."):
-            self.layers[i].update(layer_model_dict['layer.' + str(i)], i, data_type=data_type)
+            self.layers[i].update(layer_model_dict[str(i)], i, data_type=data_type)
 
     @staticmethod
     def from_torch(config, layer_model_dict, layer_num, data_type=torch.float32, bias=True, is_int8=True):
         """from torch."""
         DecoderLayers = []
-        for i in tqdm(range(layer_num), desc="[EET][INFO] model weight preprocessing..."):
+        for i in tqdm(range(layer_num), desc="[EET][INFO] loading weight..."):
             DecoderLayers.extend(
                 [
-                    EETLlamaDecoderLayer.from_torch(config, layer_model_dict['layer.' + str(i)], i, data_type=data_type, bias=bias, is_int8=is_int8)
+                    EETLlamaDecoderLayer.from_torch(config, layer_model_dict[str(i)], i, data_type=data_type, bias=bias, is_int8=is_int8)
                 ]
             )
 
@@ -347,7 +294,6 @@ class EETLlamaModel():
         )
 
         decoder_out = self.layer_norm(decoder_out)
-        # print("eet output: ", decoder_out)
         return decoder_out
 
     def update(self, torch_model, data_type=torch.float16, model_attr="model"):
@@ -372,97 +318,41 @@ class EETLlamaModel():
                 layernorm_dict[k] = v
 
         from itertools import groupby
-
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
-                                                           lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
+        decoder_list = sorted(decoder_dict.items(), key=lambda item: int(item[0].split('.')[1]))
+        layer_model_dict = {k: dict(v) for k, v in groupby(decoder_list, lambda item: item[0].split('.')[1])}
         
         self.embedding.load_state_dict(embedding_dict)
         self.decoder.update(layer_model_dict, cfg.num_hidden_layers, data_type)
         self.layer_norm.update(layernorm_dict, data_type)
 
     @staticmethod
-    def from_torch(torch_model, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model", is_int8=False):
-        """from torch."""
-        torch.set_grad_enabled(False)
-        model_dict = {}
-        embedding_dict = {}
-        layernorm_dict = {}
-
-        cfg = torch_model.config
-        base_model = getattr(torch_model, model_attr) if model_attr is not None else torch_model
-
-        for k, v in base_model.state_dict().items():
-            if 'embed_tokens.' in k:
-                embedding_dict[k] = v
-            if 'layers.' in k:
-                k = convert_name(k, "llama")
-                k = k[k.find('layer.'):]
-                model_dict[k] = v
-            if 'norm.' in k:
-                k = k[k.find('norm.'):]
-                layernorm_dict[k] = v
-
-        from itertools import groupby
-
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(model_dict.items()),
-                                                           lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
-
-        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
-        batch_size = max_batch
-        activation_fn = cfg.hidden_act
-        # activation_fn = "gelu"
-        meta_des = meta_desc(dtype=data_type,
-                             batch_size=batch_size,
-                             head_num=cfg.num_attention_heads,
-                             hidden_units=cfg.hidden_size,
-                             layer_num=cfg.num_hidden_layers,
-                             max_seq_len=max_prompt_seq_len,
-                             max_full_seq_len=max_full_seq_len,
-                             activation_fn=activation_fn,
-                             d_ff=cfg.intermediate_size,
-                             cuda_device=device,
-                             layernorm_eps=cfg.rms_norm_eps)
-        # torch_model.to(data_type)
-        
-        embedding = getattr(torch_model, model_attr).embed_tokens.cuda()
-        decoder = EETLlamaDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, bias=False, is_int8=is_int8)
-        layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['norm.weight'], None, data_type)
-        # layer_norm = getattr(torch_model, model_attr).norm.cuda()
-        eet_model = EETLlamaModel(cfg, decoder, layer_norm, embedding=embedding, max_batch=max_batch, max_prompt_len=max_prompt_seq_len)
-        return eet_model
-
-
-    @staticmethod
-    def from_pretrained(cfg, llama_dict, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model", is_int8=False):
+    def from_torch(llama_dict, cfg, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float16, device_id=0):
         """from torch."""
         torch.set_grad_enabled(False)
         embedding_dict = {}
         layernorm_dict = {}
         decoder_dict = {}
-        prefix_len = len(model_attr)
+        is_int8 = True if data_type == torch.int8 else False
+        data_type = torch.float16 if data_type == torch.int8 else data_type
 
         for k, v in llama_dict.items():
-            k = k[prefix_len+1:]
             if 'embed_tokens.' in k:
                 k = k[k.find('weight'):]
                 embedding_dict[k] = v
-            if 'layers.' in k:
-                k = convert_name(k, "llama")
-                k = k[k.find('layer.'):]
+            if 'layer.' in k:
                 decoder_dict[k] = v
             if 'norm.' in k:
                 k = k[k.find('norm.'):]
                 layernorm_dict[k] = v
 
         from itertools import groupby
-
-        layer_model_dict = {k: dict(v) for k, v in groupby(list(decoder_dict.items()),
-                                                           lambda item: item[0][:(item[0].index('.', item[0].index('.')+1))])}
+        decoder_list = sorted(decoder_dict.items(), key=lambda item: int(item[0].split('.')[1]))
+        layer_model_dict = {k: dict(v) for k, v in groupby(decoder_list, lambda item: item[0].split('.')[1])}
 
         device = "cpu" if device_id < 0 else f"cuda:{device_id}"
         batch_size = max_batch
         activation_fn = cfg.hidden_act
-        # activation_fn = "gelu"
+
         meta_des = meta_desc(dtype=data_type,
                              batch_size=batch_size,
                              head_num=cfg.num_attention_heads,
@@ -473,16 +363,74 @@ class EETLlamaModel():
                              activation_fn=activation_fn,
                              d_ff=cfg.intermediate_size,
                              cuda_device=device,
-                             layernorm_eps=cfg.rms_norm_eps)
-        # torch_model.to(data_type)
+                             layernorm_eps=cfg.rms_norm_eps,
+                             is_int8=is_int8)
         
         embedding = nn.Embedding(cfg.vocab_size, cfg.hidden_size, cfg.pad_token_id)
         embedding.load_state_dict(embedding_dict)
         embedding = embedding.half().cuda()
-        decoder = EETLlamaDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, bias=False, is_int8=is_int8)
+        decoder = EETLlamaDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
         layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['norm.weight'], None, data_type)
 
-        eet_model = EETLlamaModel(cfg, decoder, layer_norm, embedding=embedding, max_batch=max_batch, max_prompt_len=max_prompt_seq_len)
+        eet_model = EETLlamaModel(cfg, decoder, layer_norm=layer_norm, embedding=embedding, max_batch=max_batch, max_prompt_len=max_prompt_seq_len)
+        return eet_model
+
+
+    @staticmethod
+    def from_pretrained(path_or_file, cfg, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, is_int8=False):
+        """from pretrained."""
+        torch.set_grad_enabled(False)
+        llama_dict = {}
+        if os.path.isfile(path_or_file):
+            with open(path_or_file, "rb") as f:
+                llama_dict = torch.load(f, map_location=torch.device("cpu"))
+        elif os.path.isdir(path_or_file):
+            ts_model = AutoModel.from_pretrained(path_or_file, trust_remote_code=True).half()
+            llama_dict = convert_llama_weights(ts_model.state_dict(), data_type=data_type)
+        else:
+            raise ValueError("[EET][ERROR] path_or_file must be a valid path or path to model file, but get {}".format(path_or_file))
+
+        is_int8 = True if data_type == torch.int8 else False
+        data_type = torch.float16 if data_type == torch.int8 else data_type
+
+        for k, v in llama_dict.items():
+            if 'embed_tokens.' in k:
+                k = k[k.find('weight'):]
+                embedding_dict[k] = v
+            if 'layer.' in k:
+                decoder_dict[k] = v
+            if 'norm.' in k:
+                k = k[k.find('norm.'):]
+                layernorm_dict[k] = v
+
+        from itertools import groupby
+        decoder_list = sorted(decoder_dict.items(), key=lambda item: int(item[0].split('.')[1]))
+        layer_model_dict = {k: dict(v) for k, v in groupby(decoder_list, lambda item: item[0].split('.')[1])}
+
+        device = "cpu" if device_id < 0 else f"cuda:{device_id}"
+        batch_size = max_batch
+        activation_fn = cfg.hidden_act
+
+        meta_des = meta_desc(dtype=data_type,
+                             batch_size=batch_size,
+                             head_num=cfg.num_attention_heads,
+                             hidden_units=cfg.hidden_size,
+                             layer_num=cfg.num_hidden_layers,
+                             max_seq_len=max_prompt_seq_len,
+                             max_full_seq_len=max_full_seq_len,
+                             activation_fn=activation_fn,
+                             d_ff=cfg.intermediate_size,
+                             cuda_device=device,
+                             layernorm_eps=cfg.rms_norm_eps,
+                             is_int8=is_int8)
+        
+        embedding = nn.Embedding(cfg.vocab_size, cfg.hidden_size, cfg.pad_token_id)
+        embedding.load_state_dict(embedding_dict)
+        embedding = embedding.half().cuda()
+        decoder = EETLlamaDecoder.from_torch(meta_des, layer_model_dict, layer_num=cfg.num_hidden_layers, data_type=data_type, is_int8=is_int8)
+        layer_norm = EETLayerNorm.from_torch(meta_des, layernorm_dict['norm.weight'], None, data_type)
+
+        eet_model = EETLlamaModel(cfg, decoder, layer_norm=layer_norm, embedding=embedding, max_batch=max_batch, max_prompt_len=max_prompt_seq_len)
         return eet_model
 
 
@@ -570,21 +518,30 @@ class EETLlamaForCausalLM(GenerationMixin_EET):
         self.model.update(torch_model, data_type=data_type, model_attr=model_attr)
 
     @staticmethod
-    def from_torch(torch_model, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model", is_int8=False):
+    def from_torch(model_dict, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32):
         """from torch."""
         torch.set_grad_enabled(False)
-        cfg = torch_model.config
-        llamamodel = EETLlamaModel.from_torch(torch_model, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
-                                                max_full_seq_len=max_full_seq_len, data_type=data_type, model_attr=model_attr, is_int8=is_int8)
 
-        # torch_model.to(data_type)
-        lm_head = torch_model.lm_head.half().cuda()
-        eet_model = EETLlamaForCausalLM(cfg, llamamodel, lm_head)
+        llama_dict = {}
+        lm_head_dict = {}
+        for k, v in model_dict.items():
+            if 'lm_head' in k:
+                k = k[k.find('weight'):]
+                lm_head_dict[k] = v
+            else:
+                llama_dict[k] = v
+
+        llamamodel = EETLlamaModel.from_torch(llama_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
+                                              max_full_seq_len=max_full_seq_len, data_type=data_type)
+        lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        lm_head.load_state_dict(lm_head_dict)
+        lm_head = lm_head.half().cuda()
+        eet_model = EETLlamaForCausalLM(config, llamamodel, lm_head)
 
         return eet_model
 
     @staticmethod
-    def from_pretrained(model_path, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32, device_id=0, model_attr="model", is_int8=True):
+    def from_pretrained(path_or_file, config, max_batch, max_prompt_seq_len, max_full_seq_len, data_type=torch.float32):
         """from pretrained."""
         torch.set_grad_enabled(False)
         # cfg = torch_model.config
@@ -592,9 +549,14 @@ class EETLlamaForCausalLM(GenerationMixin_EET):
         model_dict = {}
         llama_dict = {}
         lm_head_dict = {}
-
-        with open(model_path, "rb") as f:
-            model_dict = torch.load(f, map_location=torch.device("cpu"))
+        if os.path.isfile(path_or_file):
+            with open(path_or_file, "rb") as f:
+                model_dict = torch.load(f, map_location=torch.device("cpu"))
+        elif os.path.isdir(path_or_file):
+            ts_model = AutoModelForCausalLM.from_pretrained(path_or_file, trust_remote_code=True).half()
+            model_dict = convert_llama_weights(ts_model.state_dict(), data_type=data_type)
+        else:
+            raise ValueError("[EET][ERROR] path_or_file must be a valid path or path to model file, but get {}".format(path_or_file))
 
         for k, v in model_dict.items():
             if 'lm_head' in k:
@@ -603,10 +565,8 @@ class EETLlamaForCausalLM(GenerationMixin_EET):
             else:
                 llama_dict[k] = v
 
-        llamamodel = EETLlamaModel.from_pretrained(config, llama_dict, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
-                                                   max_full_seq_len=max_full_seq_len, data_type=data_type, model_attr=model_attr, is_int8=is_int8)
-
-        # torch_model.to(data_type)
+        llamamodel = EETLlamaModel.from_torch(llama_dict, config, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
+                                              max_full_seq_len=max_full_seq_len, data_type=data_type)
         lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         lm_head.load_state_dict(lm_head_dict)
         lm_head = lm_head.half().cuda()
@@ -755,7 +715,8 @@ class EETRewardModel():
         """from torch."""
         torch.set_grad_enabled(False)
         config = torch_model.config
-        llamamodel = EETLlamaModel.from_torch(torch_model, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
+        model_dict = convert_llama_weights(torch_model.state_dict(), data_type=data_type)
+        llamamodel = EETLlamaModel.from_torch(model_dict, max_batch=max_batch, max_prompt_seq_len=max_prompt_seq_len,
                                               max_full_seq_len=max_full_seq_len, data_type=data_type, model_attr=model_attr, is_int8=is_int8)
 
         # torch_model.to(data_type)
@@ -769,3 +730,52 @@ class EETRewardModel():
         torch.set_grad_enabled(False)
         self.v_head.load_state_dict(torch_model.v_head.state_dict())
         self.rwtranrsformer.update(torch_model, data_type=data_type, model_attr=model_attr)
+
+
+def convert_llama_weights(model_dict, data_type=torch.int8, model_attr="model"):
+    prefix_len = len(model_attr)
+    llama_dict = {}
+    qkv_dict = {}
+    keys_to_remove = [key for key in model_dict.keys() if 'q_proj' in key or 'k_proj' in key or 'v_proj' in key]
+
+    for k, v in model_dict.items():
+        if 'layers.' in k:
+            k = k[k.find('layers.'):]
+            layer_id = k.split('.')[1]
+            if 'q_proj' in k or 'k_proj' in k or 'v_proj' in k:
+                qkv_dict.setdefault(layer_id, []).append(v)
+    
+    for layer_id, qkv_values in qkv_dict.items():
+        model_dict[f'layers.{layer_id}.self_attn.qkv_proj.weight'] = torch.cat(qkv_values, dim=0)
+
+    for key in keys_to_remove:
+        del model_dict[key]
+
+    if data_type == torch.int8:
+        for k, v in tqdm(model_dict.items(), desc="[EET][INFO] int8 model weight quantification and preprocessing..."):
+            k = k[prefix_len+1:] if model_attr in k else k
+            if 'layers.' in k:
+                k = convert_name(k, "llama")
+                k = k[k.find('layer.'):]
+                if '.weight' in k and v.dim() == 2:
+                    unprocessed_weights = v.transpose(0, 1).contiguous()
+                    processed_weights, processed_scale = quant_and_preprocess_weights(unprocessed_weights, torch.int8, False)
+                    llama_dict[k] = processed_weights                
+                    llama_dict[k.replace('.weight', '.scale')] = processed_scale
+                else:
+                    llama_dict[k] = v
+            else:
+                llama_dict[k] = v
+    else:
+        for k, v in tqdm(model_dict.items(), desc="[EET][INFO] fp model weight preprocessing..."):
+            k = k[prefix_len+1:] if model_attr in k else k
+            if 'layers.' in k:
+                k = convert_name(k, "llama")
+                k = k[k.find('layer.'):]
+                if '.weight' in k and v.dim() == 2:
+                    v = v.transpose(0, 1).contiguous()
+
+            llama_dict[k] = v.to(data_type)
+
+    return llama_dict
+

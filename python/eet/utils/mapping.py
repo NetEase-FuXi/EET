@@ -279,6 +279,7 @@ transformers_llama_mapping = {
             "self_attn": {
                 "__name__":"self_attn",
                 "rotary_emb.inv_freq": {"__name__":"rotary_emb.inv_freq"},
+                "qkv_proj": {"__name__":"qkv_proj"},
                 "q_proj": {"__name__":"q_proj"},
                 "k_proj": {"__name__":"k_proj"},
                 "v_proj": {"__name__":"v_proj"},
