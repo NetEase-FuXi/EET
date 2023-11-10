@@ -10,7 +10,7 @@ from eet import EETLlamaModel, EETLlamaForCausalLM
 from transformers import AutoTokenizer, LlamaModel, LlamaForSequenceClassification, LlamaForCausalLM, LlamaTokenizer,AutoConfig,AutoModelForCausalLM
 
 # model_dir = "decapoda-research/llama-7b-hf"
-model_dir = "/root/download/llama-13b"
+model_dir = "/root/download/llama-7b"
 
 def set_random_seed(seed):
     random.seed(seed)
@@ -47,34 +47,16 @@ def test():
 
 def test_eet():
     print("*************")
-    model_dir = "/root/download/llama-13b"
+    model_dir = "/root/download/llama-7b"
     tokenizer = LlamaTokenizer.from_pretrained(model_dir)
     config = AutoConfig.from_pretrained(model_dir)
     prompt = "你好，介绍一下你自己?"
     inputs = tokenizer(prompt, return_tensors="pt")
     input_ids = inputs["input_ids"].cuda()
-    model_dict = {}
-    llama_dict = {}
-    lm_head_dict = {}
     
-    model_dict = LlamaForCausalLM.from_pretrained(model_dir).state_dict()
+    eet_model = EETLlamaForCausalLM.from_pretrained(model_dir, config, max_batch=1, max_prompt_seq_len=1024,
+                                                     max_full_seq_len=2048, data_type=torch.float16)
 
-    for k, v in model_dict.items():
-        if 'lm_head' in k:
-            k = k[k.find('weight'):]
-            lm_head_dict[k] = v
-        else:
-            llama_dict[k] = v
-
-    llamamodel = EETLlamaModel.from_pretrained(config, llama_dict, max_batch=1, max_prompt_seq_len=1024,
-                                                max_full_seq_len=2048, data_type=torch.float16, model_attr='model', is_int8=False)
-
-    # torch_model.to(data_type)
-    import torch.nn as nn
-    lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-    lm_head.load_state_dict(lm_head_dict)
-    lm_head = lm_head.half().cuda()
-    eet_model = EETLlamaForCausalLM(config, llamamodel, lm_head)
     # Generate
     generate_ids = eet_model.generate(input_ids, max_length=128)
     outputs = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
