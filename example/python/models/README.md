@@ -50,4 +50,4 @@ test on WikiText-v2 test dataset
 | --- | :---: | :---: |
 | baichuan-7b | torch(fp16) | 6.030 |
 | baichuan-7b | eet(fp16) | 6.036 |
-| baichuan-7b | eet(int8) | 6.642 |
+| baichuan-7b | eet(int8) | 6.042 |
