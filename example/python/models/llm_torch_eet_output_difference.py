@@ -6,10 +6,10 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from torch.nn.parameter import Parameter
-from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM, T5Model, T5Tokenizer
+from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM, T5Model, T5Tokenizer, BertModel
 from datasets import load_dataset
 from eet.transformers.modeling_baichuan import convert_baichuan_weights
-from eet import EETLlamaModel, EETLlamaForCausalLM, EETBaichuanModel, EETBaichuanForCausalLM
+from eet import EETLlamaModel, EETLlamaForCausalLM, EETBaichuanModel, EETBaichuanForCausalLM, EETBertModel, EETT5Model
 from eet.transformers.modeling_t5 import EETT5Model
 
 import matplotlib.pyplot as plt
@@ -96,15 +96,73 @@ def test_baichuan_output():
     plt.savefig('./baichuan_output.png')
     print('save baichuan_output.png')
 
+def test_bert_output():
+    torch.set_grad_enabled(False)
+    set_random_seed(1)
+    torch.set_printoptions(precision=6, sci_mode=False)
+    seq_len = 512
+    batch_size = 2
+
+    tokenizer = AutoTokenizer.from_pretrained("/root/download/bert-base-uncased/", use_fast=False, trust_remote_code=True)
+    input_full = np.random.randint(1000, 9000, seq_len * batch_size, dtype='int64')
+    input_inc = np.random.randint(1000, 9000, 1 * batch_size, dtype='int64')
+
+    input_full_decoder = torch.from_numpy(input_full).long().reshape(batch_size, seq_len).cuda()
+    input_inc_decoder = torch.from_numpy(input_inc).long().reshape(batch_size, 1).cuda()
+
+    attention_mask = None
+
+    # load transformers model
+    ts_model = BertModel.from_pretrained("/root/download/bert-base-uncased/").cuda()
+    ts_model = ts_model.half()
+    
+    torch.cuda.synchronize()
+    input_ids = input_full_decoder
+    past_key_values = None
+    encoder_outputs = None
+    with torch.no_grad():
+        res_ts = ts_model(input_ids=input_ids, attention_mask=attention_mask)
+        print("ts full output: ", res_ts.last_hidden_state.shape, res_ts.last_hidden_state.reshape(-1)[:32])
+        
+    res_ts_last = res_ts.last_hidden_state[:, -1:, :].reshape(-1)[::32]
+    
+    # load eet model
+    max_seq_len = 1024
+    eet_model = EETBertModel.from_pretrained("/root/download/bert-base-uncased/", max_batch=batch_size, data_type=torch.float16)
+    with torch.no_grad():
+        res_eet = eet_model(input_ids=input_ids, attention_mask=attention_mask)
+        print("eet full output: ", res_eet[0].shape, res_eet[0].reshape(-1)[:32])
+    res_eet_last = res_eet[0][:, -1:, :].reshape(-1)[::32]
+
+    res_ts_last = res_ts_last.cpu().numpy()
+    res_eet_last = res_eet_last.cpu().numpy()
+
+    print(f"abs diff: {np.mean(np.abs(res_ts_last - res_eet_last)):.3f} +- {np.std(np.abs(res_ts_last - res_eet_last)):.3f}")
+    print(f"percent diff: {np.mean(np.abs(res_ts_last - res_eet_last) / np.abs(res_ts_last) * 100):.3f}% +- {np.std(np.abs(res_ts_last - res_eet_last) / np.abs(res_ts_last) * 100):.3f}")
+    print(f"abs square error: {np.mean(np.abs(res_ts_last - res_eet_last)**2):.3f} +- {np.std(np.abs(res_ts_last - res_eet_last)**2):.3f}")
+
+    # 画图
+    plt.figure(0, dpi=300)
+    x = np.arange(len(res_ts_last))
+    plt.scatter(x, res_ts_last, label="ts", alpha=0.7)
+    plt.scatter(x, res_eet_last, label="eet", alpha=0.7)
+    plt.xlabel("index")
+    plt.ylabel("value")
+    plt.legend()
+    plt.savefig('./bert_output.png')
+    print('save bert_output.png')
+
 
 def test_T5_output():
     torch.set_grad_enabled(False)
     set_random_seed(1)
     torch.set_printoptions(precision=6, sci_mode=False)
     seq_len = 512
-    batch_size = 4
+    batch_size = 1
 
-    tokenizer = AutoTokenizer.from_pretrained("/root/download/flan-t5-small/", use_fast=False, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained("/root/download/t5-small", use_fast=False, trust_remote_code=True)
+    config = AutoConfig.from_pretrained("/root/download/t5-small", use_fast=False, trust_remote_code=True)
+
     input_full = np.random.randint(1000, 9000, seq_len * batch_size, dtype='int64')
     input_inc = np.random.randint(1000, 9000, 1 * batch_size, dtype='int64')
 
@@ -120,7 +178,7 @@ def test_T5_output():
         encoder_seq_len = encoder_seq_len - pre_padding_len
 
     # load transformers model
-    ts_model = T5Model.from_pretrained("/root/download/flan-t5-small/").cuda()
+    ts_model = T5Model.from_pretrained("/root/download/t5-small", config=config).cuda()
     ts_model = ts_model.half()
     
     torch.cuda.synchronize()
@@ -130,19 +188,29 @@ def test_T5_output():
     with torch.no_grad():
         res_ts = ts_model(input_ids=input_ids, decoder_input_ids=input_ids, past_key_values=past_key_values, attention_mask=attention_mask, encoder_outputs=encoder_outputs)
         past_key_values = res_ts.past_key_values
-        input_ids = input_inc_decoder
         encoder_outputs = (res_ts.encoder_last_hidden_state, )
         print("ts full output: ", res_ts.last_hidden_state.reshape(-1)[:32])
+        print('=================================\n')
+        res_ts = ts_model(input_ids=input_inc_decoder, decoder_input_ids=input_inc_decoder, past_key_values=past_key_values, attention_mask=attention_mask, encoder_outputs=encoder_outputs)
+        print("ts inc output: ", res_ts.last_hidden_state.reshape(-1)[:32])
+
     res_ts_last = res_ts.last_hidden_state[:, -1:, :].reshape(-1)[::32]
     
     # load eet model
+    input_ids = input_full_decoder
     max_seq_len = 1024
-    eet_model = EETT5Model.from_pretrained("/root/download/flan-t5-small/", batch_size, max_prompt_seq_len=seq_len, max_full_seq_len=max_seq_len, data_type=torch.float16)
+    eet_model = EETT5Model.from_pretrained("/root/download/t5-small", batch_size, max_prompt_seq_len=seq_len, max_full_seq_len=max_seq_len, data_type=torch.float16)
     with torch.no_grad():
         self_past_key_values_length = 0
         first_pass = True
         res_eet = eet_model(input_ids=input_ids, decoder_input_ids=input_ids, attention_mask=attention_mask, encoder_seq_length=encoder_seq_len, first_pass=first_pass, self_past_key_values_length=self_past_key_values_length)
         print("eet full output: ", res_eet.reshape(-1)[:32])
+        print('=================================\n')
+        first_pass = False
+        self_past_key_values_length = seq_len
+        res_eet = eet_model(input_ids=input_inc_decoder, decoder_input_ids=input_inc_decoder, attention_mask=attention_mask, encoder_seq_length=encoder_seq_len, first_pass=first_pass, self_past_key_values_length=self_past_key_values_length)
+        print("eet inc output: ", res_eet.reshape(-1)[:32])
+
     res_eet_last = res_eet[:, -1:, :].reshape(-1)[::32]
 
     res_ts_last = res_ts_last.cpu().numpy()
@@ -162,7 +230,6 @@ def test_T5_output():
     plt.legend()
     plt.savefig('./t5_output.png')
     print('save t5_output.png')
-
 
 def ppl_eval(tokenizer, model):
     seq_len = 2048
@@ -236,9 +303,9 @@ def test_eet_ppl():
 if __name__ == '__main__':
     # set_random_seed(1)
     # test_llama_output()
-
     # test_baichuan_output()
     # test_T5_output()
+    test_bert_output()
 
     # 计算PPL
-    test_eet_ppl()
+    # test_eet_ppl()

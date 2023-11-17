@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import random
 from torch.nn.parameter import Parameter
 from transformers import T5Model, T5Tokenizer
 from eet.transformers.modeling_t5 import EETT5Model
@@ -9,15 +10,24 @@ import time
 
 using_half = True
 batch_size = 4
-seq_len = 512
-max_seq_len = 1024
-loop = 10
+seq_len = 32
+max_seq_len = 40
+loop = 1
 device = "cuda" if torch.cuda.is_available() else "cpu"
+model_dir = "/root/download/t5-small/"
+
+def set_random_seed(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
 
 
 def main():
-    torch.set_printoptions(precision=3, sci_mode=False)
+    torch.set_printoptions(precision=6, sci_mode=False)
     torch.set_grad_enabled(False)
+    set_random_seed(1)
     # 输入数据构造，实际业务输入应该是tokens
     # tokenizer = T5Tokenizer.from_pretrained("t5-small")
     # inputs = tokenizer("Hello, my dog is cute", return_tensors="pt")
@@ -38,8 +48,9 @@ def main():
         encoder_seq_len = encoder_seq_len - pre_padding_len
 
     # load transformers model
-    ts_model = T5Model.from_pretrained('t5-small').cuda()
+    ts_model = T5Model.from_pretrained(model_dir).cuda()
     ts_model = ts_model.half() if using_half else ts_model
+    print(ts_model.config)
     # warm up
     for i in range(loop):
         res_ts = ts_model(input_ids=input_full_decoder, decoder_input_ids=input_full_decoder)
@@ -61,7 +72,7 @@ def main():
     time_ts = t4 - t3
 
     # load eet model
-    eet_model = EETT5Model.from_pretrained('t5-small', batch_size, max_prompt_seq_len=seq_len, max_full_seq_len=max_seq_len, data_type=data_type)
+    eet_model = EETT5Model.from_pretrained(model_dir, batch_size, max_prompt_seq_len=seq_len, max_full_seq_len=max_seq_len, data_type=data_type)
     '''
     first_pass 用于判断生成任务时是否是第一步，也就是是否是在做提示词的推理。true代表在做提示词的推理，false代表在做生成推理
     由于eet不会返回past_key_value，前一步的信息全部在内部做了保存，所以没法通过past_key_value做判断，故增加此参数。
