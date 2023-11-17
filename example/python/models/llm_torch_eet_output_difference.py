@@ -25,6 +25,7 @@ def set_random_seed(seed):
     np.random.seed(seed)
 
 def test_llama_output():
+    model_dir = "/root/download/llama-7b"
     torch.set_grad_enabled(False)
     set_random_seed(1)
     torch.set_printoptions(precision=6, sci_mode=False)
@@ -42,12 +43,35 @@ def test_llama_output():
         res_ts = ts_model(input_ids=input_ids, past_key_values=None, attention_mask=None, use_cache=True)
         print("ts full output: ", res_ts.last_hidden_state.reshape(-1)[:32])
 
-    eet_model = EETLlamaForCausalLM.from_pretrained(config, config, max_batch=1, max_prompt_seq_len=1024,
-                                                     max_full_seq_len=2048, data_type=torch.float16, model_attr='model', is_int8=False)
+    res_ts_last = res_ts.last_hidden_state.reshape(-1)[:32].cpu().numpy()
+    ts_model = ts_model.cpu()
+    del ts_model
+    del ts_lm_model
+
+    eet_model = EETLlamaForCausalLM.from_pretrained(model_dir, config, max_batch=1, max_prompt_seq_len=1024,
+                                                    max_full_seq_len=2048, data_type=torch.int8)
     # generate
     with torch.no_grad():
         res_eet = eet_model(input_ids=input_ids, past_key_values=None, attention_mask=None)
-        print("eet full output: ", res_eet.reshape(-1)[:32])
+        print("eet full output: ", res_eet.logits[:, -1:, :].reshape(-1)[:32])
+    
+    res_eet_last = res_eet.logits[:, -1:, :].reshape(-1)[:32].cpu().numpy()
+    
+    print(f"abs diff: {np.mean(np.abs(res_ts_last - res_eet_last)):.3f} +- {np.std(np.abs(res_ts_last - res_eet_last)):.3f}")
+    print(f"percent diff: {np.mean(np.abs(res_ts_last - res_eet_last) / np.abs(res_ts_last) * 100):.3f}% +- {np.std(np.abs(res_ts_last - res_eet_last) / np.abs(res_ts_last) * 100):.3f}")
+    print(f"abs square error: {np.mean(np.abs(res_ts_last - res_eet_last)**2):.3f} +- {np.std(np.abs(res_ts_last - res_eet_last)**2):.3f}")
+
+    # 画图
+    plt.figure(0, dpi=300)
+    x = np.arange(len(res_ts_last))
+    plt.scatter(x, res_ts_last, label="ts", alpha=0.7)
+    plt.scatter(x, res_eet_last, label="eet", alpha=0.7)
+    plt.xlabel("index")
+    plt.ylabel("value")
+    plt.legend()
+    plt.savefig('./llama_output.png')
+    print('save llama_output.png')
+
 
 def test_baichuan_output():
     torch.set_grad_enabled(False)
@@ -302,10 +326,10 @@ def test_eet_ppl():
 
 if __name__ == '__main__':
     # set_random_seed(1)
-    # test_llama_output()
+    test_llama_output()
     # test_baichuan_output()
     # test_T5_output()
-    test_bert_output()
+    # test_bert_output()
 
     # 计算PPL
     # test_eet_ppl()

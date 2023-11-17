@@ -301,6 +301,7 @@ class EETLlamaModel():
         model_dict = {}
         embedding_dict = {}
         layernorm_dict = {}
+        decoder_dict = {}
 
         cfg = torch_model.config
         base_model = getattr(torch_model, model_attr) if model_attr is not None else torch_model
@@ -381,6 +382,9 @@ class EETLlamaModel():
         """from pretrained."""
         torch.set_grad_enabled(False)
         llama_dict = {}
+        embedding_dict = {}
+        layernorm_dict = {}
+        decoder_dict = {}
         if os.path.isfile(path_or_file):
             with open(path_or_file, "rb") as f:
                 llama_dict = torch.load(f, map_location=torch.device("cpu"))
