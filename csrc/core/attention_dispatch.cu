@@ -1352,6 +1352,7 @@ void fused_masked_attention_dispatch(
     int cond = size_per_head * ((ATTENION_OPT)? 1:0);
 
     if (self_Q_bias != nullptr) {
+      // std::cout << "T5 (T)(1.f / sqrtf(size_per_head * 1.0f))" << std::endl;
       T scalar = (T)(1.f / sqrtf(size_per_head * 1.0f));
       switch (cond)
       {
@@ -1394,6 +1395,7 @@ void fused_masked_attention_dispatch(
           assert(false);
       }
     } else {
+      // std::cout << "T5 (T)(1.0f)" << std::endl;
       // T scalar = (T)(1.0f); // TODO T5 is different
       T scalar = (T)(1.f / sqrtf(size_per_head * 1.0f));
       switch (cond)
@@ -1431,4 +1433,56 @@ template void fused_masked_attention_dispatch<float>(void* qkv_buf,const void* s
 
 template void fused_masked_attention_dispatch<half>(void* qkv_buf ,const void* self_Q_bias, 
                                               void* key_cache, const void* self_K_bias, void* value_cache, const void* self_V_bias,
+                                              void* context_buf, int& batch_size,int& first_batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len,const int64_t *reorder_index, const void* position_bias);
+
+template <typename T>
+void t5_fused_masked_attention_dispatch(
+  void* qkv_buf,
+  void* key_cache,
+  void* value_cache,
+  void* context_buf, int& batch_size, int& first_batch_size,
+  int& head_num, int& size_per_head,
+  const int& step, cudaStream_t stream, 
+  const int64_t* pre_padding_len, const int64_t* reorder_index, const void* position_bias)
+  {
+    const int block_sz = ATTENTION_BLOCK_SIZE;
+
+    dim3 grid(batch_size * head_num);
+
+    int cond = size_per_head * ((ATTENION_OPT)? 1:0);
+
+    T scalar = (T)(1.0f);
+    switch (cond)
+    {
+      case 32:
+        t5_masked_attention_kernel<32, block_sz, T><<<grid, block_sz, 0, stream>>>(
+          (T*)qkv_buf, (T*)key_cache, (T*)value_cache, (T*)position_bias, (T*)context_buf, 
+          first_batch_size, head_num, step, scalar, pre_padding_len, reorder_index); 
+        break;
+      case 64:
+        t5_masked_attention_kernel<64, block_sz, T><<<grid, block_sz, 0, stream>>>(
+          (T*)qkv_buf, (T*)key_cache, (T*)value_cache, (T*)position_bias, (T*)context_buf, 
+          first_batch_size, head_num, step, scalar, pre_padding_len, reorder_index); 
+        break;
+      case 96:
+        t5_masked_attention_kernel<96, block_sz, T><<<grid, block_sz, 0, stream>>>(
+          (T*)qkv_buf, (T*)key_cache, (T*)value_cache, (T*)position_bias, (T*)context_buf, 
+          first_batch_size, head_num, step, scalar, pre_padding_len, reorder_index); 
+        break;
+      case 128:
+        t5_masked_attention_kernel<128, block_sz, T><<<grid, block_sz, 0, stream>>>(
+          (T*)qkv_buf, (T*)key_cache, (T*)value_cache, (T*)position_bias, (T*)context_buf, 
+          first_batch_size, head_num, step, scalar, pre_padding_len, reorder_index); 
+        break;
+      default:
+        assert(false);
+    }
+  }
+
+template void t5_fused_masked_attention_dispatch<float>(void* qkv_buf,
+                                              void* key_cache, void* value_cache,
+                                              void* context_buf, int& batch_size,int& first_batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len,const int64_t *reorder_index, const void* position_bias);
+
+template void t5_fused_masked_attention_dispatch<half>(void* qkv_buf,
+                                              void* key_cache, void* value_cache,
                                               void* context_buf, int& batch_size,int& first_batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len,const int64_t *reorder_index, const void* position_bias);

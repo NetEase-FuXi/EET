@@ -232,7 +232,12 @@ namespace eet{
             const int64_t *reorder_index = reorder_state.data_ptr<int64_t>();
             void* relative_attention_bias_ = relative_attention_bias.data_ptr();
 
-            masked_attention(qkv_buffer, context_buf, padding_len, reorder_index, relative_attention_bias_);
+            if (with_bias_) {
+                masked_attention(qkv_buffer, context_buf, padding_len, reorder_index, relative_attention_bias_);
+            } else {
+                // t5
+                t5_masked_attention(qkv_buffer, context_buf, padding_len, reorder_index, relative_attention_bias_);
+            }
             qkv_buffer.free();
             
             Buffer& output = MManager::get_instance().get_cache(desc_.batch_size_ * cur_seq_len_ * desc_.hidden_units_, desc_.dtype_, desc_.options_, "self_mask_attn_cache");
@@ -441,6 +446,18 @@ namespace eet{
             check_cuda_error(cudaGetLastError());
             #endif
          }
-    
+        void MaskedMultiHeadAttention::t5_masked_attention(const Buffer& qkv_buffer,
+                                                        Buffer& context_buf,
+                                                        const int64_t *padding_len,
+                                                        const int64_t *reorder_index,
+                                                        const void* relative_attention_bias_)
+         {
+            RUN_KERNEL(t5_fused_masked_attention_dispatch,desc_.dtype_,qkv_buffer.data_ptr(), k_cache_.data_ptr(), v_cache_.data_ptr(),
+                        context_buf.data_ptr(),cur_batch_size_,first_batch_size_,desc_.head_num_,size_per_head_,step_, desc_.stream, padding_len,reorder_index, relative_attention_bias_);
+            #ifdef _DEBUG_MODE_
+            cudaDeviceSynchronize();
+            check_cuda_error(cudaGetLastError());
+            #endif
+         }
     }
 }

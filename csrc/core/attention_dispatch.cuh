@@ -13,3 +13,8 @@ template <typename T>
 void fused_masked_attention_dispatch(void *qkv_buf, const void *self_Q_bias,
                                      void *key_cache, const void *self_K_bias, void *value_cache, const void *self_V_bias,
                                      void *context_buf, int &batch_size, int &first_batch_size, int &head_num, int &size_per_head, const int &step, cudaStream_t stream, const int64_t *pre_padding_len, const int64_t *reorder_index, const void *position_bias);
+
+template <typename T>
+void t5_fused_masked_attention_dispatch(void* qkv_buf,
+                                        void* key_cache, void* value_cache,
+                                        void* context_buf, int& batch_size, int& first_batch_size, int& head_num, int& size_per_head, const int& step, cudaStream_t stream, const int64_t* pre_padding_len, const int64_t* reorder_index, const void* position_bias);
