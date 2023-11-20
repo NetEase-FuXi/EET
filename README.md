@@ -21,6 +21,7 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
 
 ## Features
 
+- **New**🔥: Support Baichuan, LLaMA and other LLMs.
 - Support Mega-size model with single GPU. EET could make an 11B model available online within 24G Ampere GPU.
 - Expertise in inference for multi-modal and NLP tasks (CLIP/GPT-3/Bert/Seq2seq etc.).
 - High performance. Make the transformer-based model faster and faster with the effect of CUDA kernel optimization and quantization/sparsity algorithm. 
@@ -75,6 +76,12 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
     </tr>
     <tr>
        <td style="text-align: center"><font color="#1e90ff">Distillbert</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">X</td><td style="text-align: center"><font color="#dc143c">1~2x</font></td><td style="text-align: center"><font color="#deb887">1.0</font></td> 
+    </tr>
+    <tr>
+       <td style="text-align: center"><font color="#1e90ff">Baichuan</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">&#x2705;</td><td style="text-align: center"><font color="#dc143c">1~2x</font></td><td style="text-align: center"><font color="#deb887">2.0</font></td> 
+    </tr>
+    <tr>
+       <td style="text-align: center"><font color="#1e90ff">LLaMA</font></td><td style="text-align: center">&#x2705;</td><td style="text-align: center">X</td><td style="text-align: center">&#x2705;</td><td style="text-align: center"><font color="#dc143c">1~2x</font></td><td style="text-align: center"><font color="#deb887">2.0</font></td> 
     </tr>
 </table>
 
@@ -233,14 +240,14 @@ out = nlp(input)
 
 Now we support these tasks：
 
-| Task | Since version | 
-|-------|-------------|
-| text-classification | 1.0 |
-| token-classification | 1.0 | 
-| question-answering | 1.0 | 
-| fill-mask | 1.0 |
-| text-generation | 1.0 |
-| image-classification | 1.0 |
+| Task                 | Since version | 
+|:-------------------------------|:---:|
+| text-classification            | 1.0 |
+| token-classification           | 1.0 | 
+| question-answering             | 1.0 | 
+| fill-mask                      | 1.0 |
+| text-generation                | 1.0 |
+| image-classification           | 1.0 |
 | zero_shot_image_classification | 1.0 |
 
 For more examples, please refer to [example/python/pipelines](./example/python/pipelines).

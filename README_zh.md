@@ -21,6 +21,7 @@
 EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型和长序列场景的高性能pytorch推理插件。
 
 ## 功能特性
+* **新特性**🔥: 现已支持Baichuan、LLaMA等LLMs。
 * 高性能：设计高度优化的CUDA内核。
 * 灵活：提供了包括op api、model api和pipelines应对不同的需求 
 * 易于使用： 几行代码即可完成。 
@@ -54,6 +55,8 @@ EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型
 | Vit | 1.0 |
 | Clip | 1.0 |
 | Distilbert | 1.0 |
+| Baichuan | 2.0 |
+| LLaMA | 2.0 |
 
 ## 快速开始
 
