@@ -22,25 +22,29 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
 ## Features
 
 - **New**🔥: Support Baichuan, LLaMA and other LLMs.
-- Support Mega-size model with single GPU. EET could make an 11B model available online within 24G Ampere GPU.
+- **New**🔥: Support int8 quantization.
+- Support Mega-size model with single GPU. 
 - Expertise in inference for multi-modal and NLP tasks (CLIP/GPT-3/Bert/Seq2seq etc.).
 - High performance. Make the transformer-based model faster and faster with the effect of CUDA kernel optimization and quantization/sparsity algorithm. 
 - Out-of-the-box for Transformers and Fairseq. Save your pain of trivial configuration and make your model work within a few lines.
 ----
 
-* [Model Matirx](#model-matrix)
-* [Quick Start](#quick-start)
-  * [Environment](#environment)
-  * [Installation](#installation)
-    * [From Source](#from-source)
-    * [From Docker](#from-docker)
-  * [Run](#run)
-    * [operators APIs](#operators-apis)
-    * [Model APIs](#model-apis)
-    * [Application APIs](#application-apis)
-* [Performance](#performance)
-* [Cite Us](#cite-us)
-* [Contact us](#contact-us)
+- [Easy and Efficient Transformer](#easy-and-efficient-transformer)
+- [Features](#features)
+- [Model Matrix](#model-matrix)
+- [Quick Start](#quick-start)
+  - [Environment](#environment)
+  - [Installation](#installation)
+    - [From Source](#from-source)
+    - [From Docker](#from-docker)
+  - [Run](#run)
+    - [Operators APIs](#operators-apis)
+    - [Model APIs](#model-apis)
+    - [Application APIs](#application-apis)
+- [Performance](#performance)
+- [Cite Us](#cite-us)
+- [Video](#video)
+- [Contact us](#contact-us)
 
 
 ## Model Matrix
@@ -90,13 +94,13 @@ EET(Easy and Efficient Transformer) is a friendly Pytorch inference plugin focus
 
 ### Environment
 
-* cuda:>=10.1 
+* cuda:>=11.4 
 * python:>=3.7 
 * gcc:>= 7.4.0 
-* torch:>=1.5.0 
+* torch:>=1.12.0 
 * numpy:>=1.19.1 
 * fairseq:==0.10.0
-* transformers:==4.22.0
+* transformers:>=4.31.0
 
 The above environment is the minimum configuration, and it is best to use a newer version.
 
@@ -111,7 +115,7 @@ If you are installing from source, you will need install the necessary [environm
 $ git clone https://github.com/NetEase-FuXi/EET.git
 $ pip install .
 ```
-Recommend using nvcr.io/nvidia/pytorch:21.12-py3 and other series of images, you can also use the provided Dockerfile file.
+Recommend using nvcr.io/nvidia/pytorch:23.04-py3 and other series of images, you can also use the provided Dockerfile file.
 
 #### From Docker
 
@@ -262,6 +266,9 @@ Detailed performance data of GPT-3 and Bert model inference can be viewed at [li
 
 * Bert on 2080ti
 <div  align="left"> <img src="./doc/image/bert_ft.png" width = "700" height = "386" alt="bert_ft"/></div>
+
+* Llama13B on 3090
+<div  align="left"> <img src="./doc/image/llama13B_tps.png" width = "700" height = "386" alt="bert_ft"/></div>
 
 ## Cite Us
 
