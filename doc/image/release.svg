@@ -109,7 +109,7 @@
        transform="scale(0.1)"
        textLength="430"
        id="text65"
-       lengthAdjust="spacing">v1.0</text>
+       lengthAdjust="spacing">v2.0</text>
     <text
        x="745"
        y="140"
@@ -117,6 +117,6 @@
        fill="#ffffff"
        textLength="430"
        id="text67"
-       lengthAdjust="spacing">v1.0</text>
+       lengthAdjust="spacing">v2.0</text>
   </g>
 </svg>
