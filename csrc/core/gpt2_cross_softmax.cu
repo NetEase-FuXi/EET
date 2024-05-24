@@ -97,7 +97,7 @@ void launch_cross_softmax_kernel(void *qk_buf_, const int64_t *padding_len, cons
   int block_dim_x;
 
   assert(mem_seq_len <= 2048);
-  if (seq_len <= 128) {
+  if (mem_seq_len <= 128) {
     block_dim_x = min(((mem_seq_len + 31) / 32) * 32, 1024);
     cross_softmax_kernel<T><<<grid_dim_x, block_dim_x, 0, stream>>>((T *)qk_buf_, padding_len, head_num, seq_len, mem_seq_len, scalar);
   } else {
