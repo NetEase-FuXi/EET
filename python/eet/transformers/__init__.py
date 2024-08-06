@@ -12,3 +12,4 @@ from .modeling_bart import *
 from .modeling_ernie import *
 from .modeling_baichuan import *
 from .modeling_llama import *
+from .modeling_xlm_roberta import *
