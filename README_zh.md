@@ -30,19 +30,21 @@ EET（Easy But Efficient Transformer）是一款针对Transformer-based大模型
 
 ---
 
-* [支持模型](#支持模型)
-* [快速开始](#快速开始)
-  * [环境](#环境)
-  * [安装](#安装)
-    * [源码安装](#源码安装)
-    * [docker镜像安装](#docker镜像安装)
-  * [运行](#运行)
-    * [operators API](#operators-api)
-    * [Model API](#model-api)
-    * [pipelines方式](#pipelines方式)
-* [性能](#性能)
-* [Cite Us](#cite-us)
-* [联系我们](#联系我们)
+- [Easy and Efficient Transformer](#easy-and-efficient-transformer)
+- [功能特性](#功能特性)
+- [支持模型](#支持模型)
+- [快速开始](#快速开始)
+  - [环境](#环境)
+  - [安装](#安装)
+    - [源码安装](#源码安装)
+    - [docker镜像安装](#docker镜像安装)
+  - [运行](#运行)
+    - [operators API](#operators-api)
+    - [Model API](#model-api)
+    - [pipelines方式](#pipelines方式)
+- [性能](#性能)
+- [Cite Us](#cite-us)
+- [联系我们](#联系我们)
 
 ## 支持模型
 
@@ -249,6 +251,6 @@ out = nlp(input)
 ## 联系我们
 您可以将您的问题发布在github issues，也可以通过邮件与我们联系。
 
-ligongzheng@corp.netease.com, dingjingzhen@corp.netease.com ,zhaosida@corp.netease.com
+zhaosida@corp.netease.com, zhuangzhong@corp.netease.com, hzzhaozeng@corp.netease.com
 
 如果你对高性能计算、深度学习感兴趣，欢迎加入我们团队，简历可发送上述邮箱。

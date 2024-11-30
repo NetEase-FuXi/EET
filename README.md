@@ -291,5 +291,5 @@ You can post your problem with github issues.
 
 You can also contact us by email :
 
-ligongzheng@corp.netease.com, dingjingzhen@corp.netease.com ,zhaosida@corp.netease.com
+zhaosida@corp.netease.com, zhuangzhong@corp.netease.com, hzzhaozeng@corp.netease.com
 
